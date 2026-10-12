@@ -1961,3 +1961,5 @@ p.in-note.k-g { cursor: default; margin: 0; }
 p.in-note.k-g:hover { border-color: var(--line); }
 .in-note small { color: var(--muted); font-weight: 400; }
 .pc-col.empty .pc-bar { height: 6px !important; background: transparent; border: 1.5px dashed var(--line); }
+.dbx-steps { margin: 0 0 12px; padding-left: 20px; } .dbx-steps li { margin: 4px 0; }
+a.dbx-open { display: inline-flex; text-decoration: none; }

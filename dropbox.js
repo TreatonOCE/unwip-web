@@ -252,9 +252,11 @@ window.UnwipDropbox = (function () {
     const { v, c } = await pkce(); const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
     const q = { client_id: KEY, response_type: 'code', code_challenge: c, code_challenge_method: 'S256', token_access_type: 'offline' };
     if (standalone()) {
-      window.open('https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams(q), '_blank');
+      // a Home Screen app may only open another page from a direct tap, so this is a real link to tap
+      const url = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams(q);
       const body = document.createElement('div');
-      body.innerHTML = `<p>Dropbox opened in a browser page. Sign in, tap <b>Allow</b>, then copy the code it shows and paste it here.</p>
+      body.innerHTML = `<ol class="dbx-steps"><li>Tap <b>Open Dropbox</b>. Sign in and tap <b>Allow</b>.</li><li>Dropbox shows a code. Copy it.</li><li>Come back here and paste it below.</li></ol>
+        <p><a class="btn primary dbx-open" href="${url}" target="_blank" rel="noopener">Open Dropbox</a></p>
         <div class="field"><input type="text" id="dbx-code" placeholder="Paste the code from Dropbox" autocomplete="off" autocapitalize="off" spellcheck="false"></div>`;
       const ok = await U.modal({ title: 'Connect Dropbox', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Connect', value: true, kind: 'primary' }] });
       const code = ok && body.querySelector('#dbx-code').value.trim();
