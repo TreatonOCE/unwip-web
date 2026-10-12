@@ -104,7 +104,13 @@ window.FolioImport = (function () {
       let inner = '';
       const runs = [];
       // collect runs (also inside hyperlinks / smart tags)
-      (function collect(el) { for (const c of el.childNodes) { if (c.localName === 'r') runs.push(c); else if (['hyperlink', 'smartTag', 'ins', 'sdt', 'sdtContent', 'fldSimple'].includes(c.localName)) collect(c); } })(p);
+      // tracked changes from an editor (w:ins / w:del) come in as suggestions
+      const tcOf = new Map();
+      (function collect(el, tc) { for (const c of el.childNodes) {
+        if (c.localName === 'r') { runs.push(c); if (tc) tcOf.set(c, tc); }
+        else if (c.localName === 'ins' || c.localName === 'del') collect(c, { k: c.localName, a: c.getAttributeNS(W, 'author') || c.getAttribute('w:author') || 'Editor', t: Date.parse(c.getAttributeNS(W, 'date') || c.getAttribute('w:date') || '') || 0 });
+        else if (['hyperlink', 'smartTag', 'sdt', 'sdtContent', 'fldSimple'].includes(c.localName)) collect(c, tc);
+      } })(p, null);
       let hasPageBreak = false, breakAfter = false;
       for (const r of runs) {
         const rpr = kid(r, 'rPr');
@@ -125,7 +131,7 @@ window.FolioImport = (function () {
             if (rid) { const im = await picture(rid); if (im) { inner += im; } }
             continue;
           }
-          if (c.localName === 't') t += esc(c.textContent);
+          if (c.localName === 't' || (c.localName === 'delText' && tcOf.get(r))) t += esc(c.textContent);
           else if (c.localName === 'tab') t += ' ';
           else if (c.localName === 'br') { if ((c.getAttributeNS(W, 'type') || c.getAttribute('w:type')) === 'page') { if (inner || t) breakAfter = true; else hasPageBreak = true; } else t += '<br>'; }
           else if (c.localName === 'noBreakHyphen') t += '-';
@@ -135,7 +141,9 @@ window.FolioImport = (function () {
         if (va === 'superscript') t = `<sup>${t}</sup>`; if (va === 'subscript') t = `<sub>${t}</sub>`;
         if (strike) t = `<s>${t}</s>`; if (underline) t = `<u>${t}</u>`; if (italic) t = `<i>${t}</i>`; if (bold) t = `<b>${t}</b>`;
         const css = []; if (font) css.push(`font-family:${qf(font)}`); if (size) css.push(`font-size:${size}pt`);
-        inner += css.length ? `<span style="${css.join(';')}">${t}</span>` : t;
+        let piece = css.length ? `<span style="${css.join(';')}">${t}</span>` : t;
+        const tc = tcOf.get(r); if (tc) piece = `<${tc.k} class="tc-${tc.k}" data-a="${esc(tc.a)}" data-t="${tc.t || ''}">${piece}</${tc.k}>`;
+        inner += piece;
       }
       html += `<${tag}${align ? ` style="text-align:${align}"` : ''}${pageBreakBefore || hasPageBreak ? ' data-break="1"' : ''}${breakAfter ? ' data-break-after="1"' : ''}>${inner.replace(/^ +/, '') || '<br>'}</${tag}>`;
     }

@@ -1123,7 +1123,7 @@
     const id = S.docId;
     const html = editor.innerHTML;
     const f = findNode(id);
-    if (f) { f.node.words = countWords(editor.innerText); f.node.mod = Date.now(); f.node.dev = S.device || ''; }
+    if (f) { f.node.words = countWords(editorText()); f.node.mod = Date.now(); f.node.dev = S.device || ''; }
     if (S.loadedHTML && S.loadedHTML !== html) autoSnapshotIfNeeded(id, S.loadedHTML).catch(() => {});
     await api.saveDoc(S.slug, id, html);
     emit('saved', id, html);
@@ -1138,7 +1138,7 @@
   // ---- status bar
   function updateStatus() {
     if (!S.project) return;
-    const docWords = S.docId ? countWords(editor.innerText) : 0;
+    const docWords = S.docId ? countWords(editorText()) : 0;
     const f = S.docId && findNode(S.docId);
     if (f) f.node.words = docWords;
     $('#st-doc').textContent = S.docId ? `${fmt(docWords)} words in this document` : 'No document open';
@@ -1235,7 +1235,7 @@
   // change the document's count but not your writing progress.
   const BIG_CHANGE = 30;
   function trackTyping() {
-    const w = countWords(editor.innerText);
+    const w = countWords(editorText());
     const d = w - S.lastDocWords;
     S.lastDocWords = w;
     if (S.programmatic || !d || Math.abs(d) > BIG_CHANGE) return;
@@ -1247,7 +1247,13 @@
     emit('typed', d);
     if (daily && before < daily && writtenOn(day) >= daily && S.goalCheered !== day) { S.goalCheered = day; quoteToast(`Daily goal reached: ${fmt(daily)} words!`); }
   }
-  function resyncWords() { S.lastDocWords = countWords(editor.innerText); }
+  // the words on the page, leaving out suggested deletions (tracked changes)
+  function editorText() {
+    if (!editor.querySelector('del.tc-del')) return editor.innerText;
+    const c = editor.cloneNode(true); c.querySelectorAll('del.tc-del').forEach(d => d.remove());
+    return [...c.children].map(e => e.textContent).join('\n');
+  }
+  function resyncWords() { S.lastDocWords = countWords(editorText()); }
   editor.addEventListener('input', e => {
     trackTyping();
     ensureParagraphs();
@@ -2218,7 +2224,10 @@
         warnDocsFonts(PV.blocks, async map => { const o = Clip.exportFromBlocks(PV.blocks, exportSettings(), { pageBreaks: true, fontMap: map }); await api.clipboardWrite(o.html, o.text); toast('Copied with Docs-friendly fonts.'); });
       } else if (kind === 'docx') {
         const lang = ((await api.spellSettings().catch(() => ({ current: ['en-AU'] }))).current[0]) || 'en-AU';
-        const bytes = window.FolioDOCX.build(PV.blocks, PV.smf ? smfStyle() : S.project.style, { title: name, author: settings.author || '', page: PV.docPage, smf: PV.smf, pageBreaks: true, lang });
+        // a Word file keeps tracked changes as real Word tracked changes
+        let wblocks = PV.blocks; Clip.keepChanges = true;
+        try { wblocks = PV.scope === 'doc' ? await docBlocks(S.docId, titleMode()) : await compileManuscript(); } catch { wblocks = PV.blocks; } finally { Clip.keepChanges = false; }
+        const bytes = window.FolioDOCX.build(wblocks, PV.smf ? smfStyle() : S.project.style, { title: name, author: settings.author || '', page: PV.docPage, smf: PV.smf, pageBreaks: true, lang });
         const p = await api.exportBinary(bytes, name, 'docx', 'Word document');
         if (p) toast(`Word file saved.${PV.smf ? ' It has the name / title / page header agents expect.' : ''} It also opens in Google Docs (upload it to Drive).`, '', 6000);
       } else if (kind === 'html') {
@@ -2381,10 +2390,10 @@
         <div class="field"><label>New here, or showing someone?</label><button class="btn" id="g-intro" type="button">Welcome setup…</button></div>
         <div class="field"><label>A quick look around a project</label><button class="btn" id="g-tour" type="button">Take the tour</button></div>
         <div class="field"><label>What everything does, and keyboard shortcuts</label><button class="btn" id="g-help" type="button">Open Help (F1)</button></div>
-        <div class="section-label">Updates</div>
+<div class="pc-only">        <div class="section-label">Updates</div>
         <label class="check"><input type="checkbox" id="g-autoup" ${cfg.autoUpdate !== false ? 'checked' : ''}> Install updates automatically</label>
         <div class="field"><label id="g-version">Unwip</label><button class="btn" id="g-checkup" type="button">Check for updates now</button></div>
-        <div class="field full"><label>Update key (only needed while your updates repo on GitHub is private)</label><input type="password" id="g-upkey" value="${esc(cfg.updateKey || '')}" placeholder="Paste the read-only key from GitHub here" autocomplete="off" spellcheck="false"></div>
+        <div class="field full"><label>Update key (only needed while your updates repo on GitHub is private)</label><input type="password" id="g-upkey" value="${esc(cfg.updateKey || '')}" placeholder="Paste the read-only key from GitHub here" autocomplete="off" spellcheck="false"></div></div>
         <div class="section-label">Where your projects live</div>
         <div class="field full" id="s-lib"><label>Loading…</label></div>
         <div class="section-label">Extra backup copy</div>
@@ -2993,7 +3002,7 @@
 
   // ================================================================== SEARCH & WORD ANALYSIS
   const Ana = window.FolioAnalysis;
-  const htmlText = html => { const d = document.createElement('div'); d.innerHTML = html; return [...d.querySelectorAll('p,h1,h2,h3,blockquote,li')].filter(e => !e.querySelector('p,h1,h2,h3')).map(e => e.textContent).join('\n') || d.textContent; };
+  const htmlText = html => { const d = document.createElement('div'); d.innerHTML = html; d.querySelectorAll('del.tc-del').forEach(x => x.remove()); return [...d.querySelectorAll('p,h1,h2,h3,blockquote,li')].filter(e => !e.querySelector('p,h1,h2,h3')).map(e => e.textContent).join('\n') || d.textContent; };
   function docsIn(kinds) {
     const out = [];
     for (const r of S.project.binder) {
@@ -3206,7 +3215,7 @@
     let list = [];
     async function render(selectedTs) {
       list = await api.snapList(S.slug, id);
-      const curWords = countWords(editor.innerText);
+      const curWords = countWords(editorText());
       body.innerHTML = `
         <div class="snap-side">
           <div class="snap-take"><input type="text" id="sn-label" placeholder="Name this version (optional)"><button class="btn primary" id="sn-take">Take snapshot</button></div>

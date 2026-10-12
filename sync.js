@@ -12,7 +12,7 @@ window.UnwipSync = (function () {
   let beat = null, current = null;
 
   // ================================================================== ONE DEVICE AT A TIME
-  // Before a project opens: if another computer has it open right now, ask it to save and close
+  // Before a project opens: if another device has it open right now, ask it to save and close
   // (through a note in the project's Dropbox folder) and wait until it has.
   api.libraryInfo().then(i => { S.device = i.device; }).catch(() => {});
   const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); };
@@ -21,7 +21,7 @@ window.UnwipSync = (function () {
     try { others = await api.othersOpen(slug); } catch { return true; }
     if (!others.length) return true;
     const o = others[0];
-    const choice = await U.modal({ title: 'Open on another computer', body: `<p>This project is open on <b>${esc(o.device)}</b> right now (active ${ago(o.at)}).</p>
+    const choice = await U.modal({ title: 'Open on another device', body: `<p>This project is open on <b>${esc(o.device)}</b> right now (active ${ago(o.at)}).</p>
       <p>To keep your writing safe, Unwip can <b>save and close it there</b>, then open it here. It takes a few seconds, sometimes up to a minute while Dropbox passes the message along.</p>`,
       buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Open on both anyway', value: 'both', kind: 'ghost' }, { label: `Close it on ${o.device} and open here`, value: 'take', kind: 'primary' }] });
     if (!choice) return false;
@@ -79,7 +79,7 @@ window.UnwipSync = (function () {
   window.addEventListener('beforeunload', () => { markSeen(); if (current) api.presence(current, false); });
 
   // ================================================================== WHAT CHANGED ELSEWHERE
-  // documents saved on another computer since this one last had the project open
+  // documents saved on another device since this one last had the project open
   function changedList(since) {
     const out = []; U.walkTree(S.project.binder, n => { if (n.type === 'doc' && n.mod && n.dev && n.dev !== S.device && n.mod > since) out.push(n); });
     return out.sort((a, b) => b.mod - a.mod);
@@ -90,7 +90,7 @@ window.UnwipSync = (function () {
     const dev = list[0].dev;
     U.toastAction(`${list.length} document${list.length > 1 ? 's were' : ' was'} changed on <b>${esc(dev)}</b> since you were last here.`, 'Show me', () => recentDialog(true), 15000);
   }
-  // binder: a small dot on documents changed on another computer since last time
+  // binder: a small dot on documents changed on another device since last time
   U.on('binder', () => {
     if (!S.project || !S.lastSeenAt) return;
     for (const n of changedList(S.lastSeenAt)) {
@@ -104,8 +104,8 @@ window.UnwipSync = (function () {
     const list = onlyElsewhere ? changedList(S.lastSeenAt || 0) : all.slice(0, 20);
     const body = document.createElement('div');
     body.innerHTML = list.length ? `<div class="sy-list">${list.map(n => `<div class="sy-row" data-id="${n.id}"><div><b>${esc(n.title || 'Untitled')}</b><span>${ago(n.mod)}${n.dev ? ` · on ${esc(n.dev)}${n.dev === S.device ? ' (this computer)' : ''}` : ''}</span></div><button class="btn small">Open</button></div>`).join('')}</div>
-      <p class="rp-note">Opening a document that was changed on another computer highlights exactly what changed.</p>` : '<p class="np-empty">Nothing yet. Documents show up here as they’re saved.</p>';
-    U.modal({ title: onlyElsewhere ? 'Changed on your other computer' : 'Recently updated', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }],
+      <p class="rp-note">Opening a document that was changed on another device highlights exactly what changed.</p>` : '<p class="np-empty">Nothing yet. Documents show up here as they’re saved.</p>';
+    U.modal({ title: onlyElsewhere ? 'Changed on your other device' : 'Recently updated', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }],
       onOpen: back => $$('.sy-row', back).forEach(r => r.querySelector('button').onclick = () => { back.querySelector('.m-foot .btn').click(); U.openDoc(r.dataset.id); }) });
   }
 
@@ -180,23 +180,23 @@ window.UnwipSync = (function () {
   api.onExternalChange(async info => {
     if (!S.project || info.slug !== S.slug) return;
     if (info.file === 'project.json') {
-      const load = async () => { clearTimeout(S.metaTimer); S.metaTimer = null; try { U.reloadProjectMeta(await api.openProject(S.slug)); U.toast('Updated with changes from your other computer.'); } catch {} };
-      if (S.metaTimer) U.toastAction('The binder was changed on another computer.', 'Load those changes', load, 20000);
+      const load = async () => { clearTimeout(S.metaTimer); S.metaTimer = null; try { U.reloadProjectMeta(await api.openProject(S.slug)); U.toast('Updated with changes from your other device.'); } catch {} };
+      if (S.metaTimer) U.toastAction('The binder was changed on another device.', 'Load those changes', load, 20000);
       else load();
       return;
     }
     if (info.id && info.id === S.docId) {
       const before = editor.innerHTML;
       const load = async () => {
-        if (S.dirty) await U.takeSnapshot('My version before an update from another computer').catch(() => {});
+        if (S.dirty) await U.takeSnapshot('My version before an update from another device').catch(() => {});
         const html = await api.loadDoc(S.slug, info.id);
         const top = U.editorWrap.scrollTop;
         S.programmatic = true; editor.innerHTML = html || '<p><br></p>'; S.programmatic = false;
         S.dirty = false; U.resyncWords(); U.updateStatus(); U.editorWrap.scrollTop = top;
         highlightChanges(before); api.seenSave(S.slug, info.id, editor.innerHTML);
       };
-      if (!S.dirty) { await load(); U.toast('This chapter was just updated from your other computer. Changes are highlighted.'); }
-      else U.toastAction('This chapter was also changed on another computer.', 'Use that version (yours goes to Snapshots)', load, 20000);
+      if (!S.dirty) { await load(); U.toast('This chapter was just updated from your other device. Changes are highlighted.'); }
+      else U.toastAction('This chapter was also changed on another device.', 'Use that version (yours goes to Snapshots)', load, 20000);
     }
   });
 
@@ -244,6 +244,9 @@ window.UnwipSync = (function () {
   async function settingsSection(body) {
     const box = $('#s-lib', body), extra = $('#s-extra', body);
     let info; try { info = await api.libraryInfo(); } catch { return; }
+    if (info.web && window.UnwipDropbox) {     // the web version with Dropbox sync
+      box.innerHTML = '<div id="dbx-card" class="dbx-card"></div>'; window.UnwipDropbox.fillCard($('#dbx-card', box)); extra.innerHTML = ''; return;
+    }
     if (info.web) {     // the web version (iPad / iPhone): projects live in this browser for now
       box.innerHTML = `<div class="sy-cur"><span class="sy-ic">📱</span><div><b>${esc(info.places[0].label)}</b><span class="sy-path">Saved inside this browser. Add Unwip to your Home Screen so it’s kept safe.</span></div></div>
         <p class="sy-note">To bring a project over from your PC: in the PC app, open the project’s ⋯ menu › “Save a full backup file…”, put the file in Dropbox (or AirDrop it), then here use Import… › “Restore from a backup file”. Dropbox sign-in, so both stay in step automatically, is coming next.</p>`;
@@ -280,7 +283,7 @@ window.UnwipSync = (function () {
       const r = await api.libraryMove(target);
       await U.showLibrary();
       U.modal({ title: 'Done', body: `<p>${r.moved ? `${r.moved} item${r.moved > 1 ? 's' : ''} copied` : 'Nothing needed copying'}${r.kept ? `, and ${r.kept} project${r.kept > 1 ? 's were' : ' was'} already there and up to date` : ''}.</p><p>Your projects now live in <b>${esc(r.path)}</b>.</p>${r.old && r.old !== r.path ? `<p class="rp-note">Your old folder is kept as <b>${esc(r.old)}</b>. Once you’ve checked everything opens fine, you can delete it.</p>` : ''}
-        <p class="rp-note">On your other computer: install Unwip, then Settings → Where your projects live → Sync with Dropbox. It will find these projects.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
+        <p class="rp-note">On your other device: install Unwip, then Settings → Where your projects live → Sync with Dropbox. It will find these projects.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
     } catch (e) { U.toast('Couldn’t move the projects: ' + esc(e.message || e), 'warn', 8000); }
   }
 

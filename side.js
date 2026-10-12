@@ -6,7 +6,7 @@ window.UnwipSide = (function () {
   const U = window.__unwip; if (!U) return;
   const { $, $$, S, esc, api } = U;
   const main = $('#workspace .main');
-  const TABS = [['revise', 'Revise'], ['comments', 'Comments'], ['snapshots', 'Snapshots'], ['style', 'Style']];
+  const TABS = [['revise', 'Revise'], ['comments', 'Comments'], ['changes', 'Changes'], ['snapshots', 'Snapshots'], ['style', 'Style']];
   const LS = 'unwip-side-tab';
   let last = (() => { try { return localStorage.getItem(LS) || 'comments'; } catch { return 'comments'; } })();
   let busy = false;
@@ -19,7 +19,7 @@ window.UnwipSide = (function () {
     main.appendChild(p);
     return p;
   }
-  const P = { revise: $('#revise-panel'), comments: $('#notes-panel'), snapshots: makePanel('snap-panel'), style: makePanel('style-panel') };
+  const P = { revise: $('#revise-panel'), comments: $('#notes-panel'), changes: makePanel('changes-panel'), snapshots: makePanel('snap-panel'), style: makePanel('style-panel') };
 
   // labelled tabs at the top of every panel
   for (const [k, el] of Object.entries(P)) {
@@ -39,7 +39,7 @@ window.UnwipSide = (function () {
   function hideAllBut(keep) {
     if (keep !== 'revise' && S.revise) U.setRevise(false);
     if (keep !== 'comments' && visible(P.comments) && window.UnwipNotes) window.UnwipNotes.open(false);
-    for (const k of ['snapshots', 'style']) if (k !== keep) P[k].classList.add('hidden');
+    for (const k of ['changes', 'snapshots', 'style']) if (k !== keep) P[k].classList.add('hidden');
   }
   function open(tab) {
     if (!S.project) return;
@@ -48,6 +48,7 @@ window.UnwipSide = (function () {
       hideAllBut(tab);
       if (tab === 'revise') { if (!S.revise) U.setRevise(true); }
       else if (tab === 'comments') { if (window.UnwipNotes) window.UnwipNotes.open(true); }
+      else if (tab === 'changes') { P.changes.classList.remove('hidden'); if (window.UnwipTrack) window.UnwipTrack.attach($('.side-body', P.changes)); }
       else if (tab === 'snapshots') { P.snapshots.classList.remove('hidden'); renderSnaps(); }
       else if (tab === 'style') { P.style.classList.remove('hidden'); renderStyle(); }
       last = tab; try { localStorage.setItem(LS, tab); } catch {}

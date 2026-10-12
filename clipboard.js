@@ -104,8 +104,10 @@
       const raw = el.getAttribute && (el.getAttribute('style') || '');
       if (t === 'B' || t === 'STRONG') s.bold = true;
       if (t === 'I' || t === 'EM' || t === 'CITE' || t === 'VAR') s.italic = true;
-      if (t === 'U' || t === 'INS') s.underline = true;
-      if (t === 'S' || t === 'STRIKE' || t === 'DEL') s.strike = true;
+      const tc = el.classList && (el.classList.contains('tc-ins') ? 'ins' : el.classList.contains('tc-del') ? 'del' : '');
+      if (t === 'U' || (t === 'INS' && !tc)) s.underline = true;
+      if (t === 'S' || t === 'STRIKE' || (t === 'DEL' && !tc)) s.strike = true;
+      if (tc && (window.FolioClip && window.FolioClip.keepChanges)) s.tc = { k: tc, a: el.getAttribute('data-a') || '', t: +el.getAttribute('data-t') || 0 };
       if (t === 'SUP') s.sup = true;
       if (t === 'SUB') s.sub = true;
       if (t === 'FONT') {
@@ -132,7 +134,7 @@
       if (!text) return;
       const b = ensureBlock();
       const last = b.runs[b.runs.length - 1];
-      const run = { text, bold: !!s.bold, italic: !!s.italic, underline: !!s.underline, strike: !!s.strike, sup: !!s.sup, sub: !!s.sub, font: s.font || null, size: s.size || null, color: s.color || null, bg: s.bg || null };
+      const run = { text, tc: s.tc || null, bold: !!s.bold, italic: !!s.italic, underline: !!s.underline, strike: !!s.strike, sup: !!s.sup, sub: !!s.sub, font: s.font || null, size: s.size || null, color: s.color || null, bg: s.bg || null };
       if (last && !last.br && last.fn === undefined && !last.img && sameStyle(last, run)) last.text += text; else b.runs.push(run);
     }
 
@@ -149,6 +151,7 @@
       const el = node;
       const t = el.tagName.toUpperCase();
       if (SKIP_TAGS.has(t)) return;
+      if (el.classList && el.classList.contains('tc-del') && !(window.FolioClip && window.FolioClip.keepChanges)) return;
       const raw = el.getAttribute('style') || '';
       if (/mso-list\s*:\s*ignore/i.test(raw) || /display\s*:\s*none/i.test(raw)) return; // Word bullet glyphs, hidden text
       if (t === 'BR') { ensureBlock().runs.push({ br: true }); return; }
@@ -218,7 +221,7 @@
   }
 
   function sameStyle(a, b) {
-    return a.bold === b.bold && a.italic === b.italic && a.underline === b.underline && a.strike === b.strike &&
+    return (a.tc || null) === (b.tc || null) && a.bold === b.bold && a.italic === b.italic && a.underline === b.underline && a.strike === b.strike &&
       a.sup === b.sup && a.sub === b.sub && a.font === b.font && a.size === b.size && a.color === b.color && a.bg === b.bg;
   }
 
@@ -253,6 +256,7 @@
       if (r.color && !opts.dropColors) css.push(`color: ${r.color}`);
       if (r.bg && !opts.dropColors) css.push(`background-color: ${r.bg}`);
       if (css.length) h = `<span style="${escAttr(css.join('; '))}">${h}</span>`;
+      if (r.tc && opts.keepChanges !== false) h = `<${r.tc.k} class="tc-${r.tc.k}" data-a="${escAttr(r.tc.a || '')}" data-t="${r.tc.t || ''}">${h}</${r.tc.k}>`;
       out += h;
     }
     return out;
@@ -357,7 +361,12 @@
 
   window.FolioClip = {
     // HTML from the clipboard -> clean HTML for the editor
-    cleanPaste(html, opts) { return toEditorHTML(extract(parseHTML(html)), opts); },
+    // a Word file with an editor's tracked changes keeps them as suggestions to accept or reject
+    cleanPaste(html, opts) {
+      const keep = /class="tc-(ins|del)"/.test(String(html || '')), was = window.FolioClip.keepChanges;
+      if (keep) window.FolioClip.keepChanges = true;
+      try { return toEditorHTML(extract(parseHTML(html)), opts); } finally { window.FolioClip.keepChanges = was; }
+    },
     // plain text -> paragraphs
     textToHTML(text) {
       const lines = String(text).replace(/\r\n?/g, '\n').split('\n');

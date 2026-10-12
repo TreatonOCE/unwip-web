@@ -14,6 +14,7 @@ window.FolioDOCX = (function () {
   const fonts = f => `<w:rFonts w:ascii="${x(f)}" w:hAnsi="${x(f)}" w:cs="${x(f)}" w:eastAsia="${x(f)}"/>`;
   const field = name => `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ${name} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
 
+  let TC_ID = 1;
   function runXML(r, base) {
     if (r.br) return '<w:r><w:br/></w:r>';
     if (r.img) return base.picture ? base.picture(r) : '';
@@ -27,7 +28,14 @@ window.FolioDOCX = (function () {
     if (r.size && r.size !== base.size) p.push(`<w:sz w:val="${Math.round(r.size * 2)}"/><w:szCs w:val="${Math.round(r.size * 2)}"/>`);
     if (r.underline) p.push('<w:u w:val="single"/>');
     if (r.sup) p.push('<w:vertAlign w:val="superscript"/>'); else if (r.sub) p.push('<w:vertAlign w:val="subscript"/>');
-    return `<w:r>${p.length ? `<w:rPr>${p.join('')}</w:rPr>` : ''}<w:t xml:space="preserve">${x(r.text)}</w:t></w:r>`;
+    const run = `<w:r>${p.length ? `<w:rPr>${p.join('')}</w:rPr>` : ''}<w:t xml:space="preserve">${x(r.text)}</w:t></w:r>`;
+    // tracked changes go to Word as real tracked changes, so an editor can accept or reject them there
+    if (r.tc) {
+      base.tcN = (base.tcN || 0) + 1; const id = 900 + (TC_ID++);
+      const attrs = `w:id="${id}" w:author="${x(r.tc.a || 'Author')}" w:date="${new Date(r.tc.t || Date.now()).toISOString().replace(/\.\d+Z$/, 'Z')}"`;
+      return r.tc.k === 'del' ? `<w:del ${attrs}>${run.replace('<w:t ', '<w:delText ').replace('</w:t>', '</w:delText>')}</w:del>` : `<w:ins ${attrs}>${run}</w:ins>`;
+    }
+    return run;
   }
 
   // blocks: Unwip blocks; style: manuscript style; opts: { title, author, page: 'A4'|'Letter', smf, pageBreaks }
