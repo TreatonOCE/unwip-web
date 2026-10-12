@@ -55,6 +55,7 @@ window.UnwipCommand = (function () {
     ['Corkboard', 'cards index plan', '', detailed(() => U.setView('cork')), desk(inProject)],
     ['Moodboard', 'images inspiration pictures', '', detailed(() => U.setView('mood')), desk(inProject)],
     ['Timeline', 'events days dates', '', detailed(() => U.setView('timeline')), desk(inProject)],
+    ['Insights: pacing and characters', 'chapter length dialogue scenes pov point of view character tracker appearances chart', '', detailed(() => U.setView('insights')), desk(inProject)],
     ['Writing goals', 'target daily words deadline', '', () => U.goalsDialog(), desk(inProject)],
     ['Sync with Dropbox now', 'dropbox sync cloud phone pc upload download', '', () => window.UnwipDropbox.connected() ? window.UnwipDropbox.sync() : window.UnwipDropbox.connect(), () => !!window.UnwipDropbox],
     ['Backups', 'restore recover', '', () => window.UnwipSync && window.UnwipSync.backupsDialog(S.slug, S.project.title), inProject],

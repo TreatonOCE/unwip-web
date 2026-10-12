@@ -41,6 +41,7 @@ window.UnwipHelp = (function () {
     ['Planning', 'Corkboard', 'Index cards for your chapters and scenes. Drag to rearrange; double-click to open.', 'Detailed mode'],
     ['Planning', 'Moodboard', 'Pictures and notes for the look and feel of your book.', 'Detailed mode'],
     ['Planning', 'Timeline', 'Key events in story days or calendar dates, linked to chapters and characters. Filter to follow one character.', 'Detailed mode'],
+    ['Planning', 'Insights', 'In Detailed mode, Insights shows the shape of your whole book. Pacing: one bar per chapter showing its length, how much is dialogue, and how many scenes, with unusually long, short, talky or quiet chapters pointed out. Characters: which chapters each character appears in (from the names and aliases on your Characters sheets), whose point of view each chapter is (set it, or let Unwip guess), and the longest stretch each one goes missing. Click anything to jump to that chapter.', 'Detailed mode › Insights'],
     ['Planning', 'Maps', 'Generate an island, continent or island chain, or paint your own. Add mountains, forests, towns, roads, borders, labels and pins linked to place sheets. One map can hold several sections (world, region, city).', '+ New › New map'],
     ['Planning', 'Map tools', 'Paint land 🟫 and water 🌊 (also for rivers and lakes). Forest, mountain and hill brushes scatter as you drag. The brush slider sets the size. ✋ moves things; double-click a label or pin to edit it. Clear empties the section; Ctrl+Z undoes.', 'In a map'],
 

@@ -3401,7 +3401,7 @@
     S.view = v;
     setTimeout(() => emit('view', v), 0);
     $$('#plan-nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-    const views = { outline: '#outline-view', cork: '#cork-view', mood: '#mood-view', timeline: '#timeline-view' };
+    const views = { outline: '#outline-view', cork: '#cork-view', mood: '#mood-view', timeline: '#timeline-view', insights: '#insights-view' };
     for (const [k, sel] of Object.entries(views)) $(sel).classList.toggle('hidden', v !== k);
     $('#page').classList.toggle('hidden', v !== 'write' || !S.docId);
     $('#empty-state').classList.toggle('hidden', v !== 'write' || !!S.docId);
@@ -3412,6 +3412,7 @@
     if (v === 'cork') renderCork();
     if (v === 'mood') renderMood();
     if (v === 'timeline') renderTimeline();
+    if (v === 'insights' && window.UnwipInsights) window.UnwipInsights.render();
   }
   $$('#plan-nav button').forEach(b => b.onclick = () => setView(b.dataset.v));
 

@@ -4,6 +4,7 @@ window.ICONS = (function () {
   return {
     panel: svg('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15 4.5v15"/>'),
     revise: svg('<path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+    chart: svg('<path d="M4 20h16"/><path d="M7 16v-5M11 16V7M15 16v-3M19 16V9"/>'),
     caretDown: svg('<path d="M6 9l6 6 6-6"/>'),
     comment: svg('<path d="M20 14a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 12h5"/>'),
     footnote: svg('<path d="M4 7h9M4 12h9M4 17h6"/><path d="M17 5.5l2-1.5v6"/><path d="M16 20h6"/>'),
