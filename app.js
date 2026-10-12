@@ -263,7 +263,7 @@
     api.backup(slug).catch(() => {});
     project.goals = project.goals || { daily: 0, total: 0, deadline: '' };
     if (project.goals.daily && !S.settings.dailyGoal) S.settings = await api.setSettings({ dailyGoal: project.goals.daily });
-    try { const all = await api.listProjects(); S.allDays = all.filter(p => p.slug !== slug).map(p => p.days || {}); } catch { S.allDays = []; }
+    try { const all = await api.listProjects(); S.allProjects = all; S.allDays = all.filter(p => p.slug !== slug).map(p => p.days || {}); } catch { S.allDays = []; S.allProjects = []; }
     project.stats.sprints = project.stats.sprints || [];
     scheduleNames(0);
     if (project.splitId && findNode(project.splitId)) setTimeout(() => openSplit(project.splitId), 300);
@@ -411,7 +411,7 @@
       const icon = n.root ? rootIcon(n) : iconHTML(n, n.type === 'folder' ? (n.open ? I.folderOpen : I.folder) : I.doc);
       const showCount = n.id === ms.id || isInside(n.id, ms);
       const count = showCount ? folderWords(n) : 0;
-      row.innerHTML = `<span class="tr-chev ${n.open ? 'open' : ''} ${n.type === 'folder' && (hasKids || n.root) ? '' : 'none'}">${I.chevron}</span><span class="tr-icon">${icon}</span><span class="tr-title">${esc(n.title || 'Untitled')}</span>${n.fav ? `<span class="tr-fav" title="Favourite">★</span>` : ''}${n.type === 'doc' && statusOf(n.status) && S.mode === 'detailed' ? `<span class="st-dot" style="--st:${statusColor(n.status)}" title="${esc(statusName(n.status))}"></span>` : ''}${showCount && count ? `<span class="tr-count">${fmt(count)}</span>` : ''}${n.root && n.kind !== 'trash' ? `<button class="tr-add" title="Add a new ${n.kind === 'manuscript' ? 'chapter' : newTitleFor(n).replace(/^New /, '')} to ${esc(n.title)}">+</button>` : ''}`;
+      row.innerHTML = `<span class="tr-chev ${n.open ? 'open' : ''} ${n.type === 'folder' && (hasKids || n.root) ? '' : 'none'}">${I.chevron}</span><span class="tr-icon">${icon}</span><span class="tr-title">${esc(n.title || 'Untitled')}</span>${n.series && S.project.series ? `<span class="tr-series" title="Shared with the series “${esc(S.project.series)}”">${I.series}</span>` : ''}${n.fav ? `<span class="tr-fav" title="Favourite">★</span>` : ''}${n.type === 'doc' && statusOf(n.status) && S.mode === 'detailed' ? `<span class="st-dot" style="--st:${statusColor(n.status)}" title="${esc(statusName(n.status))}"></span>` : ''}${showCount && count ? `<span class="tr-count">${fmt(count)}</span>` : ''}${n.root && n.kind !== 'trash' ? `<button class="tr-add" title="Add a new ${n.kind === 'manuscript' ? 'chapter' : newTitleFor(n).replace(/^New /, '')} to ${esc(n.title)}">+</button>` : ''}`;
       row.draggable = !n.root;
       tree.appendChild(row);
       if (n.type === 'folder' && n.open) for (const c of n.children || []) build(c, depth + 1);
@@ -485,6 +485,10 @@
       items.push({ label: 'Change icon…', action: () => iconPicker(n.id) });
       items.push({ label: 'Rename', hint: 'Double-click', action: () => startRename($(`.tree-row[data-id="${n.id}"]`), n) });
       if (n.type === 'doc') items.push({ label: 'Copy for Docs', action: () => copyDocForDocs(n.id) });
+      if (n.type === 'doc' && !n.map && window.UnwipSeries && ['characters', 'places', 'items'].concat(S.project.binder.filter(r => r.custom).map(r => r.kind)).includes(root.kind)) {
+        if (n.series && S.project.series) items.push({ label: 'Stop sharing with the series…', action: async () => { if (await confirmBox('Stop sharing?', `“${esc(n.title)}” stays in every book, but the copies stop updating each other.`, 'Stop sharing')) window.UnwipSeries.unshare(n); } });
+        else items.push({ label: 'Share with the series…', action: async () => { if (!S.project.series) return window.UnwipSeries.open(); await flushSave(); await window.UnwipSeries.share([n]); toast(`“${esc(n.title)}” is shared with the series “${esc(S.project.series)}”.`); } });
+      }
       if (n.type === 'doc') items.push({ label: 'Snapshots…', action: async () => { await openDoc(n.id); snapshotsDialog(); } });
       if (n.type === 'doc' || n.type === 'folder') items.push({ label: 'Remove empty lines…', action: () => tidyBlankLines(n.id) });
       if (n.type === 'doc' && n.id !== S.docId) items.push({ label: 'Open in split view', action: () => { if (S.view !== 'write') setView('write'); openSplit(n.id); } });
@@ -510,6 +514,7 @@
     if (n.type === 'folder' && root.kind !== 'trash') items.push({ sep: true }, { label: '🗺️ New map here…', action: () => window.UnwipMaps && window.UnwipMaps.create(n.id) }, ...(window.UnwipBookImport ? window.UnwipBookImport.menuItems({ parentId: n.id }).map(x => ({ ...x, label: x.label.replace(/^Word, Google Docs, LibreOffice, text files…/, 'Import files here…').replace(/^A folder of chapter files…/, 'Import a folder of chapters here…').replace(/^Paste a whole book.*/, 'Paste chapters here…') })) : [{ label: 'Import Word file here…', action: () => importDocxInto(n.id) }]));
     if (n.kind === 'manuscript') items.push({ sep: true }, { label: '🔒 Protected: this is what gets exported', disabled: true });
     if (n.root) {
+      if (window.UnwipSeries && n.kind !== 'manuscript' && n.kind !== 'trash') items.push({ sep: true }, { label: 'Series bible (share with other books)…', action: () => window.UnwipSeries.open() });
       items.push({ sep: true }, { label: 'Change icon…', action: () => iconPicker(n.id) }, { label: 'New template section (Factions, Magic, Creatures…)…', action: () => templateGallery() });
       if (n.custom) items.push({ label: 'Edit this section…', action: () => editSection(n) }, { label: 'Save as one of my templates…', action: () => editSection(n, true) }, { label: 'Remove this section…', danger: true, action: () => deleteSection(n) });
     }
@@ -1062,7 +1067,9 @@
     $$('.toast.with-action').forEach(t => t.remove()); // offers about the previous document
     S.docId = id; S.selectedId = id;
     S.project.lastDoc = id; scheduleMeta();
-    const html = await api.loadDoc(S.slug, id);
+    let html = await api.loadDoc(S.slug, id);
+    if (f.node.series && window.UnwipSeries) { try { const fresh = await window.UnwipSeries.reconcile(f.node, html); if (fresh != null && S.docId === id) html = fresh; } catch (e) { console.warn('series', e); } }
+    if (S.docId !== id) return;
     showEmpty(false);
     editor.innerHTML = html || '<p><br></p>';
     S.loadedHTML = editor.innerHTML;
@@ -1126,6 +1133,7 @@
     if (f) { f.node.words = countWords(editorText()); f.node.mod = Date.now(); f.node.dev = S.device || ''; }
     if (S.loadedHTML && S.loadedHTML !== html) autoSnapshotIfNeeded(id, S.loadedHTML).catch(() => {});
     await api.saveDoc(S.slug, id, html);
+    if (f && f.node.series && window.UnwipSeries) window.UnwipSeries.push(f.node, html).catch(e => console.warn('series', e));
     emit('saved', id, html);
     if (f && ['characters', 'places', 'items'].includes((rootOf(id) || {}).kind)) scheduleNames();
     await saveMetaNow();
@@ -1244,6 +1252,11 @@
     const daily = (S.settings || {}).dailyGoal || 0;
     const before = daily ? writtenOn(day) : 0;
     S.project.stats.days[day] = (S.project.stats.days[day] || 0) + d;
+    // for Writing history: what time of day the words come, and minutes spent writing
+    const st = S.project.stats, now = new Date();
+    if (d > 0) { st.hours = st.hours || {}; const h = now.getHours(); st.hours[h] = (st.hours[h] || 0) + d; }
+    const minute = Math.floor(now.getTime() / 60000);
+    if (S.lastTypedMinute !== minute) { S.lastTypedMinute = minute; st.mins = st.mins || {}; st.mins[day] = (st.mins[day] || 0) + 1; }
     emit('typed', d);
     if (daily && before < daily && writtenOn(day) >= daily && S.goalCheered !== day) { S.goalCheered = day; quoteToast(`Daily goal reached: ${fmt(daily)} words!`); }
   }
@@ -2952,13 +2965,14 @@
         </div>
       </div>
       ${paceText(g, total) ? `<div class="pace">${paceText(g, total)}</div>` : ''}
-      <div class="chart-wrap"><div class="chart-cap"><span>Words written, last 14 days (all projects)</span><span>${fmt(week)} this week</span></div>${historyChart(null, daily)}</div>
+      <div class="chart-wrap"><div class="chart-cap"><span>Words written, last 14 days (all projects)</span><span>${fmt(week)} this week${window.UnwipHistory ? ` · <button class="link-btn" id="g-history">Full history ›</button>` : ''}</span></div>${historyChart(null, daily)}</div>
       <div class="form-grid" style="margin-top:16px">
         <div class="field"><label>Daily goal (all projects)</label><input type="number" id="g-daily" min="0" step="50" value="${daily || ''}" placeholder="e.g. 1000"></div>
         <div class="field"><label>Manuscript goal for this project</label><input type="number" id="g-total" min="0" step="1000" value="${g.total || ''}" placeholder="e.g. 90000"></div>
         <div class="field"><label>Deadline (optional)</label><input type="date" id="g-deadline" value="${g.deadline || ''}" class="date-input"></div>
       </div>
       <p style="margin-top:10px">Only words you type count towards daily goals and streaks. Pasting and big deletions are left out so the numbers stay honest.</p>`;
+    const hb = $('#g-history', body); if (hb) hb.onclick = () => { const c = body.closest('.modal-back'); const x = c && c.querySelector('.m-foot button'); if (x) x.click(); window.UnwipHistory.open(); };
     const ok = await modal({ title: 'Goals & progress', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }, { label: 'Save goals', value: true, kind: 'primary' }] });
     if (!ok) return;
     g.total = Math.max(0, +$('#g-total', body).value || 0);
@@ -2994,7 +3008,8 @@
         </div>
         ${daily ? '' : `<button class="btn ghost small dash-setgoal" id="dash-setgoal">Set a daily goal</button>`}
       </div>
-      <div class="dash-card chart-card"><div class="chart-cap"><span>Last 14 days</span><span>${daily && todayW >= daily ? 'Goal met today!' : daily ? `${fmt(Math.max(0, daily - todayW))} to go today` : ''}</span></div>${historyChart(allDays, daily)}</div>`;
+      <div class="dash-card chart-card"><div class="chart-cap"><span>Last 14 days</span><span>${daily && todayW >= daily ? 'Goal met today! · ' : daily ? `${fmt(Math.max(0, daily - todayW))} to go today · ` : ''}<button class="link-btn" id="dash-history">Full history ›</button></span></div>${historyChart(allDays, daily)}</div>`;
+    const dh = $('#dash-history'); if (dh) dh.onclick = () => window.UnwipHistory && window.UnwipHistory.open();
     const sg = $('#dash-setgoal'); if (sg) sg.onclick = openSettings;
     const cb = $('#btn-continue'); if (cb) cb.onclick = () => continueWriting(lp);
   }
@@ -4047,6 +4062,6 @@
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,
     reloadProjectMeta, showLibrary, openProject, leaveProject: () => leaveProject(), importScrivener: () => importScrivener(), DEFAULT_STYLE, setMode, setView: v => setView(v), importWordProject: () => importWordProject(), newProjectTemplate: () => newProjectTemplate(), ROOTS,
     tidyBlankLines, sectionDialog, templateGallery, continueWriting, noteLastPlace, caretOffset,
-    openPreview, snapshotsDialog, openSettings, goalsDialog, openFind, openSearch, splitAtCursor, setMode, restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
+    openPreview, snapshotsDialog, openSettings, goalsDialog, writtenOn, dayKey, streaks, dial, manuscriptWords, openFind, openSearch, splitAtCursor, setMode, restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
   };
 })();
