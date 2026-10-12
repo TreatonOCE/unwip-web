@@ -89,6 +89,15 @@ window.FolioImport = (function () {
         return (picCache[name] = p ? `<img class="doc-img" src="${p.src}" data-w="${p.w}" data-h="${p.h}" style="width: 60%" alt="">` : '');
       } catch { return (picCache[name] = ''); }
     };
+    // a reader's Word comments: id -> { by, at, note }
+    const wcomments = {};
+    const cXml = await text('word/comments.xml');
+    if (cXml) for (const c of parse(cXml).getElementsByTagNameNS(W, 'comment')) {
+      const id = c.getAttributeNS(W, 'id') || c.getAttribute('w:id');
+      wcomments[id] = { by: c.getAttributeNS(W, 'author') || c.getAttribute('w:author') || 'Reader', at: c.getAttributeNS(W, 'date') || c.getAttribute('w:date') || '',
+        note: [...c.getElementsByTagNameNS(W, 'p')].map(p => [...p.getElementsByTagNameNS(W, 't')].map(t => t.textContent).join('')).join('\n').trim() };
+    }
+    const activeC = new Set();
     let sectionBreak = false;
     for (const p of paras) {
       const ppr = kid(p, 'pPr');
@@ -105,14 +114,17 @@ window.FolioImport = (function () {
       const runs = [];
       // collect runs (also inside hyperlinks / smart tags)
       // tracked changes from an editor (w:ins / w:del) come in as suggestions
-      const tcOf = new Map();
+      const tcOf = new Map(); let anchor = null;
       (function collect(el, tc) { for (const c of el.childNodes) {
         if (c.localName === 'r') { runs.push(c); if (tc) tcOf.set(c, tc); }
+        else if (c.localName === 'commentRangeStart' || c.localName === 'commentRangeEnd') runs.push(c);
+        else if (c.localName === 'bookmarkStart') { const nm = c.getAttributeNS(W, 'name') || c.getAttribute('w:name') || ''; if (/^unwip_/.test(nm)) anchor = nm.slice(6); }
         else if (c.localName === 'ins' || c.localName === 'del') collect(c, { k: c.localName, a: c.getAttributeNS(W, 'author') || c.getAttribute('w:author') || 'Editor', t: Date.parse(c.getAttributeNS(W, 'date') || c.getAttribute('w:date') || '') || 0 });
         else if (['hyperlink', 'smartTag', 'sdt', 'sdtContent', 'fldSimple'].includes(c.localName)) collect(c, tc);
       } })(p, null);
       let hasPageBreak = false, breakAfter = false;
       for (const r of runs) {
+        if (r.localName !== 'r') { const cid = r.getAttributeNS(W, 'id') || r.getAttribute('w:id'); if (r.localName === 'commentRangeStart') activeC.add(cid); else activeC.delete(cid); continue; }
         const rpr = kid(r, 'rPr');
         const rs = rpr ? val(kid(rpr, 'rStyle')) : null;
         const bold = rpr && kid(rpr, 'b') ? onOff(kid(rpr, 'b')) : (rs && styleProp(rs, 'bold')) || false;
@@ -143,9 +155,10 @@ window.FolioImport = (function () {
         const css = []; if (font) css.push(`font-family:${qf(font)}`); if (size) css.push(`font-size:${size}pt`);
         let piece = css.length ? `<span style="${css.join(';')}">${t}</span>` : t;
         const tc = tcOf.get(r); if (tc) piece = `<${tc.k} class="tc-${tc.k}" data-a="${esc(tc.a)}" data-t="${tc.t || ''}">${piece}</${tc.k}>`;
+        for (const cid of activeC) { const c = wcomments[cid]; if (c) piece = `<span class="cmt" data-cid="w${esc(cid)}" data-note="${esc(c.note)}" data-at="${esc(c.at)}" data-by="${esc(c.by)}">${piece}</span>`; }
         inner += piece;
       }
-      html += `<${tag}${align ? ` style="text-align:${align}"` : ''}${pageBreakBefore || hasPageBreak ? ' data-break="1"' : ''}${breakAfter ? ' data-break-after="1"' : ''}>${inner.replace(/^ +/, '') || '<br>'}</${tag}>`;
+      html += `<${tag}${anchor ? ` data-anchor="${esc(anchor)}"` : ''}${align ? ` style="text-align:${align}"` : ''}${pageBreakBefore || hasPageBreak ? ' data-break="1"' : ''}${breakAfter ? ' data-break-after="1"' : ''}>${inner.replace(/^ +/, '') || '<br>'}</${tag}>`;
     }
     return html;
   }

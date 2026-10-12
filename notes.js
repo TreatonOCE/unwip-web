@@ -58,7 +58,7 @@ window.UnwipNotes = (function () {
     const map = new Map();
     for (const s of $$('span.cmt[data-cid]', editor)) {
       const id = s.dataset.cid;
-      if (!map.has(id)) map.set(id, { id, note: s.dataset.note || '', at: s.dataset.at || '', spans: [] });
+      if (!map.has(id)) map.set(id, { id, note: s.dataset.note || '', at: s.dataset.at || '', by: s.dataset.by || '', spans: [] });
       map.get(id).spans.push(s);
     }
     return [...map.values()];
@@ -117,7 +117,7 @@ window.UnwipNotes = (function () {
       ${cs.length ? cs.map(c => `<div class="np-card" data-cid="${c.id}">
           <div class="np-quote">“${esc(quoteOf(c))}”</div>
           <textarea rows="2" placeholder="Write your comment…">${esc(c.note)}</textarea>
-          <div class="np-foot"><span>${esc(fmtDate(c.at))}</span><button class="btn small ghost np-resolve" title="Remove the comment and keep the words">Resolve</button></div>
+          <div class="np-foot"><span>${c.by ? `<b>${esc(c.by)}</b> · ` : ''}${esc(fmtDate(c.at))}</span><button class="btn small ghost np-resolve" title="Remove the comment and keep the words">Resolve</button></div>
         </div>`).join('') : '<p class="np-empty">Select some words and press <b>Ctrl+Alt+M</b> (or right-click → Add comment). Comments are notes to yourself and never appear in exports.</p>'}
       <div class="np-sec"><span>Footnotes</span><b>${fs.length}</b><button class="btn small ghost" id="np-add-f" title="Insert a footnote where the cursor is (Ctrl+Alt+F)">+ Footnote</button></div>
       ${fs.length ? fs.map(f => `<div class="np-card fn" data-fid="${f.id}">

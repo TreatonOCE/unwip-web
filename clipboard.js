@@ -108,6 +108,7 @@
       if (t === 'U' || (t === 'INS' && !tc)) s.underline = true;
       if (t === 'S' || t === 'STRIKE' || (t === 'DEL' && !tc)) s.strike = true;
       if (tc && (window.FolioClip && window.FolioClip.keepChanges)) s.tc = { k: tc, a: el.getAttribute('data-a') || '', t: +el.getAttribute('data-t') || 0 };
+      if (el.classList && el.classList.contains('cmt') && (window.FolioClip && window.FolioClip.keepChanges)) s.cmt = [...(s.cmt || []), { id: el.getAttribute('data-cid') || '', note: el.getAttribute('data-note') || '', at: el.getAttribute('data-at') || '', by: el.getAttribute('data-by') || '' }];
       if (t === 'SUP') s.sup = true;
       if (t === 'SUB') s.sub = true;
       if (t === 'FONT') {
@@ -134,7 +135,7 @@
       if (!text) return;
       const b = ensureBlock();
       const last = b.runs[b.runs.length - 1];
-      const run = { text, tc: s.tc || null, bold: !!s.bold, italic: !!s.italic, underline: !!s.underline, strike: !!s.strike, sup: !!s.sup, sub: !!s.sub, font: s.font || null, size: s.size || null, color: s.color || null, bg: s.bg || null };
+      const run = { text, tc: s.tc || null, cmt: s.cmt || null, bold: !!s.bold, italic: !!s.italic, underline: !!s.underline, strike: !!s.strike, sup: !!s.sup, sub: !!s.sub, font: s.font || null, size: s.size || null, color: s.color || null, bg: s.bg || null };
       if (last && !last.br && last.fn === undefined && !last.img && sameStyle(last, run)) last.text += text; else b.runs.push(run);
     }
 
@@ -221,7 +222,7 @@
   }
 
   function sameStyle(a, b) {
-    return (a.tc || null) === (b.tc || null) && a.bold === b.bold && a.italic === b.italic && a.underline === b.underline && a.strike === b.strike &&
+    return (a.tc || null) === (b.tc || null) && (a.cmt || null) === (b.cmt || null) && a.bold === b.bold && a.italic === b.italic && a.underline === b.underline && a.strike === b.strike &&
       a.sup === b.sup && a.sub === b.sub && a.font === b.font && a.size === b.size && a.color === b.color && a.bg === b.bg;
   }
 
@@ -256,6 +257,7 @@
       if (r.color && !opts.dropColors) css.push(`color: ${r.color}`);
       if (r.bg && !opts.dropColors) css.push(`background-color: ${r.bg}`);
       if (css.length) h = `<span style="${escAttr(css.join('; '))}">${h}</span>`;
+      if (r.cmt) for (const k of r.cmt) h = `<span class="cmt" data-cid="${escAttr(k.id)}" data-note="${escAttr(k.note)}" data-at="${escAttr(k.at)}"${k.by ? ` data-by="${escAttr(k.by)}"` : ''}>${h}</span>`;
       if (r.tc && opts.keepChanges !== false) h = `<${r.tc.k} class="tc-${r.tc.k}" data-a="${escAttr(r.tc.a || '')}" data-t="${r.tc.t || ''}">${h}</${r.tc.k}>`;
       out += h;
     }
@@ -363,7 +365,7 @@
     // HTML from the clipboard -> clean HTML for the editor
     // a Word file with an editor's tracked changes keeps them as suggestions to accept or reject
     cleanPaste(html, opts) {
-      const keep = /class="tc-(ins|del)"/.test(String(html || '')), was = window.FolioClip.keepChanges;
+      const keep = /class="(tc-(ins|del)|cmt)"/.test(String(html || '')), was = window.FolioClip.keepChanges;
       if (keep) window.FolioClip.keepChanges = true;
       try { return toEditorHTML(extract(parseHTML(html)), opts); } finally { window.FolioClip.keepChanges = was; }
     },

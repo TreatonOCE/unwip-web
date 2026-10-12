@@ -2251,7 +2251,10 @@
       null,
       ['doc', 'Print-ready PDF', 'Paperback interior with page numbers and chapter openers', '', () => openPreview('paperback')],
       ['book', 'EPUB e-book', 'For Kindle (KDP), Apple Books and Kobo', '', () => openPreview('ebook')],
-      ['doc', 'Word document (.docx)', 'For an editor, agent or beta reader', '', () => openPreview('docs')]
+      ['doc', 'Word document (.docx)', 'For an editor, agent or beta reader', '', () => openPreview('docs')],
+      null,
+      ['person', 'Send to a beta reader…', 'A Word file they mark up with Track Changes and comments', '', () => window.UnwipReader && window.UnwipReader.send()],
+      ['importic', 'Bring in a reader’s feedback…', 'Their changes and comments land in the right chapters', '', () => window.UnwipReader && window.UnwipReader.receive()]
     ];
     const pop = document.createElement('div'); pop.className = 'export-pop'; pop.setAttribute('role', 'menu');
     pop.innerHTML = items.map((x, i) => x ? `<button class="ex-item" role="menuitem" data-i="${i}"><span class="ex-ic">${I[x[0]] || ''}</span><span class="ex-t"><b>${esc(x[1])}</b><small>${esc(x[2])}</small></span>${x[3] ? `<kbd>${x[3]}</kbd>` : ''}</button>` : '<hr>').join('') + '<p class="ex-note">Whole book or this chapter? Choose in Preview.</p>';
@@ -3179,6 +3182,7 @@
   $('#btn-search').innerHTML = I.search;
   $('#btn-search').onclick = () => openSearch('search');
   $('#rp-analysis').onclick = () => openSearch('freq');
+  $('#rp-read').onclick = () => window.UnwipRead && window.UnwipRead.start();
 
   // ================================================================== SNAPSHOTS
   $('#snap-ic').innerHTML = I.history;

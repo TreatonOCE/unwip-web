@@ -14,7 +14,7 @@ window.FolioDOCX = (function () {
   const fonts = f => `<w:rFonts w:ascii="${x(f)}" w:hAnsi="${x(f)}" w:cs="${x(f)}" w:eastAsia="${x(f)}"/>`;
   const field = name => `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ${name} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
 
-  let TC_ID = 1;
+  let TC_ID = 1, BM_ID = 1;
   function runXML(r, base) {
     if (r.br) return '<w:r><w:br/></w:r>';
     if (r.img) return base.picture ? base.picture(r) : '';
@@ -71,7 +71,9 @@ window.FolioDOCX = (function () {
       if (hasPic && !align) pPr.push('<w:jc w:val="center"/>');
       if (!heading && b.tag === 'p' && (hasPic || scene || (S.noIndentFirst && afterBreak) || align === 'center' || align === 'right')) pPr.push('<w:ind w:firstLine="0"/>');
       const runs = scene ? `<w:r><w:t>${opts.smf ? '#' : x(text.trim())}</w:t></w:r>` : b.runs.map(r => runXML(r, { font: heading ? null : S.font, size: heading ? null : S.size, notes, picture })).join('');
-      body.push(`<w:p>${pPr.length ? `<w:pPr>${pPr.join('')}</w:pPr>` : ''}${runs}</w:p>`);
+      // a hidden marker on each chapter heading, so a reader's copy can be matched back to the right chapter
+      const bm = b.anchor ? (n => `<w:bookmarkStart w:id="${n}" w:name="unwip_${String(b.anchor).replace(/[^A-Za-z0-9_]/g, '').slice(0, 34)}"/><w:bookmarkEnd w:id="${n}"/>`)(5000 + (BM_ID++)) : '';
+      body.push(`<w:p>${pPr.length ? `<w:pPr>${pPr.join('')}</w:pPr>` : ''}${bm}${runs}</w:p>`);
       if (text.trim()) afterBreak = heading || !!scene;
     }
     const [pw, ph] = opts.page === 'Letter' ? [8.5, 11] : [8.27, 11.69];

@@ -207,8 +207,11 @@ window.UnwipTrack = (function () {
         return `<div class="tc-card" data-i="${i}"><div class="tc-who"><b>${esc(c.a || 'Someone')}</b><span>${esc(when(c.t))}</span></div><div class="tc-what">${what}</div>
           <div class="tc-acts"><button class="btn small" data-x="acc">✓ Accept</button><button class="btn small ghost" data-x="rej">✕ Reject</button></div></div>`;
       }).join('')}</div>
+      <div class="tc-readers"><button class="btn small" id="tc-send">Send to a beta reader…</button><button class="btn small" id="tc-recv">Bring in feedback…</button></div>
       <p class="side-note">Suggestions show in your exports as if accepted. A Word export keeps them as real tracked changes, and an editor’s tracked changes in a Word file come in here to accept or reject.</p>`;
     $('#tc-on', panelBody).onchange = e => setOn(e.target.checked);
+    $('#tc-send', panelBody).onclick = () => window.UnwipReader && window.UnwipReader.send();
+    $('#tc-recv', panelBody).onclick = () => window.UnwipReader && window.UnwipReader.receive();
     const aa = $('#tc-acc-all', panelBody), ra = $('#tc-rej-all', panelBody);
     if (aa) aa.onclick = () => all(accept);
     if (ra) ra.onclick = async () => { if (await U.confirmBox('Reject every suggestion?', 'Additions are removed and deleted words come back.', 'Reject all')) all(reject); };
