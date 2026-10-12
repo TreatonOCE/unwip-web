@@ -76,37 +76,56 @@ window.UnwipInsights = (function () {
   }
   const go = (id, find) => { U.setView('write'); U.openDoc(id).then(() => { if (find) { U.openFind(); const fi = document.getElementById('find-input'); if (fi) { fi.value = find; fi.dispatchEvent(new Event('input', { bubbles: true })); } } }); };
   const short = n => (n.title || 'Untitled').replace(/^(chapter\s+)?(\d+)[.:)\s-]+\s*/i, '');
-  const num = (n, i) => { const m = /^(?:chapter\s+)?(\d+)/i.exec(n.title || ''); return m ? m[1] : String(i + 1); };
+  // bars are numbered by their place in the manuscript (titles can repeat numbers or have none); hover shows the title
+  const num = (n, i) => String(i + 1);
 
   function pacing(chs, stats) {
     const body = $('#in-body'), words = stats.map(s => s.words), total = words.reduce((a, b) => a + b, 0);
-    const sorted = [...words].sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)] || 0;
-    const avg = total / chs.length, max = Math.max(...words, 1), dlg = stats.reduce((a, s) => a + s.dialogue, 0);
+    // empty chapters (placeholders) would drag the average down, so they're left out of it
+    const filled = words.filter(w => w > 0), sorted = [...filled].sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)] || 0;
+    const avg = filled.length ? total / filled.length : 0, max = Math.max(...words, 1), dlg = stats.reduce((a, s) => a + s.dialogue, 0);
     $('#in-sum').textContent = `${chs.length} chapters · ${total.toLocaleString()} words · average ${Math.round(avg).toLocaleString()} · ${total ? Math.round(dlg / total * 100) : 0}% dialogue`;
     // things worth a look
     const notes = [];
     chs.forEach((n, i) => {
-      const s = stats[i], name = `<b>${esc(/^\s*(chapter\s+)?\d+\b/i.test(n.title || '') ? n.title : `${num(n, i)}. ${n.title || 'Untitled'}`)}</b>`;
-      if (!s.words) return;
+      const s = stats[i], name = `<b>${esc(n.title || 'Untitled')}</b>${/^\s*(chapter\s+)?\d+\b/i.test(n.title || '') && num(n, i) === (/\d+/.exec(n.title) || [])[0] ? '' : ` <small>(bar ${num(n, i)})</small>`}`;
+      if (!s.words) { notes.push(['empty', i, `${name} is empty.`]); return; }
       if (median && s.words > median * 1.8 && s.words > 1500) notes.push(['long', i, `${name} is ${(s.words / median).toFixed(1)}× your usual chapter length. Worth splitting, or is it the big one?`]);
       else if (median && s.words < median * 0.4 && chs.length > 3) notes.push(['short', i, `${name} is much shorter than the rest (${s.words.toLocaleString()} words).`]);
       if (s.words > 400 && s.dialogue / s.words > 0.7) notes.push(['talk', i, `${name} is ${Math.round(s.dialogue / s.words * 100)}% dialogue. Room for a little more setting or action?`]);
       if (s.words > 1200 && s.dialogue / s.words < 0.04) notes.push(['quiet', i, `${name} has almost no dialogue. Fine for a reflective chapter, but check it moves.`]);
       if (s.words > 4000 && s.scenes === 1) notes.push(['scene', i, `${name} is one long scene of ${s.words.toLocaleString()} words.`]);
     });
+    // the book at a glance: always there, however even the chapters are
+    const glance = [];
+    const idx = filled.length ? stats.map((x, i) => i).filter(i => stats[i].words) : [];
+    if (idx.length) {
+      const by = f => idx.reduce((a, i) => (f(i) > f(a) ? i : a), idx[0]), byMin = f => idx.reduce((a, i) => (f(i) < f(a) ? i : a), idx[0]);
+      const dl = i => stats[i].dialogue / stats[i].words, t = i => `<b>${esc(chs[i].title || 'Untitled')}</b>`;
+      const longI = by(i => stats[i].words), shortI = byMin(i => stats[i].words);
+      if (idx.length > 1) glance.push(['g', longI, `Longest: ${t(longI)} at ${stats[longI].words.toLocaleString()} words. Shortest: ${t(shortI)} at ${stats[shortI].words.toLocaleString()}.`]);
+      const hiD = by(dl), loD = byMin(dl);
+      if (idx.length > 1) glance.push(['g', hiD, `Most dialogue: ${t(hiD)} (${Math.round(dl(hiD) * 100)}%). Least: ${t(loD)} (${Math.round(dl(loD) * 100)}%).`]);
+      const scenes = idx.reduce((a, i) => a + Math.max(1, stats[i].scenes), 0);
+      glance.push(['g', -1, `Scenes run about ${Math.round(total / scenes).toLocaleString()} words on average (${scenes} scene${scenes === 1 ? '' : 's'} in ${idx.length} chapter${idx.length === 1 ? '' : 's'}).`]);
+      const pct = total ? Math.round(dlg / total * 100) : 0;
+      glance.push(['g', -1, `The book is ${pct}% dialogue. ${pct < 15 ? 'That’s on the narration-heavy side: fine for a reflective or descriptive book, but if a scene feels slow, more people talking can speed it up.' : pct > 55 ? 'That’s dialogue-heavy: quick to read, but check readers can still picture where everyone is.' : 'That’s a middle-of-the-road mix of talk and narration.'}`]);
+      if (idx.length < 4) glance.push(['g', -1, `Comparing chapters gets more useful from about four chapters on: with ${idx.length} there isn’t much to compare yet.`]);
+    }
     const avgPct = avg / max * 100;
     body.innerHTML = `
       <div class="pc-legend"><span><i class="pc-k nar"></i>Narration</span><span><i class="pc-k dlg"></i>Dialogue</span><span><i class="pc-k scn"></i>Scenes</span><span><i class="pc-k avg"></i>Average length</span></div>
       <div class="pc-scroll"><div class="pc-chart" style="--n:${chs.length}">
         <div class="pc-avg" style="bottom:calc(var(--plot) * ${(avgPct / 100).toFixed(4)} + var(--base))"><span>avg ${Math.round(avg).toLocaleString()}</span></div>
         ${chs.map((n, i) => { const s = stats[i], h = s.words / max * 100, d = s.words ? s.dialogue / s.words * 100 : 0, flag = notes.some(x => x[1] === i && (x[0] === 'long' || x[0] === 'short'));
-          return `<button class="pc-col ${n.id === S.docId ? 'cur' : ''} ${flag ? 'flag' : ''}" data-i="${i}" aria-label="${esc(n.title || '')}: ${s.words} words">
+          return `<button class="pc-col ${n.id === S.docId ? 'cur' : ''} ${flag ? 'flag' : ''} ${s.words ? '' : 'empty'}" data-i="${i}" aria-label="${esc(n.title || '')}: ${s.words} words">
             <div class="pc-bar" style="--h:${h.toFixed(2)};height:calc(${h.toFixed(2)}% * 0 + var(--plot) * ${(h / 100).toFixed(4)})"><div class="pc-dlg" style="height:${d}%"></div></div>
             <div class="pc-scn">${s.scenes > 6 ? `<b>${s.scenes}</b>` : '<i></i>'.repeat(s.scenes)}</div>
             <div class="pc-lbl">${esc(num(n, i))}</div></button>`; }).join('')}
       </div></div>
       <div class="pc-tip hidden" id="pc-tip"></div>
-      <div class="in-notes"><h4>Worth a look</h4>${notes.length ? notes.slice(0, 12).map(x => `<button class="in-note k-${x[0]}" data-i="${x[1]}">${x[2]}</button>`).join('') : '<p class="in-ok">Nothing stands out. Your chapters are evenly paced.</p>'}</div>
+      <div class="in-notes"><h4>Worth a look</h4>${notes.length ? notes.slice(0, 12).map(x => `<button class="in-note k-${x[0]}" data-i="${x[1]}">${x[2]}</button>`).join('') : `<p class="in-ok">${filled.length > 1 ? 'Nothing unusual: no chapter is far longer or shorter than the rest, or all talk, or all narration.' : 'Nothing to compare yet.'}</p>`}</div>
+      ${glance.length ? `<div class="in-notes in-glance"><h4>At a glance</h4>${glance.map(x => x[1] >= 0 ? `<button class="in-note k-g" data-i="${x[1]}">${x[2]}</button>` : `<p class="in-note k-g">${x[2]}</p>`).join('')}</div>` : ''}
       <p class="in-foot">Counted on this device from your own writing. Dialogue is anything inside quotation marks; scenes are split by scene breaks (* * *). Suggested deletions aren’t counted.</p>`;
     const tip = $('#pc-tip');
     $$('.pc-col', body).forEach(b => {
@@ -116,7 +135,7 @@ window.UnwipInsights = (function () {
         const r = b.getBoundingClientRect(), br = body.getBoundingClientRect(); tip.style.left = Math.max(0, Math.min(br.width - 260, r.left - br.left + r.width / 2 - 130)) + 'px'; tip.style.top = (r.top - br.top - 8) + 'px'; };
       b.onmouseleave = () => tip.classList.add('hidden');
     });
-    $$('.in-note', body).forEach(b => b.onclick = () => go(chs[+b.dataset.i].id));
+    $$('button.in-note', body).forEach(b => b.onclick = () => go(chs[+b.dataset.i].id));
   }
 
   function characters(chs, stats) {

@@ -1955,3 +1955,9 @@ html.dv-on #editor-wrap { scroll-padding-bottom: 110px; } html.dv-on #editor { p
   .dv-long { display: none; }
   .dv-x { grid-column: 2; grid-row: 1; }
 }
+.in-note.k-empty::before { background: #94a3b8; }
+.in-note.k-g::before { background: var(--accent); opacity: .5; }
+p.in-note.k-g { cursor: default; margin: 0; }
+p.in-note.k-g:hover { border-color: var(--line); }
+.in-note small { color: var(--muted); font-weight: 400; }
+.pc-col.empty .pc-bar { height: 6px !important; background: transparent; border: 1.5px dashed var(--line); }
