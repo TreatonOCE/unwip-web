@@ -1782,3 +1782,6 @@ body.tc-on .st-track { color: #15803d; font-weight: 600; }
 .ra-bar select { height: 30px; border-radius: 99px; border: 1px solid rgba(255,255,255,.2); background: transparent; color: inherit; padding: 0 8px; font: inherit; max-width: 150px; }
 .ra-bar select option { color: #1f2a3c; }
 @media (max-width: 720px) { .ra-bar { bottom: calc(70px + env(safe-area-inset-bottom)); max-width: calc(100vw - 20px); } .ra-voice { display: none; } }
+.rd-how { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--paper); font-size: 13px; margin: 6px 0 4px; }
+.rd-how summary { cursor: pointer; }
+.rd-how ol { margin: 8px 0 6px; padding-left: 20px; } .rd-how li { margin: 3px 0; } .rd-how p { margin: 6px 0 0; color: var(--muted); }

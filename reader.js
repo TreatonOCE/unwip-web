@@ -23,7 +23,12 @@ window.UnwipReader = (function () {
       <div class="field"><label>Who is it for?</label><input type="text" id="rd-name" placeholder="e.g. Sam" value="${esc((S.project.readers || []).slice(-1).map(r => r.name)[0] || '')}"></div>
       <div class="rd-pick"><div class="rd-pick-head"><b>Chapters to send</b><span><button type="button" class="link-btn" data-all="1">All</button> · <button type="button" class="link-btn" data-all="0">None</button></span></div>
         <div class="rd-list">${docs.map(d => `<label class="check"><input type="checkbox" value="${esc(d.id)}" ${cur ? (d.id === cur ? 'checked' : '') : 'checked'}> ${esc(d.title || 'Untitled')} <small>${(d.words || 0).toLocaleString()} words</small></label>`).join('')}</div></div>
-      <p class="sy-note">They get a Word file (it opens in Word, Google Docs and Pages). Ask them to turn on <b>Track Changes</b> and leave comments. When they send it back, use <b>Bring in a reader’s feedback</b> and every change and comment lands in the right chapter. A snapshot of each chapter is kept exactly as sent.</p>`;
+      <details class="rd-how" open><summary><b>Using Google Docs?</b> (most readers do)</summary>
+        <ol><li>Upload the Word file to Google Drive, then open it with Google Docs.</li>
+        <li>Share it with your reader as <b>Commenter</b>. Their edits then come in as suggestions automatically.</li>
+        <li>When they’re done: <b>File › Download › Microsoft Word (.docx)</b>, then <b>Bring in a reader’s feedback</b> here.</li></ol>
+        <p>Using Word instead? Ask them to turn on <b>Track Changes</b> and send the file back.</p></details>
+      <p class="sy-note">Their suggestions and comments land in the right chapters, by chapter title, so ask them not to rename the chapter headings. A snapshot of each chapter is kept exactly as sent.</p>`;
     $$('[data-all]', body).forEach(b => b.onclick = () => $$('.rd-list input', body).forEach(c => c.checked = b.dataset.all === '1'));
     const ok = await U.modal({ title: 'Send to a beta reader', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Make the Word file', value: true, kind: 'primary' }] });
     if (!ok) return;
@@ -58,11 +63,17 @@ window.UnwipReader = (function () {
   function splitFeedback(raw) {
     const div = document.createElement('div'); div.innerHTML = raw;
     const docs = msDocs(), byTitle = new Map(docs.map(d => [normTitle(d.title), d.id]));
-    const parts = []; let cur = null;
+    // a heading's title as sent (a reader's suggested change to the heading itself doesn't count)
+    const sentTitle = el => { const c = el.cloneNode(true); c.querySelectorAll('ins.tc-ins').forEach(x => x.remove()); return normTitle(c.textContent); };
+    // Google Docs renames the hidden markers, so headings are matched by title, and then by order against the chapters last sent
+    const lastSent = ((S.project.readers || []).slice(-1)[0] || {}).docs || [];
+    const parts = []; let cur = null, h = 0;
     for (const el of [...div.children]) {
       const a = el.getAttribute('data-anchor');
-      const id = a && U.findNode(a) ? a : (/^H[12]$/.test(el.tagName) ? byTitle.get(normTitle(el.textContent)) : null);
-      if (id) { cur = { id, html: '' }; parts.push(cur); continue; }
+      let id = a && U.findNode(a) ? a : null;
+      if (!id && /^H1$/.test(el.tagName)) { id = byTitle.get(sentTitle(el)) || (lastSent[h] && U.findNode(lastSent[h]) ? lastSent[h] : null); h++; }
+      else if (id) h++;
+      if (id && !parts.some(p => p.id === id)) { cur = { id, html: '' }; parts.push(cur); continue; }
       if (cur) cur.html += el.outerHTML;
     }
     return parts;
