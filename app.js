@@ -1,0 +1,4038 @@
+// Unwip - app logic (library, binder, editor, copy/paste, export, writer mode)
+(function () {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const api = window.folio;
+  const Clip = window.FolioClip;
+  const Fonts = window.FolioFonts;
+  const I = window.ICONS;
+
+  // ------------------------------------------------------------------ defaults
+  const DEFAULT_STYLE = {
+    font: 'Times New Roman', size: 12, lineHeight: 1.5, indent: 0.5, paraSpacing: 0,
+    justify: false, noIndentFirst: true, titlesAsHeadings: true, pageWidth: 760,
+    headings: {
+      h1: { font: 'Times New Roman', size: 18, bold: true, italic: false, align: 'center', spaceBefore: 24, spaceAfter: 18 },
+      h2: { font: 'Times New Roman', size: 14, bold: true, italic: false, align: 'left', spaceBefore: 18, spaceAfter: 10 },
+      h3: { font: 'Times New Roman', size: 12, bold: true, italic: true, align: 'left', spaceBefore: 14, spaceAfter: 6 }
+    }
+  };
+  const ROOTS = [
+    { kind: 'manuscript', title: 'Manuscript', icon: 'book' },
+    { kind: 'characters', title: 'Characters', icon: 'person' },
+    { kind: 'places', title: 'Places', icon: 'pin' },
+    { kind: 'items', title: 'Items', icon: 'gem' },
+    { kind: 'notes', title: 'Notes', icon: 'note' },
+    { kind: 'research', title: 'Research', icon: 'flask' },
+    { kind: 'trash', title: 'Trash', icon: 'trash' }
+  ];
+  const NEW_TITLE = { manuscript: 'Chapter', characters: 'New character', places: 'New place', items: 'New item', notes: 'New note', research: 'New research note', trash: 'Untitled' };
+  const SHEETS = {
+    characters: ['Full name', 'Aliases', 'Role', 'Age'], places: ['Name', 'Aliases', 'Region', 'Type'], items: ['Name', 'Aliases', 'Type', 'Owner']
+  };
+  const SHEET_SECTIONS = {
+    characters: ['Appearance', 'Personality', 'Backstory', 'Notes'],
+    places: ['Description', 'History', 'Notes'],
+    items: ['Description', 'History', 'Notes']
+  };
+  const PAGE_SIZES = {
+    'A4': 'A4', 'Letter': 'Letter',
+    '6 x 9 in (paperback)': { width: 6, height: 9 },
+    '5.5 x 8.5 in (paperback)': { width: 5.5, height: 8.5 },
+    '5 x 8 in (paperback)': { width: 5, height: 8 }
+  };
+
+  // ------------------------------------------------------------------ state
+  const S = {
+    slug: null, project: null, docId: null, selectedId: null,
+    lastRange: null, sessionTyped: 0, lastDocWords: 0, programmatic: false,
+    saveTimer: null, metaTimer: null, dirty: false, backupTimer: null, plainPaste: false,
+    pendingSize: null
+  };
+  // small event bus so the add-on modules (notes.js, stuck.js, look.js) can follow along
+  const HOOKS = {};
+  function on(name, fn) { (HOOKS[name] = HOOKS[name] || []).push(fn); }
+  function emit(name, ...a) { for (const f of HOOKS[name] || []) { try { f(...a); } catch (e) { console.error(name, e); } } }
+  const editor = $('#editor');
+  const editorWrap = $('#editor-wrap');
+
+  const uid = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const countWords = t => (String(t).match(/[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu) || []).length;
+  const fmt = n => Number(n || 0).toLocaleString();
+  const today = () => new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
+
+  // ------------------------------------------------------------------ theme
+  function applyTheme() {
+    const pref = localStorage.getItem('folio-theme') || 'system';
+    const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+  applyTheme();
+
+  // ------------------------------------------------------------------ toasts, menus, modals
+  function toast(msg, kind = '', ms = 3200) {
+    const t = document.createElement('div');
+    t.className = 'toast ' + kind; t.innerHTML = msg;
+    $('#toasts').appendChild(t);
+    setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, ms);
+  }
+
+  function toastAction(msg, label, action, ms = 12000) {
+    const t = document.createElement('div');
+    t.className = 'toast with-action';
+    t.innerHTML = `<span>${msg}</span>`;
+    const b = document.createElement('button');
+    b.className = 'toast-btn'; b.textContent = label;
+    const close = () => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); };
+    b.onclick = () => { close(); action(); };
+    const x = document.createElement('button');
+    x.className = 'toast-x'; x.textContent = '✕'; x.title = 'Dismiss'; x.onclick = close;
+    t.append(b, x);
+    $('#toasts').appendChild(t);
+    setTimeout(close, ms);
+  }
+
+  function showMenu(x, y, items) {
+    const m = $('#menu');
+    m.innerHTML = '';
+    for (const it of items) {
+      if (it.sep) { m.appendChild(document.createElement('hr')); continue; }
+      const b = document.createElement('button');
+      b.innerHTML = esc(it.label) + (it.hint ? `<span class="hint">${esc(it.hint)}</span>` : '');
+      if (it.danger) b.classList.add('danger');
+      if (it.disabled) b.disabled = true;
+      b.onclick = () => { hideMenu(); it.action && it.action(); };
+      m.appendChild(b);
+    }
+    m.classList.remove('hidden');
+    const r = m.getBoundingClientRect();
+    m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+    m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  }
+  function hideMenu() { $('#menu').classList.add('hidden'); }
+  document.addEventListener('mousedown', e => { if (!e.target.closest('#menu')) hideMenu(); });
+
+  function modal({ title, body, buttons, wide, onOpen }) {
+    return new Promise(resolve => {
+      const back = document.createElement('div');
+      back.className = 'modal-back';
+      back.innerHTML = `<div class="modal ${wide ? 'wide' : ''}"><h2>${esc(title)}</h2><div class="m-body"></div><div class="m-foot"></div></div>`;
+      const bodyEl = $('.m-body', back);
+      if (typeof body === 'string') bodyEl.innerHTML = body; else if (body) bodyEl.appendChild(body);
+      const foot = $('.m-foot', back);
+      const close = v => { back.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+      for (const b of buttons || [{ label: 'OK', value: true, kind: 'primary' }]) {
+        const btn = document.createElement('button');
+        btn.className = 'btn ' + (b.kind || '');
+        btn.textContent = b.label;
+        btn.onclick = () => close(b.value === undefined ? b.label : b.value);
+        foot.appendChild(btn);
+      }
+      const onKey = e => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(null); }
+        if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !e.target.isContentEditable) {
+          const primary = foot.querySelector('.primary'); if (primary) { e.preventDefault(); primary.click(); }
+        }
+      };
+      document.addEventListener('keydown', onKey, true);
+      back.addEventListener('mousedown', e => { if (e.target === back) close(null); });
+      document.body.appendChild(back);
+      onOpen && onOpen(back);
+      const first = back.querySelector('input, select'); if (first) { first.focus(); first.select && first.select(); }
+    });
+  }
+  async function promptText(title, label, value = '') {
+    let input;
+    const body = document.createElement('div');
+    body.innerHTML = `<div class="field"><label>${esc(label)}</label><input type="text" value="${esc(value)}"></div>`;
+    input = $('input', body);
+    const ok = await modal({ title, body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'OK', value: true, kind: 'primary' }] });
+    return ok ? input.value.trim() : null;
+  }
+  async function confirmBox(title, text, okLabel = 'OK', danger = false) {
+    return !!(await modal({ title, body: `<p>${text}</p>`, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: okLabel, value: true, kind: danger ? 'danger primary' : 'primary' }] }));
+  }
+
+  // ------------------------------------------------------------------ icons into static buttons
+  $('#btn-library').innerHTML = I.back;
+  $('#btn-export').innerHTML = I.preview;
+  $('#btn-settings').innerHTML = I.gear; $('#btn-settings-lib').innerHTML = I.gear;
+  $('#sprint-bolt').innerHTML = I.bolt; $('#rp-refresh-ic').innerHTML = I.refresh;
+  $('#btn-style').innerHTML = I.style;
+  $('#btn-writer').innerHTML = I.writer;
+  $('#btn-cmdk').innerHTML = I.search; $('#btn-panel').innerHTML = I.panel; $('#btn-export-more').innerHTML = I.caretDown;
+  $('#btn-cmdk').onclick = () => window.UnwipCommand && window.UnwipCommand.open();
+  $$('[data-icon]').forEach(b => b.innerHTML = I[b.dataset.icon]);
+  const writerExit = document.createElement('button');
+  writerExit.className = 'btn writer-exit'; writerExit.textContent = 'Exit writer mode (Esc)';
+  writerExit.onclick = () => setWriter(false);
+  document.body.appendChild(writerExit);
+
+  // ================================================================== LIBRARY
+  async function showLibrary() {
+    if (S.slug) await leaveProject();
+    $('#workspace').classList.add('hidden');
+    $('#library').classList.remove('hidden');
+    try { S.settings = await api.getSettings(); } catch {}
+    const list = await api.listProjects();
+    $('#lib-total-words').textContent = fmt(list.reduce((a, p) => a + (p.words || 0), 0));
+    const todayWritten = list.reduce((a, p) => a + ((p.days || {})[today()] || 0), 0);
+    $('#lib-today').textContent = '';
+    renderDashboard(list);
+    renderQuoteCard();
+    emit('library', list);
+    document.title = 'Unwip — Write to finish';
+    const grid = $('#project-grid');
+    grid.innerHTML = '';
+    if (!list.length) grid.innerHTML = '<div class="lib-empty">No projects yet. Create one to start writing.</div>';
+    for (const p of list) {
+      const card = document.createElement('div');
+      card.className = 'project-card';
+      const when = p.modified ? new Date(p.modified).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+      const goal = (p.goals || {}).total || 0;
+      const pace = paceText(p.goals || {}, p.words || 0);
+      card.innerHTML = `<div class="pc-top"><div><div class="pc-spine"></div><h3>${esc(p.title)}</h3></div>
+          ${goal ? dial({ pct: p.words / goal, big: Math.floor(p.words / goal * 100) + '%', small: '', size: 58, track: 6 }) : ''}</div>
+        ${pace ? `<div class="pc-pace">${esc(pace)}</div>` : ''}
+        <div class="pc-meta">${fmt(p.words)}${goal ? ' / ' + fmt(goal) : ''} words · ${when}${p.dev && S.device && p.dev !== S.device ? ` · on ${esc(p.dev)}` : ''}</div><button class="icon-btn small pc-more" title="More">${I.dots}</button>`;
+      card.onclick = e => { if (!e.target.closest('.pc-more')) openProject(p.slug); };
+      $('.pc-more', card).onclick = e => {
+        e.stopPropagation();
+        showMenu(e.clientX, e.clientY, [
+          { label: 'Open', action: () => openProject(p.slug) },
+          { label: 'Show in folder', action: () => api.revealProject(p.slug) },
+          { label: 'Backups…', action: () => window.UnwipSync && window.UnwipSync.backupsDialog(p.slug, p.title) },
+          { label: 'Save a full backup file…', action: async () => { const f = await api.backupExport(p.slug); if (f) toast('Full backup saved, including images and snapshots.'); } },
+          { sep: true },
+          { label: 'Move to Recycle Bin…', danger: true, action: async () => {
+            if (await confirmBox('Delete project?', `"${esc(p.title)}" will be moved to the Windows Recycle Bin. You can restore it from there.`, 'Move to Recycle Bin', true)) {
+              await api.deleteProject(p.slug); showLibrary();
+            }
+          } }
+        ]);
+      };
+      grid.appendChild(card);
+    }
+  }
+  $('#btn-new-project').onclick = async () => {
+    const title = await promptText('New project', 'Project title', '');
+    if (!title) return;
+    const slug = await api.createProject(title, newProjectTemplate());
+    openProject(slug);
+  };
+  $('#btn-open-folder').onclick = () => api.revealProject(null);
+
+  function newProjectTemplate() {
+    const firstChapter = { id: uid(), type: 'doc', title: 'Chapter 1', words: 0 };
+    return {
+      version: 1,
+      style: mergeStyle({ ...JSON.parse(JSON.stringify(DEFAULT_STYLE)), ...((S.settings || {}).defaultStyle || {}) }),
+      binder: ROOTS.map(r => ({ id: 'root-' + r.kind, type: 'folder', kind: r.kind, title: r.title, root: true, open: r.kind === 'manuscript', children: r.kind === 'manuscript' ? [firstChapter] : [] })),
+      lastDoc: firstChapter.id,
+      totalWords: 0,
+      stats: { days: {} }
+    };
+  }
+
+  // ================================================================== PROJECT
+  async function openProject(slug, opts = {}) {
+    if (!opts.skipCheck && window.UnwipSync && !(await window.UnwipSync.beforeOpen(slug))) return false;
+    try { S.settings = await api.getSettings(); } catch {}
+    const project = await api.openProject(slug);
+    project.style = mergeStyle(project.style);
+    repairRoots(project);
+    project.stats = project.stats || { days: {} };
+    // older versions counted pasted text as written words, so start progress tracking fresh
+    if (project.statsVersion !== 2) { project.stats.days = {}; project.statsVersion = 2; }
+    S.slug = slug; S.project = project;
+    $('#library').classList.add('hidden');
+    $('#workspace').classList.remove('hidden');
+    $('#project-title').textContent = project.title;
+    document.title = project.title + ' — Unwip';
+    applyStyle();
+    const total = manuscriptWords();
+    S.sessionTyped = 0;
+    S.project.totalWords = total; scheduleMeta(); // refresh a stale total straight away
+    renderBinder();
+    const first = project.lastDoc && findNode(project.lastDoc) ? project.lastDoc : firstDocId();
+    if (first) await openDoc(first); else showEmpty(true);
+    updateStatus();
+    api.backup(slug).catch(() => {});
+    project.goals = project.goals || { daily: 0, total: 0, deadline: '' };
+    if (project.goals.daily && !S.settings.dailyGoal) S.settings = await api.setSettings({ dailyGoal: project.goals.daily });
+    try { const all = await api.listProjects(); S.allDays = all.filter(p => p.slug !== slug).map(p => p.days || {}); } catch { S.allDays = []; }
+    project.stats.sprints = project.stats.sprints || [];
+    scheduleNames(0);
+    if (project.splitId && findNode(project.splitId)) setTimeout(() => openSplit(project.splitId), 300);
+    emit('project', project);
+    clearInterval(S.backupTimer);
+    S.backupTimer = setInterval(() => { if (S.slug && S.dirtySinceBackup) { api.backup(S.slug); S.dirtySinceBackup = false; } }, 10 * 60 * 1000);
+  }
+  // The Manuscript and Trash must always exist (exports read the Manuscript). If a project file
+  // ever lost one, put it back rather than failing.
+  function repairRoots(project) {
+    project.binder = Array.isArray(project.binder) ? project.binder : [];
+    for (const kind of ['manuscript', 'trash']) {
+      let r = project.binder.find(n => n.root && n.kind === kind);
+      if (!r) {
+        const def = ROOTS.find(x => x.kind === kind);
+        r = { id: 'root-' + kind, type: 'folder', kind, title: def.title, root: true, open: true, children: [] };
+        if (kind === 'manuscript') project.binder.unshift(r); else project.binder.push(r);
+      }
+      r.root = true; r.type = 'folder'; r.children = r.children || [];
+      if (!String(r.title || '').trim()) r.title = ROOTS.find(x => x.kind === kind).title;
+    }
+  }
+  // another device changed project.json (via Dropbox): take its binder without closing the project
+  function reloadProjectMeta(p) {
+    p.style = mergeStyle(p.style); repairRoots(p);
+    p.stats = p.stats || { days: {} }; p.stats.days = p.stats.days || {}; p.stats.sprints = p.stats.sprints || [];
+    p.goals = p.goals || { daily: 0, total: 0, deadline: '' };
+    S.project = p;
+    applyStyle(); renderBinder(); refreshPlanView(); updateStatus();
+    if (S.docId && !findNode(S.docId)) { S.docId = null; showEmpty(true); }
+    emit('reload', p);
+  }
+  function mergeStyle(st) {
+    const d = JSON.parse(JSON.stringify(DEFAULT_STYLE));
+    st = st || {};
+    return { ...d, ...st, headings: { h1: { ...d.headings.h1, ...(st.headings || {}).h1 }, h2: { ...d.headings.h2, ...(st.headings || {}).h2 }, h3: { ...d.headings.h3, ...(st.headings || {}).h3 } } };
+  }
+  async function leaveProject() {
+    if (S.lastPlace && S.lastPlace.slug === S.slug) { clearTimeout(S.lastPlaceT); try { S.settings = await api.setSettings({ lastPlace: S.lastPlace }); } catch {} }
+    if (S.sprint) await endSprint(false);
+    await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null;
+    setRevise(false);
+    await flushSave();
+    if (S.slug) await api.backup(S.slug).catch(() => {});
+    clearInterval(S.backupTimer);
+    emit('leave');
+    S.slug = null; S.project = null; S.docId = null;
+    setWriter(false);
+  }
+  $('#btn-library').onclick = () => showLibrary();
+
+  // ------------------------------------------------------------------ tree helpers
+  function walkTree(list, fn, parent = null) {
+    for (let i = 0; i < list.length; i++) {
+      const n = list[i];
+      if (fn(n, parent, list, i) === false) return false;
+      if (n.children && walkTree(n.children, fn, n) === false) return false;
+    }
+  }
+  function findNode(id) {
+    let found = null;
+    walkTree(S.project.binder, (n, parent, list, index) => { if (n.id === id) { found = { node: n, parent, list, index }; return false; } });
+    return found;
+  }
+  function rootOf(id) {
+    let root = null;
+    for (const r of S.project.binder) {
+      if (r.id === id) return r;
+      walkTree(r.children || [], n => { if (n.id === id) { root = r; return false; } });
+      if (root) return root;
+    }
+    return null;
+  }
+  function firstDocId() {
+    let id = null;
+    walkTree(S.project.binder, n => { if (n.type === 'doc' && !n.map && rootOf(n.id).kind !== 'trash') { id = n.id; return false; } });
+    return id;
+  }
+  function isInside(childId, ancestor) {
+    let inside = false;
+    walkTree(ancestor.children || [], n => { if (n.id === childId) { inside = true; return false; } });
+    return inside;
+  }
+  function folderWords(n) {
+    if (n.type === 'doc') return n.words || 0;
+    return (n.children || []).reduce((a, c) => a + folderWords(c), 0);
+  }
+  function manuscriptWords() { return folderWords(S.project.binder.find(r => r.kind === 'manuscript')); }
+
+  // ------------------------------------------------------------------ binder rendering
+  function refreshPlanView() { if (S.view === 'outline') renderOutline(); else if (S.view === 'cork') renderCork(); }
+  function toggleFav(id) {
+    const f = findNode(id); if (!f || f.node.root) return;
+    f.node.fav = !f.node.fav; if (!f.node.fav) delete f.node.fav;
+    scheduleMeta(); renderBinder();
+    toast(f.node.fav ? `★ Added “${esc(f.node.title)}” to Favourites (top of the binder).` : `Removed “${esc(f.node.title)}” from Favourites.`);
+  }
+  // ---- custom icons / emojis for binder items
+  const ICON_CHOICES = ['folder', 'doc', 'book', 'person', 'pin', 'gem', 'note', 'flask', 'scene', 'flame', 'bolt', 'tag', 'mood', 'image', 'sticky', 'palette', 'timeline', 'cork', 'outline', 'history', 'search', 'columns'];
+  const EMOJI_CHOICES = ('📖 📕 📗 📘 📙 📓 📝 ✏️ 🖋️ 📜 🗒️ 📌 📍 🔖 ⭐ 🌟 ✨ 💡 🔥 ⚡ ❤️ 💔 💀 👑 🗡️ ⚔️ 🛡️ 🏹 🔮 🧪 🗝️ 💎 💰 🪙 📦 🎁 ' +
+    '🧙 🧝 🧛 🧟 🐉 🦄 🐺 🦅 🐈 🐍 👤 👥 👩 👨 🧒 👵 🤴 👸 🕵️ 🦹 ' +
+    '🏰 🏯 🏠 🏚️ ⛪ 🏙️ 🌆 🌃 🌲 🌳 🏔️ 🌋 🏝️ 🌊 🏜️ 🌍 🗺️ 🧭 🚢 🚂 🚀 ' +
+    '☀️ 🌙 🌧️ ❄️ 🌪️ 🌸 🍂 🕯️ 🕰️ ⏳ 📅 🎭 🎬 🎵 🎨 🧩 ❓ ❗ ✅ ❌ 🚧 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪').split(' ');
+  function iconHTML(n, fallback) {
+    if (!n.icon) return fallback;
+    if (I[n.icon] && /^[a-zA-Z]+$/.test(n.icon)) return I[n.icon];
+    return `<span class="tr-emoji">${esc(n.icon)}</span>`;
+  }
+  // the icon chooser: returns { icon } ('' = default) or null if cancelled
+  async function pickIcon(current, title) {
+    let chosen = current || '';
+    const body = document.createElement('div');
+    body.innerHTML = `<div class="ip-label">Icons</div><div class="ip-grid icons">${ICON_CHOICES.map(k => `<button class="ip-btn" data-v="${k}" title="${k}">${I[k]}</button>`).join('')}</div>
+      <div class="ip-label">Emojis</div><div class="ip-grid emoji">${EMOJI_CHOICES.map(e => `<button class="ip-btn" data-v="${esc(e)}">${esc(e)}</button>`).join('')}</div>
+      <div class="ip-own"><label>Or type/paste any emoji (Windows: press Win + . to open the emoji keyboard)</label><input type="text" maxlength="8" value="${chosen && !I[chosen] ? esc(chosen) : ''}" placeholder="🙂"></div>`;
+    const mark = () => $$('.ip-btn', body).forEach(b => b.classList.toggle('on', b.dataset.v === chosen));
+    mark();
+    $$('.ip-btn', body).forEach(b => b.onclick = () => { chosen = b.dataset.v; $('.ip-own input', body).value = I[chosen] ? '' : chosen; mark(); });
+    $('.ip-own input', body).oninput = e => { chosen = e.target.value.trim(); mark(); };
+    const r = await modal({ title: `Icon for “${title || 'Untitled'}”`, body, wide: true, buttons: [{ label: 'Use default', value: 'reset', kind: 'ghost' }, { label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
+    if (!r) return null;
+    if (r === 'reset' || !chosen) return { icon: '' };
+    return { icon: I[chosen] && /^[a-zA-Z]+$/.test(chosen) ? chosen : [...chosen].slice(0, 8).join('') };
+  }
+  const iconMarkup = v => !v ? '' : I[v] && /^[a-zA-Z]+$/.test(v) ? I[v] : esc(v);
+  async function iconPicker(id) {
+    const f = findNode(id); if (!f) return;
+    const n = f.node;
+    const r = await pickIcon(n.icon, n.title); if (!r) return;
+    if (!r.icon) delete n.icon; else n.icon = r.icon;
+    scheduleMeta(); renderBinder(); refreshPlanView();
+  }
+  function rootIcon(n) { if (n.icon) return iconHTML(n, ''); const r = ROOTS.find(x => x.kind === n.kind); return r ? I[r.icon] : I.tag; }
+  function renderBinder() {
+    const tree = $('#binder-tree');
+    tree.innerHTML = '';
+    const ms = S.project.binder.find(r => r.kind === 'manuscript');
+    const build = (n, depth) => {
+      const row = document.createElement('div');
+      row.className = 'tree-row' + (n.root ? ' root' : '') + (n.id === S.selectedId ? ' selected' : '');
+      if (n.type === 'folder') row.dataset.folder = '1';
+      row.dataset.id = n.id;
+      row.style.paddingLeft = (6 + depth * 16) + 'px';
+      const hasKids = n.type === 'folder' && n.children && n.children.length;
+      const icon = n.root ? rootIcon(n) : iconHTML(n, n.type === 'folder' ? (n.open ? I.folderOpen : I.folder) : I.doc);
+      const showCount = n.id === ms.id || isInside(n.id, ms);
+      const count = showCount ? folderWords(n) : 0;
+      row.innerHTML = `<span class="tr-chev ${n.open ? 'open' : ''} ${n.type === 'folder' && (hasKids || n.root) ? '' : 'none'}">${I.chevron}</span><span class="tr-icon">${icon}</span><span class="tr-title">${esc(n.title || 'Untitled')}</span>${n.fav ? `<span class="tr-fav" title="Favourite">★</span>` : ''}${n.type === 'doc' && statusOf(n.status) && S.mode === 'detailed' ? `<span class="st-dot" style="--st:${statusColor(n.status)}" title="${esc(statusName(n.status))}"></span>` : ''}${showCount && count ? `<span class="tr-count">${fmt(count)}</span>` : ''}${n.root && n.kind !== 'trash' ? `<button class="tr-add" title="Add a new ${n.kind === 'manuscript' ? 'chapter' : newTitleFor(n).replace(/^New /, '')} to ${esc(n.title)}">+</button>` : ''}`;
+      row.draggable = !n.root;
+      tree.appendChild(row);
+      if (n.type === 'folder' && n.open) for (const c of n.children || []) build(c, depth + 1);
+    };
+    const favs = []; walkTree(S.project.binder, n => { if (n.fav && !n.root && rootOf(n.id).kind !== 'trash') favs.push(n); });
+    if (favs.length) {
+      const head = document.createElement('div'); head.className = 'fav-head'; head.innerHTML = '<span>★</span> Favourites'; tree.appendChild(head);
+      for (const n of favs) {
+        const r = document.createElement('div');
+        r.className = 'tree-row fav-row' + (n.id === S.docId ? ' current' : '');
+        r.dataset.goto = n.id; r.style.paddingLeft = '6px';
+        r.innerHTML = `<span class="tr-icon">${iconHTML(n, n.type === 'folder' ? I.folder : I.doc)}</span><span class="tr-title">${esc(n.title || 'Untitled')}</span><button class="tr-unfav" title="Remove from favourites">✕</button>`;
+        tree.appendChild(r);
+      }
+    }
+    let labelled = false;
+    for (const r of S.project.binder) {
+      if (!r.root && !labelled) { labelled = true; const l = document.createElement('div'); l.className = 'tree-unsorted'; l.textContent = 'New — drag into place'; tree.appendChild(l); }
+      build(r, 0);
+    }
+    emit('binder');
+  }
+
+  const tree = $('#binder-tree');
+  tree.addEventListener('click', e => {
+    const fav = e.target.closest('.fav-row');
+    if (fav) {
+      const f = findNode(fav.dataset.goto); if (!f) return;
+      if (e.target.closest('.tr-unfav')) { toggleFav(f.node.id); return; }
+      if (f.node.type === 'doc') { if (S.view !== 'write') setView('write'); openDoc(f.node.id); }
+      else { S.selectedId = f.node.id; let p = findNode(f.node.id); while (p && p.parent) { p.parent.open = true; p = findNode(p.parent.id); } f.node.open = true; renderBinder(); const row = $(`.tree-row[data-id="${f.node.id}"]`); if (row) row.scrollIntoView({ block: 'center' }); }
+      return;
+    }
+    const row = e.target.closest('.tree-row'); if (!row) return;
+    if (e.target.closest('.tr-add')) { addNode('doc', row.dataset.id, true); return; }
+    const f = findNode(row.dataset.id); if (!f) return;
+    const n = f.node;
+    if (n.type === 'folder') {
+      if (e.target.closest('.tr-chev') || n.id === S.selectedId) { n.open = !n.open; scheduleMeta(); }
+      S.selectedId = n.id; renderBinder();
+    } else {
+      openDoc(n.id, { focus: false });
+    }
+  });
+  tree.addEventListener('dblclick', e => {
+    const row = e.target.closest('.tree-row'); if (!row || row.classList.contains('fav-row')) return;
+    const n = findNode(row.dataset.id).node;
+    if (!n.root) startRename(row, n);
+  });
+  tree.addEventListener('contextmenu', e => {
+    const row = e.target.closest('.tree-row'); if (!row || row.classList.contains('fav-row')) return;
+    e.preventDefault();
+    const n = findNode(row.dataset.id).node;
+    const root = rootOf(n.id);
+    S.selectedId = n.id; renderBinder();
+    const items = [];
+    const f = findNode(n.id);
+    if (root.kind !== 'trash') {
+      if (n.type === 'folder') {
+        items.push({ label: 'New document inside', action: () => addNode('doc', n.id, true) });
+        items.push({ label: 'New folder inside', action: () => addNode('folder', n.id, true) });
+      }
+      if (!n.root) {
+        items.push({ label: 'New document below', action: () => addNode('doc', n.id, false) });
+        items.push({ label: 'New folder below', action: () => addNode('folder', n.id, false) });
+      }
+    }
+    if (!n.root) {
+      items.push({ sep: true });
+      items.push({ label: n.fav ? '☆ Remove from favourites' : '★ Add to favourites', hint: 'Ctrl+D', action: () => toggleFav(n.id) });
+      items.push({ label: 'Change icon…', action: () => iconPicker(n.id) });
+      items.push({ label: 'Rename', hint: 'Double-click', action: () => startRename($(`.tree-row[data-id="${n.id}"]`), n) });
+      if (n.type === 'doc') items.push({ label: 'Copy for Docs', action: () => copyDocForDocs(n.id) });
+      if (n.type === 'doc') items.push({ label: 'Snapshots…', action: async () => { await openDoc(n.id); snapshotsDialog(); } });
+      if (n.type === 'doc' || n.type === 'folder') items.push({ label: 'Remove empty lines…', action: () => tidyBlankLines(n.id) });
+      if (n.type === 'doc' && n.id !== S.docId) items.push({ label: 'Open in split view', action: () => { if (S.view !== 'write') setView('write'); openSplit(n.id); } });
+      { const fn = findNode(n.id); const nx = fn.list[fn.index + 1];
+        if (n.type === 'doc' && nx && nx.type === 'doc' && !nx.root) items.push({ label: `Merge with next (“${nx.title.length > 24 ? nx.title.slice(0, 24) + '…' : nx.title}”)…`, action: () => mergeWithNext(n.id) });
+        if (n.type === 'folder') items.push({ label: 'Merge folder into one document…', action: () => mergeFolder(n.id) }); }
+      if (n.type === 'doc' && S.mode === 'detailed') items.push({ label: 'Status', disabled: true }, ...statusOptions().map(([v, l]) => ({ label: (n.status || '') === v ? `✓ ${l}` : `    ${l}`, action: () => { n.status = v; scheduleMeta(); renderBinder(); refreshPlanView(); } })), { label: '    Edit status labels…', action: editStatuses });
+      items.push({ sep: true });
+      items.push({ label: 'Move to…', action: () => moveToDialog(n.id) });
+      items.push({ label: 'Move up', hint: 'Alt+↑', disabled: f.index === 0, action: () => moveBy(n.id, -1) });
+      items.push({ label: 'Move down', hint: 'Alt+↓', disabled: f.index === f.list.length - 1, action: () => moveBy(n.id, 1) });
+      items.push({ label: 'Move out of folder', hint: 'Alt+←', disabled: !f.parent || f.parent.root, action: () => moveOut(n.id) });
+      items.push({ sep: true });
+      if (root.kind === 'trash') items.push({ label: 'Delete forever…', danger: true, action: () => deleteForever(n.id) });
+      else items.push({ label: 'Move to Trash', danger: true, action: () => moveToTrash(n.id) });
+    }
+    if (n.type === 'folder' && !n.root && root.kind === 'manuscript') {
+      const h = folderHolds(n), auto = !n.holds;
+      items.push({ sep: true }, { label: 'Documents inside are…', disabled: true },
+        { label: `${h === 'chapters' ? '✓' : '   '} Chapters (each gets a title)${auto && h === 'chapters' ? ' · auto' : ''}`, action: () => { n.holds = 'chapters'; scheduleMeta(); toast(`Documents in “${esc(n.title)}” will export as chapters, each with its own title.`); } },
+        { label: `${h === 'scenes' ? '✓' : '   '} Scenes (joined with * * *)${auto && h === 'scenes' ? ' · auto' : ''}`, action: () => { n.holds = 'scenes'; scheduleMeta(); toast(`Documents in “${esc(n.title)}” will export as scenes of one chapter called “${esc(n.title)}”.`); } });
+    }
+    if (n.type === 'folder' && root.kind !== 'trash') items.push({ sep: true }, { label: '🗺️ New map here…', action: () => window.UnwipMaps && window.UnwipMaps.create(n.id) }, ...(window.UnwipBookImport ? window.UnwipBookImport.menuItems({ parentId: n.id }).map(x => ({ ...x, label: x.label.replace(/^Word, Google Docs, LibreOffice, text files…/, 'Import files here…').replace(/^A folder of chapter files…/, 'Import a folder of chapters here…').replace(/^Paste a whole book.*/, 'Paste chapters here…') })) : [{ label: 'Import Word file here…', action: () => importDocxInto(n.id) }]));
+    if (n.kind === 'manuscript') items.push({ sep: true }, { label: '🔒 Protected: this is what gets exported', disabled: true });
+    if (n.root) {
+      items.push({ sep: true }, { label: 'Change icon…', action: () => iconPicker(n.id) }, { label: 'New template section (Factions, Magic, Creatures…)…', action: () => templateGallery() });
+      if (n.custom) items.push({ label: 'Edit this section…', action: () => editSection(n) }, { label: 'Save as one of my templates…', action: () => editSection(n, true) }, { label: 'Remove this section…', danger: true, action: () => deleteSection(n) });
+    }
+    if (n.kind === 'trash') items.push({ label: 'Empty Trash…', danger: true, disabled: !(n.children || []).length, action: emptyTrash });
+    showMenu(e.clientX, e.clientY, items);
+  });
+
+  function startRename(row, n) {
+    const titleEl = $('.tr-title', row);
+    const input = document.createElement('input');
+    input.className = 'rename'; input.value = n.title;
+    titleEl.replaceWith(input);
+    input.focus(); input.select();
+    const done = commit => {
+      if (commit && input.value.trim()) {
+        n.title = input.value.trim();
+        if (n.id === S.docId) $('#doc-title').value = n.title;
+        scheduleMeta(); scheduleNames();
+      }
+      renderBinder(); refreshPlanView();
+    };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); e.stopPropagation(); });
+    input.addEventListener('blur', () => done(true));
+  }
+
+  // Add a document or folder. By default it goes just below the selected item, at the same level
+  // (so a new folder never lands inside another folder unless you ask for "inside").
+  async function addNode(type, nearId, inside = false) {
+    let target = nearId ? findNode(nearId) : null;
+    if (!target) target = findNode(S.selectedId || 'root-manuscript') || findNode('root-manuscript');
+    let parent, index;
+    if (target.node.root || (inside && target.node.type === 'folder')) { parent = target.node; index = parent.children.length; }
+    else { parent = target.parent; index = target.index + 1; }
+    const root = rootOf(parent.id) || parent;
+    const kind = root.kind === 'trash' ? 'manuscript' : root.kind;
+    if (root.kind === 'trash') { parent = findNode('root-manuscript').node; index = parent.children.length; }
+    let title;
+    if (type === 'folder') title = kind === 'manuscript' ? 'New part' : 'New folder';
+    else if (kind === 'manuscript') { let c = 0; walkTree(findNode('root-manuscript').node.children, n => { if (n.type === 'doc') c++; }); title = 'Chapter ' + (c + 1); }
+    else title = newTitleFor(root);
+    const node = type === 'folder' ? { id: uid(), type: 'folder', title, open: true, children: [] } : { id: uid(), type: 'doc', title, words: 0 };
+    parent.children.splice(index, 0, node);
+    parent.open = true;
+    if (type === 'doc' && sheetFor(root)) await api.saveDoc(S.slug, node.id, sheetTemplate(root));
+    scheduleMeta();
+    if (type === 'doc') await openDoc(node.id); else { S.selectedId = node.id; }
+    renderBinder();
+    const row = $(`.tree-row[data-id="${node.id}"]`);
+    if (row) { row.scrollIntoView({ block: 'nearest' }); startRename(row, node); }
+  }
+  function sheetFor(root) {
+    if (!root) return null;
+    if (SHEETS[root.kind]) return { fields: SHEETS[root.kind], sections: SHEET_SECTIONS[root.kind] };
+    if (root.custom) return { fields: root.fields || ['Name', 'Aliases'], sections: root.sections || ['Description', 'Notes'] };
+    return null;
+  }
+  function newTitleFor(root) { return NEW_TITLE[root.kind] || (root.custom ? 'New ' + (root.singular || 'entry').toLowerCase() : 'Untitled'); }
+  function sheetTemplate(root) {
+    const sh = sheetFor(root);
+    return sh.fields.map(f => `<p><b>${esc(f)}:</b> </p>`).join('') + sh.sections.map(x => `<h2>${esc(x)}</h2><p><br></p>`).join('');
+  }
+
+  // ---- split & merge
+  async function splitAtCursor() {
+    if (!S.docId) return;
+    const sel = getSelection();
+    if (!sel.rangeCount || !editor.contains(sel.anchorNode)) { toast('Click where you want to split first.'); return; }
+    const f = findNode(S.docId);
+    await flushSave();
+    const before = editor.innerHTML;
+    const r = sel.getRangeAt(0).cloneRange(); r.collapse(true);
+    r.setEnd(editor, editor.childNodes.length);
+    const frag = r.extractContents();
+    const box = document.createElement('div'); box.appendChild(frag);
+    // drop empty paragraphs at the split point
+    while (box.firstElementChild && !box.firstElementChild.textContent.trim() && box.children.length > 1) box.firstElementChild.remove();
+    while (editor.lastElementChild && !editor.lastElementChild.textContent.trim() && editor.children.length > 1) editor.lastElementChild.remove();
+    if (!box.textContent.trim()) { editor.innerHTML = before; toast('Nothing after the cursor to split off.'); return; }
+    ensureParagraphs();
+    // name the new part: use its first line if it looks like a heading
+    let title = `${f.node.title} (part 2)`;
+    const first = box.firstElementChild;
+    if (first && (/^H[1-3]$/.test(first.tagName) || /^(chapter|scene|part|prologue|epilogue)\b/i.test(first.textContent.trim())) && first.textContent.trim().length < 80) { title = first.textContent.trim(); first.remove(); }
+    await api.snapSave(S.slug, S.docId, before, 'Before splitting', true);
+    const node = { id: uid(), type: 'doc', title, words: countWords(box.innerText || box.textContent), status: f.node.status };
+    await api.saveDoc(S.slug, node.id, box.innerHTML || '<p><br></p>');
+    f.list.splice(f.index + 1, 0, node);
+    S.dirty = true; await flushSave(); resyncWords();
+    scheduleMeta(); renderBinder(); updateStatus();
+    toastAction(`Split off “${esc(title)}”.`, 'Open it', () => openDoc(node.id), 8000);
+  }
+  async function mergeWithNext(id) {
+    const f = findNode(id); const next = f.list[f.index + 1];
+    if (!next || next.type !== 'doc') return;
+    const sep = await modal({ title: 'Merge documents', body: `<p>Join “${esc(next.title)}” onto the end of “${esc(f.node.title)}”? The second document goes to the Trash afterwards.</p>`,
+      buttons: [{ label: 'Cancel', value: null, kind: 'ghost' }, { label: 'Join directly', value: 'none' }, { label: 'Join with a scene break', value: 'scene', kind: 'primary' }] });
+    if (!sep) return;
+    await flushSave();
+    const a = id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, id);
+    const b = await api.loadDoc(S.slug, next.id);
+    await api.snapSave(S.slug, id, a, `Before merging in “${next.title}”`, true);
+    const merged = a + (sep === 'scene' ? '<p class="scene" style="text-align: center">* * *</p>' : '') + b;
+    await api.saveDoc(S.slug, id, merged);
+    f.node.words = countWords(htmlText(merged));
+    f.list.splice(f.index + 1, 1); findNode('root-trash').node.children.push(next);
+    if (S.docId === id) { editor.innerHTML = merged; resyncWords(); markScenes(editor); }
+    if (S.docId === next.id) await openDoc(id);
+    scheduleMeta(); renderBinder(); updateStatus();
+    toast(`Merged. “${esc(next.title)}” is in the Trash if you need it.`);
+  }
+  // remove empty paragraphs used as spacing in a document or every document in a folder (a snapshot is kept first)
+  async function tidyBlankLines(id) {
+    const f = findNode(id); const docs = [];
+    if (f.node.type === 'doc') docs.push(f.node); else walkTree(f.node.children || [], n => { if (n.type === 'doc') docs.push(n); });
+    await flushSave();
+    const plan = [];
+    for (const d of docs) {
+      const before = d.id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, d.id);
+      const r = Clip.dropBlankLines(before);
+      if (r.removed) plan.push({ d, before, ...r });
+    }
+    if (!plan.length) { toast('No empty lines to remove here.'); return; }
+    const lines = plan.reduce((a, x) => a + x.removed, 0), scenes = plan.reduce((a, x) => a + x.scenes, 0);
+    const msg = `Removes <b>${fmt(lines)}</b> empty line${lines === 1 ? '' : 's'} from ${plan.length} document${plan.length === 1 ? '' : 's'}, so the gaps between paragraphs come only from Manuscript style.` +
+      (scenes ? ` Where there were two or more empty lines in a row (${scenes} place${scenes === 1 ? '' : 's'}), a scene break (* * *) is put in instead.` : '') + ' A snapshot of each document is saved first, so you can go back.';
+    if (!(await confirmBox('Remove empty lines?', msg, 'Remove them'))) return;
+    for (const x of plan) {
+      await api.snapSave(S.slug, x.d.id, x.before, 'Before removing empty lines', true);
+      await api.saveDoc(S.slug, x.d.id, x.html);
+      x.d.words = countWords(htmlText(x.html));
+      if (x.d.id === S.docId) { editor.innerHTML = x.html; markScenes(editor); resyncWords(); }
+    }
+    scheduleMeta(); renderBinder(); updateStatus();
+    toast(`Removed ${fmt(lines)} empty line${lines === 1 ? '' : 's'}${scenes ? ` and added ${scenes} scene break${scenes === 1 ? '' : 's'}` : ''}.`);
+  }
+
+  async function mergeFolder(id) {
+    const f = findNode(id); const docs = [];
+    walkTree(f.node.children || [], n => { if (n.type === 'doc') docs.push(n); });
+    if (docs.length < 1) { toast('This folder has no documents to merge.'); return; }
+    if (!(await confirmBox('Merge folder into one document?', `The ${docs.length} documents in “${esc(f.node.title)}” become one document, separated by scene breaks. The folder and its documents go to the Trash, so nothing is lost.`, 'Merge'))) return;
+    await flushSave();
+    const parts = [];
+    for (const d of docs) parts.push(d.id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, d.id));
+    const merged = parts.join('<p class="scene" style="text-align: center">* * *</p>');
+    const node = { id: uid(), type: 'doc', title: f.node.title, words: countWords(htmlText(merged)), synopsis: f.node.synopsis, status: f.node.status };
+    await api.saveDoc(S.slug, node.id, merged);
+    f.list.splice(f.index, 1, node); findNode('root-trash').node.children.push(f.node);
+    scheduleMeta(); await openDoc(node.id); renderBinder(); updateStatus();
+    toast(`Merged ${docs.length} documents into “${esc(node.title)}”.`);
+  }
+
+  // ---- template sections: a binder section where every new entry starts from the same sheet
+  const TEMPLATES = [
+    ['🛡️', 'Factions', 'Faction', ['Name', 'Aliases', 'Leader', 'Base', 'Size'], ['Goals', 'Beliefs', 'Allies & enemies', 'History', 'Notes']],
+    ['✨', 'Magic systems', 'Magic system', ['Name', 'Aliases', 'Source', 'Cost'], ['Rules', 'Limits', 'Who can use it', 'Examples in the story', 'Notes']],
+    ['🐉', 'Creatures', 'Creature', ['Name', 'Aliases', 'Habitat', 'Size', 'Danger'], ['Appearance', 'Behaviour', 'Abilities', 'Weaknesses', 'Notes']],
+    ['👹', 'Monsters', 'Monster', ['Name', 'Aliases', 'Level', 'Area or floor', 'Loot'], ['Appearance', 'Attacks', 'Weaknesses', 'Notes']],
+    ['🎲', 'Classes & skills', 'Class or skill', ['Name', 'Aliases', 'Type', 'Rank', 'Main stat'], ['What it does', 'How it levels up', 'Strengths', 'Weaknesses', 'Notes']],
+    ['🔮', 'Spells & abilities', 'Spell', ['Name', 'Aliases', 'School', 'Cost', 'Range'], ['Effect', 'Requirements', 'Who knows it', 'Notes']],
+    ['⛩️', 'Religions & gods', 'Deity', ['Name', 'Aliases', 'Domain', 'Symbol', 'Followers'], ['Beliefs', 'Rituals', 'Myths', 'Notes']],
+    ['🏺', 'Cultures', 'Culture', ['Name', 'Aliases', 'Region', 'Language'], ['Customs', 'Food & dress', 'Values', 'Notes']],
+    ['🗣️', 'Languages', 'Language', ['Name', 'Aliases', 'Spoken in', 'Script'], ['Sounds', 'Common words', 'Phrases', 'Notes']],
+    ['📜', 'Historical events', 'Event', ['Name', 'Aliases', 'Date', 'Place'], ['What happened', 'Who was involved', 'Consequences', 'Notes']],
+    ['🗺️', 'Quests & plot threads', 'Quest', ['Name', 'Aliases', 'Given by', 'Reward', 'Status'], ['Goal', 'Steps', 'Outcome', 'Notes']],
+    ['🚢', 'Ships & vehicles', 'Ship', ['Name', 'Aliases', 'Type', 'Captain', 'Crew'], ['Description', 'History', 'Notes']],
+    ['🪐', 'Worlds & planets', 'World', ['Name', 'Aliases', 'System', 'Climate', 'Population'], ['Geography', 'Cultures', 'History', 'Notes']]
+  ];
+  // a small picture of what one entry's sheet will look like
+  function sheetPreviewHTML(icon, singular, fields, sections) {
+    return `<div class="sp-sheet"><div class="sp-h">${icon ? `<span class="sp-ic">${iconMarkup(icon)}</span>` : ''}New ${esc(singular.toLowerCase())}</div>
+      ${fields.map(f => `<div class="sp-f"><b>${esc(f)}:</b><i></i></div>`).join('')}
+      ${sections.map(x => `<div class="sp-s">${esc(x)}</div><div class="sp-l"></div>`).join('')}</div>`;
+  }
+  async function templateGallery() {
+    let pick = 0;
+    const body = document.createElement('div'); body.className = 'tg';
+    const mine = (S.settings.myTemplates || []).map(t => [t.icon || '🗂️', t.title, t.singular, t.fields, t.sections, t.id]);
+    const list = [...mine, ...TEMPLATES, ['✏️', 'Make your own…', 'Entry', ['Name', 'Aliases'], ['Description', 'Notes']]];
+    const taken = new Set(S.project.binder.filter(n => n.root).map(n => (n.title || '').toLowerCase()));
+    body.innerHTML = `<p class="hint">A template section sits in your binder like Characters or Places. Every new entry in it starts from the same sheet, so you fill in the blanks instead of starting from nothing.</p>
+      <div class="tg-cols"><div class="tg-list">${list.map(([ic, t, , , , mid], i) => `${i === 0 && mine.length ? '<div class="tg-group">Your templates</div>' : ''}${i === mine.length && mine.length ? '<div class="tg-group">Ready-made</div>' : ''}<button class="tg-item ${i === 0 ? 'on' : ''}" data-i="${i}"${taken.has(t.toLowerCase()) ? ' data-tip="You already have this section"' : ''}><span class="tg-ic">${iconMarkup(ic)}</span><span class="tg-t">${esc(t)}${taken.has(t.toLowerCase()) ? ' <small>✓</small>' : ''}</span>${mid ? `<span class="tg-del" data-del="${esc(mid)}" title="Delete this template (sections already in your binder stay)">✕</span>` : ''}</button>`).join('')}</div>
+      <div class="tg-prev" id="tg-prev"></div></div>`;
+    const show = i => { pick = i; const [ic, , sg, f, sc] = list[i]; $('#tg-prev', body).innerHTML = `<div class="tg-cap">Each new entry looks like this:</div>` + sheetPreviewHTML(ic, sg, f, sc); $$('.tg-item', body).forEach(b => b.classList.toggle('on', +b.dataset.i === i)); };
+    show(0);
+    $$('.tg-item', body).forEach(b => { b.onmouseenter = () => show(+b.dataset.i); b.onclick = () => show(+b.dataset.i); b.ondblclick = () => $('.modal-back .m-foot .primary').click(); });
+    $$('.tg-del', body).forEach(x => x.onclick = async e => {
+      e.stopPropagation();
+      const t = (S.settings.myTemplates || []).find(y => y.id === x.dataset.del); if (!t) return;
+      S.settings = await api.setSettings({ myTemplates: (S.settings.myTemplates || []).filter(y => y.id !== t.id) });
+      const b = x.closest('.tg-item'); b.remove(); toast(`Deleted the “${esc(t.title)}” template.`);
+    });
+    const ok = await modal({ title: 'New template section', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Change it first…', value: 'edit', kind: 'ghost' }, { label: 'Add to binder', value: true, kind: 'primary' }] });
+    if (!ok) return;
+    const [ic, title, singular, fields, sections] = list[pick];
+    const custom = pick === list.length - 1;
+    let r = { title: custom ? '' : title, singular, fields, sections, icon: custom ? '' : ic };
+    if (ok === 'edit' || custom) { r = await sectionDialog(custom ? null : r, { offerSave: true }); if (!r) return; }
+    const k = 'custom-' + uid();
+    const node = { id: 'root-' + k, type: 'folder', kind: k, root: true, custom: true, open: true, children: [], ...r };
+    if (!node.icon) delete node.icon;
+    S.project.binder.splice(S.project.binder.findIndex(x => x.kind === 'trash'), 0, node);
+    scheduleMeta(); renderBinder(); scheduleNames();
+    toast(`Added “${esc(r.title)}”. Use + New › New ${esc((r.singular || 'entry').toLowerCase())} or hover it and click + to add one.`, '', 6000);
+  }
+  // ---- the + New menu at the bottom of the binder, with a preview of each choice
+  function newMenu(anchor) {
+    document.querySelectorAll('.new-pop').forEach(x => x.remove());
+    const t = addTarget();
+    const where = t ? `in “${t.title}”` : 'at the bottom of the binder';
+    const root = t ? rootOf(t.id) : null;
+    const sheet = root && sheetFor(root);
+    const items = [
+      { ic: '📄', label: sheet ? `New ${newTitleFor(root).replace(/^New /i, '').toLowerCase()}` : 'New document', sub: sheet ? `A fresh sheet ${where}` : `A blank page ${where}`, key: 'Ctrl+N',
+        prev: sheet ? sheetPreviewHTML(root.icon && !/^[a-z]+$/i.test(root.icon) ? root.icon : '', newTitleFor(root).replace(/^New /i, ''), sheet.fields, sheet.sections) : '<div class="np-page"><i></i><i></i><i></i><i class="s"></i><i></i><i></i><i class="s"></i></div>', run: () => addHere('doc') },
+      { ic: '📁', label: 'New folder', sub: `To group chapters or notes, ${where}`, prev: '<div class="np-tree"><div>📁 Part One</div><div class="in">📄 Chapter 1</div><div class="in">📄 Chapter 2</div><div>📁 Part Two</div></div>', run: () => addHere('folder') },
+      { ic: '🗺️', label: 'New map', sub: 'Paint or generate a map of your world', prev: '<svg viewBox="0 0 120 80" class="np-map"><rect width="120" height="80" fill="#d8c59c"/><path d="M22 40 C20 18 52 12 64 22 C80 8 104 22 96 42 C108 58 82 72 62 62 C44 74 18 64 22 40Z" fill="#f1e5c9" stroke="#4e3b26" stroke-width="1.6"/><path d="M40 34 l6 -9 l6 9z M52 38 l6 -10 l6 10z" fill="#b59a72" stroke="#3a2a19" stroke-width="1"/><circle cx="74" cy="44" r="2.6" fill="#c0492b"/><rect x="3" y="3" width="114" height="74" fill="none" stroke="#3a2a19" stroke-width="1.4"/></svg>', run: () => $('#btn-add-map').click() },
+      { ic: '🗂️', label: 'New template section…', sub: 'Factions, magic, creatures, monsters, quests… every entry starts from the same sheet', prev: sheetPreviewHTML('🛡️', 'Faction', TEMPLATES[0][3], TEMPLATES[0][4]), run: () => templateGallery() },
+      { ic: '📥', label: 'Bring in chapters…', sub: 'From Word, Google Docs, text or a whole folder', prev: '<div class="np-tree"><div>📄 Chapter 1.docx</div><div>📄 Chapter 2.docx</div><div>📄 Chapter 3.docx</div><div style="margin-top:6px;color:var(--accent)">→ 3 chapters</div></div>', run: () => { if (window.UnwipBookImport) { const r = anchor.getBoundingClientRect(); showMenu(r.left, r.top - 120, window.UnwipBookImport.menuItems({ parentId: t ? t.id : 'root-manuscript' })); } } }
+    ];
+    const pop = document.createElement('div'); pop.className = 'new-pop';
+    pop.innerHTML = `<div class="np-list">${items.map((x, i) => `<button class="np-item" data-i="${i}"><span class="np-ic">${x.ic}</span><span class="np-t"><b>${esc(x.label)}</b><small>${esc(x.sub)}</small></span>${x.key ? `<kbd>${x.key}</kbd>` : ''}</button>`).join('')}</div><div class="np-prev" id="np-prev"></div>`;
+    document.body.appendChild(pop);
+    const prev = i => { $('#np-prev', pop).innerHTML = items[i].prev; $$('.np-item', pop).forEach(b => b.classList.toggle('on', +b.dataset.i === i)); };
+    prev(0);
+    $$('.np-item', pop).forEach(b => { b.onmouseenter = () => prev(+b.dataset.i); b.onclick = () => { pop.remove(); items[+b.dataset.i].run(); }; });
+    const r = anchor.getBoundingClientRect();
+    pop.style.left = Math.max(8, r.left) + 'px'; pop.style.bottom = (innerHeight - r.top + 8) + 'px';
+    setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('mousedown', off); } }), 0);
+  }
+
+  // ---- your own sections (Factions, Magic, Creatures…)
+  async function sectionDialog(existing, opts = {}) {
+    const body = document.createElement('div');
+    const f = existing || { title: '', singular: '', fields: ['Name', 'Aliases'], sections: ['Description', 'Notes'] };
+    let icon = f.icon || '';
+    const isMine = !!(S.settings.myTemplates || []).find(t => t.title.toLowerCase() === (f.title || '').toLowerCase());
+    body.className = 'cs-dlg';
+    body.innerHTML = `<p>Make a section for anything your story needs: factions, magic systems, creatures, ships, gods… Each new entry starts from the sheet you set up here.</p>
+      <div class="cs-cols"><div class="form-grid">
+        <div class="field full cs-name"><label>Section name</label><div class="cs-row"><button type="button" class="cs-icon" id="cs-icon" title="Choose an icon">${iconMarkup(icon) || '🗂️'}</button><input type="text" id="cs-title" value="${esc(f.title)}" placeholder="e.g. Factions"></div></div>
+        <div class="field"><label>One entry is called a…</label><input type="text" id="cs-single" value="${esc(f.singular || '')}" placeholder="e.g. Faction"></div>
+        <div class="field full"><label>Fields at the top of each sheet (comma separated). Keep “Name” and “Aliases” for name suggestions.</label><input type="text" id="cs-fields" value="${esc(f.fields.join(', '))}"></div>
+        <div class="field full"><label>Headings below (comma separated)</label><input type="text" id="cs-sections" value="${esc(f.sections.join(', '))}"></div>
+        ${opts.offerSave || opts.forceSave ? `<label class="check full"><input type="checkbox" id="cs-save" ${!existing || isMine || opts.forceSave ? 'checked' : ''}> Save as one of my templates, so I can add it to other projects from + New</label>` : ''}
+      </div><div class="cs-prev"><div class="tg-cap">Each new entry looks like this:</div><div id="cs-sheet"></div></div></div>`;
+    const list = id => $('#' + id, body).value.split(',').map(x => x.trim()).filter(Boolean);
+    const read = () => { const title = $('#cs-title', body).value.trim(); return { title, singular: $('#cs-single', body).value.trim() || title.replace(/s$/i, '') || 'Entry', fields: list('cs-fields'), sections: list('cs-sections'), icon }; };
+    const redraw = () => { const r = read(); $('#cs-sheet', body).innerHTML = sheetPreviewHTML(icon || '🗂️', r.singular, r.fields, r.sections); };
+    body.addEventListener('input', redraw); redraw();
+    $('#cs-icon', body).onclick = async () => { const r = await pickIcon(icon, read().title || 'this section'); if (!r) return; icon = r.icon; $('#cs-icon', body).innerHTML = iconMarkup(icon) || '🗂️'; redraw(); };
+    const ok = await modal({ title: existing && existing.id ? `Edit “${existing.title}”` : existing ? `Set up “${existing.title}”` : 'New template section', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: existing && existing.id ? 'Save' : 'Create section', value: true, kind: 'primary' }] });
+    if (!ok) return null;
+    const r = read();
+    if (!r.title) return null;
+    if (!r.icon) delete r.icon;
+    if ($('#cs-save', body) && $('#cs-save', body).checked) {
+      const mineList = (S.settings.myTemplates || []).filter(t => t.title.toLowerCase() !== r.title.toLowerCase());
+      mineList.unshift({ id: uid(), title: r.title, singular: r.singular, fields: r.fields, sections: r.sections, icon: r.icon || '' });
+      S.settings = await api.setSettings({ myTemplates: mineList });
+      toast(`Saved “${esc(r.title)}” to your templates. It’s in + New › New template section in every project.`, '', 5000);
+    }
+    return r;
+  }
+  async function newSection() {
+    const r = await sectionDialog(null, { offerSave: true }); if (!r) return;
+    const k = 'custom-' + uid();
+    const node = { id: 'root-' + k, type: 'folder', kind: k, root: true, custom: true, open: true, children: [], ...r };
+    const trashAt = S.project.binder.findIndex(x => x.kind === 'trash');
+    S.project.binder.splice(trashAt, 0, node);
+    scheduleMeta(); renderBinder(); scheduleNames();
+    toast(`Added “${esc(r.title)}”. Hover it and click + to add an entry.`);
+  }
+  async function editSection(n, forceSave) {
+    const r = await sectionDialog(n, { offerSave: true, forceSave }); if (!r) return;
+    Object.assign(n, r); if (!r.icon) delete n.icon;
+    scheduleMeta(); renderBinder(); scheduleNames();
+  }
+  async function deleteSection(n) {
+    if (!(await confirmBox(`Remove “${esc(n.title)}”?`, (n.children || []).length ? `Its ${n.children.length} item(s) will be moved to the Trash first.` : 'It is empty.', 'Remove section', true))) return;
+    findNode('root-trash').node.children.push(...(n.children || []));
+    S.project.binder.splice(S.project.binder.indexOf(n), 1);
+    if (S.docId && !findNode(S.docId)) { S.docId = null; showEmpty(true); }
+    scheduleMeta(); renderBinder(); scheduleNames();
+  }
+  // "+ Document" / "+ Folder": add at the bottom of the binder (under Trash), then drag it where it belongs
+  async function addLoose(type) {
+    const node = type === 'folder' ? { id: uid(), type: 'folder', title: 'New folder', open: true, children: [] } : { id: uid(), type: 'doc', title: 'Untitled', words: 0 };
+    S.project.binder.push(node);
+    scheduleMeta();
+    if (type === 'doc') await openDoc(node.id); else S.selectedId = node.id;
+    renderBinder();
+    const row = $(`.tree-row[data-id="${node.id}"]`);
+    if (row) { row.scrollIntoView({ block: 'nearest' }); startRename(row, node); }
+  }
+  // (kept for the right-click menu)
+  function addMenu(type, btn) {
+    const what = type === 'doc' ? 'document' : 'folder';
+    const items = [];
+    const sel = S.selectedId && findNode(S.selectedId);
+    if (sel && !sel.node.root && rootOf(sel.node.id).kind !== 'trash') {
+      const rootName = rootOf(sel.node.id).title;
+      items.push({ label: `Below “${sel.node.title}”`, hint: rootName, action: () => addNode(type, sel.node.id, false) });
+      if (sel.node.type === 'folder') items.push({ label: `Inside “${sel.node.title}”`, hint: rootName, action: () => addNode(type, sel.node.id, true) });
+      items.push({ sep: true });
+    }
+    for (const r of S.project.binder) {
+      if (r.kind === 'trash') continue;
+      items.push({ label: `New ${what} in ${r.title}`, action: () => addNode(type, r.id, true) });
+    }
+    const rect = btn.getBoundingClientRect();
+    showMenu(rect.left, rect.top - 8 - (items.length * 34 + 12), items);
+  }
+  // + Document / + Folder: into the selected folder or section; with nothing (or a document) selected, at the bottom
+  function addTarget() {
+    const sel = S.selectedId && findNode(S.selectedId);
+    if (!sel || sel.node.type !== 'folder') return null;
+    const r = rootOf(sel.node.id);
+    return r && r.kind === 'trash' ? null : sel.node;
+  }
+  function addHere(type) { const t = addTarget(); if (t) addNode(type, t.id, true); else addLoose(type); }
+  function updateAddHints() {
+    const t = addTarget();
+    $('#btn-new').title = t ? `New document, folder, map or template, in “${t.title}”` : 'New document, folder, map or template (select a folder first to add it there)';
+    $('#binder').classList.toggle('has-target', !!t);
+  }
+  $('#btn-new').onclick = e => newMenu(e.currentTarget);
+  $('#btn-help').onclick = () => window.UnwipHelp && window.UnwipHelp.open();
+  $('#btn-add-doc').onclick = () => addHere('doc');
+  $('#btn-add-folder').onclick = () => addHere('folder');
+  // maps go in the selected folder, or in Places
+  $('#btn-add-map').onclick = () => {
+    const sel = S.selectedId && findNode(S.selectedId);
+    const target = sel && sel.node.type === 'folder' && rootOf(sel.node.id).kind !== 'trash' ? sel.node.id : (findNode('root-places') ? 'root-places' : 'root-notes');
+    if (window.UnwipMaps) window.UnwipMaps.create(target);
+  };
+  $('#btn-new').addEventListener('mouseenter', updateAddHints);
+  // clicking empty space in the binder clears the selection
+  $('#binder-tree').addEventListener('mousedown', e => {
+    if (e.target.closest('.tree-row')) return;
+    S.selectedId = null; renderBinder();
+  });
+
+  async function moveToTrash(id) {
+    const f = findNode(id); if (!f || f.node.root) return;
+    f.list.splice(f.index, 1);
+    findNode('root-trash').node.children.push(f.node);
+    if (id === S.docId || isInside(S.docId, f.node)) { await flushSave(); S.docId = null; showEmpty(true); }
+    // select the neighbour so pressing Delete again keeps working down the list
+    const next = f.list[f.index] || f.list[f.index - 1];
+    S.selectedId = next && !next.root ? next.id : null;
+    scheduleMeta(); renderBinder(); updateStatus(); refreshPlanView();
+    toastAction(`Moved “${esc(f.node.title)}” to the Trash.`, 'Undo', () => {
+      const t = findNode(id); if (!t) return;
+      t.list.splice(t.index, 1);
+      f.list.splice(Math.min(f.index, f.list.length), 0, t.node);
+      S.selectedId = id; scheduleMeta(); renderBinder(); updateStatus(); refreshPlanView();
+    }, 8000);
+  }
+  // Delete key: binder item (or corkboard card) → Trash; already in the Trash → delete forever
+  function deleteSelected() {
+    const id = S.view === 'cork' && S.ckSelected ? S.ckSelected : S.selectedId;
+    const f = id && findNode(id);
+    if (!f) return false;
+    if (f.node.root) { protectedNote(f.node); return true; }
+    if (rootOf(id).kind === 'trash') deleteForever(id); else moveToTrash(id);
+    if (S.view === 'cork') S.ckSelected = null;
+    return true;
+  }
+  function protectedNote(n) {
+    if (n.kind === 'manuscript') toast('The Manuscript can’t be deleted or moved. Everything in it is what gets exported, so it’s always kept safe.', '', 5200);
+    else if (n.kind === 'trash') toast('The Trash is always there. Right-click it to empty it.');
+    else if (n.custom) toast(`To remove “${esc(n.title)}”, right-click it and choose “Remove this section…”.`, '', 4500);
+    else toast(`“${esc(n.title)}” is a built-in section, so it can’t be deleted. You can collapse it or change its icon.`, '', 4500);
+  }
+  // ---- moving things around (menu + keyboard; drag and drop is below)
+  function moveNodeTo(id, parentId, index) {
+    const src = findNode(id); if (!src || src.node.root) return;
+    const parent = findNode(parentId).node;
+    if (parent.id === id || isInside(parentId, src.node)) return;
+    src.list.splice(src.index, 1);
+    if (index == null || index > parent.children.length) index = parent.children.length;
+    parent.children.splice(index, 0, src.node);
+    parent.open = true;
+    S.selectedId = id;
+    scheduleMeta(); renderBinder(); updateStatus(); refreshPlanView();
+    const row = $(`.tree-row[data-id="${id}"]`); if (row) row.scrollIntoView({ block: 'nearest' });
+  }
+  function moveBy(id, delta) {
+    const f = findNode(id); if (!f || f.node.root) return;
+    const to = f.index + delta;
+    if (to < 0 || to >= f.list.length || f.list[to].root) return;
+    f.list.splice(f.index, 1); f.list.splice(to, 0, f.node);
+    S.selectedId = id; scheduleMeta(); renderBinder();
+  }
+  function moveOut(id) {
+    const f = findNode(id); if (!f || !f.parent || f.parent.root) return;
+    const p = findNode(f.parent.id);
+    moveNodeTo(id, p.parent.id, p.index + 1);
+  }
+  function moveInto(id) {
+    // Alt+→ : put it inside the folder directly above it
+    const f = findNode(id); if (!f || f.index === 0) return;
+    const above = f.list[f.index - 1];
+    if (above.type !== 'folder') return;
+    moveNodeTo(id, above.id, null);
+  }
+  async function moveToDialog(id) {
+    const node = findNode(id).node;
+    const body = document.createElement('div');
+    body.innerHTML = '<p>Choose where to put it. It goes to the end of that folder.</p><div class="dest-list"></div>';
+    const list = $('.dest-list', body);
+    let chosen = null;
+    const add = (n, depth) => {
+      if (n.type !== 'folder' || n.id === id || isInside(n.id, node)) return;
+      const b = document.createElement('button');
+      b.className = 'dest' + (n.root ? ' root' : '');
+      b.style.paddingLeft = (12 + depth * 18) + 'px';
+      const icon = n.root ? rootIcon(n) : I.folder;
+      b.innerHTML = `${icon}<span>${esc(n.title)}</span>`;
+      b.onclick = () => { $$('.dest', list).forEach(x => x.classList.remove('on')); b.classList.add('on'); chosen = n.id; };
+      b.ondblclick = () => { chosen = n.id; body.closest('.modal-back').querySelector('.btn.primary').click(); };
+      list.appendChild(b);
+      for (const c of n.children || []) add(c, depth + 1);
+    };
+    for (const r of S.project.binder) add(r, 0);
+    const ok = await modal({ title: `Move "${node.title}"`, body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Move here', value: true, kind: 'primary' }] });
+    if (ok && chosen) moveNodeTo(id, chosen, null);
+  }
+  tree.addEventListener('mousedown', e => {
+    S.binderActive = true; S.focusTarget = null; S.ckSelected = null;
+    if (!e.target.closest('input') && document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  });
+  editor.addEventListener('focus', () => { S.binderActive = false; });
+  document.addEventListener('keydown', e => {
+    if (!S.slug || !S.binderActive || !e.altKey || !S.selectedId) return;
+    if (document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    const map = { ArrowUp: () => moveBy(S.selectedId, -1), ArrowDown: () => moveBy(S.selectedId, 1), ArrowLeft: () => moveOut(S.selectedId), ArrowRight: () => moveInto(S.selectedId) };
+    if (map[e.key]) { e.preventDefault(); map[e.key](); }
+  });
+
+  async function deleteForever(id) {
+    const f = findNode(id);
+    if (!(await confirmBox('Delete forever?', `"${esc(f.node.title)}" will be removed from this project. This can't be undone (your automatic backups still have it).`, 'Delete', true))) return;
+    f.list.splice(f.index, 1);
+    if (id === S.docId) { S.docId = null; showEmpty(true); }
+    scheduleMeta(); renderBinder();
+  }
+  async function emptyTrash() {
+    if (!(await confirmBox('Empty Trash?', 'Everything in the Trash will be removed from this project. Your automatic backups still keep a copy.', 'Empty Trash', true))) return;
+    const t = findNode('root-trash').node;
+    if (S.docId && isInside(S.docId, t)) { S.docId = null; showEmpty(true); }
+    t.children = [];
+    scheduleMeta(); renderBinder();
+  }
+
+  // drag and drop in the binder.
+  // Drop on the top half of a row = above it, bottom half = below it, middle of a folder = inside it.
+  // Below the last item in a folder, move the mouse LEFT to drop it outside that folder instead.
+  let dragId = null;
+  tree.addEventListener('dragstart', e => {
+    const row = e.target.closest('.tree-row'); if (!row) return;
+    dragId = row.dataset.id; row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/x-folio-node', dragId);
+  });
+  tree.addEventListener('dragend', () => { dragId = null; clearDrop(); renderBinder(); });
+  function clearDrop() {
+    $$('.drop-before,.drop-after,.drop-inside', tree).forEach(r => { r.classList.remove('drop-before', 'drop-after', 'drop-inside'); r.style.removeProperty('--drop-left'); });
+  }
+  function depthOf(id) { let d = 0; let f = findNode(id); while (f && f.parent) { d++; f = findNode(f.parent.id); } return d; }
+  function resolveDrop(e, row) {
+    const f = findNode(row.dataset.id); if (!f) return null;
+    const n = f.node;
+    if (n.root) return { id: n.id, zone: 'inside', row };
+    const r = row.getBoundingClientRect(); const y = (e.clientY - r.top) / r.height;
+    let zone;
+    const openWithKids = n.type === 'folder' && n.open && n.children && n.children.length;
+    if (n.type === 'folder') zone = y < .3 ? 'before' : (y > .7 && !openWithKids) ? 'after' : 'inside';
+    else zone = y < .5 ? 'before' : 'after';
+    let target = f;
+    if (zone === 'after') {
+      // climb out of folders when the pointer is left of this row's indent and this is the last item
+      const indentX = r.left + parseFloat(row.style.paddingLeft || 0) + 10;
+      let levelsOut = Math.max(0, Math.floor((indentX - e.clientX) / 16));
+      while (levelsOut > 0 && target.parent && !target.parent.root && target.index === target.list.length - 1) {
+        target = findNode(target.parent.id); levelsOut--;
+      }
+    }
+    return { id: target.node.id, zone, row };
+  }
+  function canDrop(targetId, zone) {
+    if (!dragId || targetId === dragId) return false;
+    const drag = findNode(dragId).node;
+    if (isInside(targetId, drag)) return false;
+    const t = findNode(targetId).node;
+    if (zone === 'inside' && t.type !== 'folder') return false;
+    return true;
+  }
+  tree.addEventListener('dragover', e => {
+    const row = e.target.closest('.tree-row'); if (!row || !dragId) return;
+    const d = resolveDrop(e, row);
+    clearDrop();
+    if (!d || !canDrop(d.id, d.zone)) return;
+    e.preventDefault();
+    row.classList.add('drop-' + d.zone);
+    if (d.zone !== 'inside') row.style.setProperty('--drop-left', (6 + depthOf(d.id) * 16 + 18) + 'px');
+  });
+  tree.addEventListener('drop', e => {
+    const row = e.target.closest('.tree-row'); if (!row || !dragId) return;
+    e.preventDefault();
+    const d = resolveDrop(e, row);
+    if (!d || !canDrop(d.id, d.zone)) return;
+    const id = dragId; dragId = null; clearDrop();
+    if (d.zone === 'inside') { moveNodeTo(id, d.id, null); return; }
+    // remove first, then find the target's new position
+    const src = findNode(id); src.list.splice(src.index, 1);
+    const tgt = findNode(d.id);
+    tgt.list.splice(tgt.index + (d.zone === 'after' ? 1 : 0), 0, src.node);
+    S.selectedId = id; scheduleMeta(); renderBinder(); updateStatus(); refreshPlanView();
+  });
+  // dropping on the empty space under the tree puts it at the end of the Manuscript
+  const binderScroll = $('#binder-tree');
+  binderScroll.addEventListener('dragover', e => { if (dragId && !e.target.closest('.tree-row')) { e.preventDefault(); binderScroll.classList.add('drop-end'); } });
+  binderScroll.addEventListener('dragleave', () => binderScroll.classList.remove('drop-end'));
+  binderScroll.addEventListener('drop', e => {
+    binderScroll.classList.remove('drop-end');
+    if (!dragId || e.target.closest('.tree-row')) return;
+    e.preventDefault(); const id = dragId; dragId = null;
+    const src = findNode(id); if (!src || src.node.root) return;
+    src.list.splice(src.index, 1); S.project.binder.push(src.node);
+    S.selectedId = id; scheduleMeta(); renderBinder(); updateStatus(); refreshPlanView();
+  });
+
+  // ================================================================== EDITOR
+  document.execCommand('defaultParagraphSeparator', false, 'p');
+
+  function showEmpty(on) {
+    $('#page').classList.toggle('hidden', on);
+    $('#empty-state').classList.toggle('hidden', !on);
+    if (on) { editor.innerHTML = ''; updateStatus(); if (window.CSS && CSS.highlights) clearRvHighlights(); }
+  }
+
+  async function openDoc(id, opts = {}) {
+    await flushSave();
+    const f = findNode(id); if (!f) return;
+    if (f.node.map && window.UnwipMaps) { S.selectedId = id; renderBinder(); return window.UnwipMaps.open(id); }
+    if (S.view === 'outline') setView('write');
+    if (S.splitId === id) { await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null; }
+    $$('.toast.with-action').forEach(t => t.remove()); // offers about the previous document
+    S.docId = id; S.selectedId = id;
+    S.project.lastDoc = id; scheduleMeta();
+    const html = await api.loadDoc(S.slug, id);
+    showEmpty(false);
+    editor.innerHTML = html || '<p><br></p>';
+    S.loadedHTML = editor.innerHTML;
+    resyncWords();
+    $('#doc-title').value = f.node.title;
+    synopsis.value = f.node.synopsis || ''; requestAnimationFrame(fitSynopsis);
+    $('#snap-count').textContent = ''; refreshSnapCount();
+    const kind = rootOf(id).kind;
+    editor.classList.toggle('sheet', kind !== 'manuscript' && kind !== 'trash');
+    markScenes(editor);
+    renderBinder();
+    editorWrap.scrollTop = 0;
+    updateStatus();
+    hideAutocomplete();
+    if (S.revise) runRevise();
+    emit('doc', id);
+    if (opts.focus === false) return;   // opened from the binder: keep the keyboard there (Delete, arrows)
+    editor.focus();
+    const r = document.createRange(); r.setStart(editor.firstChild || editor, 0); r.collapse(true);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+
+  $('#doc-title').addEventListener('input', e => {
+    const f = findNode(S.docId); if (!f) return;
+    f.node.title = e.target.value;
+    scheduleMeta(); scheduleNames();
+    const row = $(`.tree-row[data-id="${S.docId}"] .tr-title`); if (row) row.textContent = e.target.value || 'Untitled';
+  });
+  $('#doc-title').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); editor.focus(); } });
+  $('#doc-title').addEventListener('focus', () => { S.focusTarget = 'title'; refreshToolbar(); });
+  $('#doc-title').addEventListener('mousedown', () => { S.focusTarget = 'title'; setTimeout(refreshToolbar, 0); });
+  editor.addEventListener('focus', () => { S.focusTarget = 'editor'; $('#sel-block').disabled = false; });
+
+  // The document title is the chapter heading, so the toolbar edits the "Heading 1" style
+  // (shared by every chapter title, which keeps the book consistent).
+  function titleFocused() { return S.focusTarget === 'title' && document.activeElement !== editor; }
+  function setTitleStyle(change) {
+    Object.assign(S.project.style.headings.h1, change);
+    applyStyle(); scheduleMeta(); refreshToolbar();
+    if (!localStorage.getItem('folio-title-tip')) {
+      localStorage.setItem('folio-title-tip', '1');
+      toast('Changed the chapter title style. It applies to every chapter title, and you can fine-tune it in Manuscript style.', '', 6000);
+    }
+    $('#doc-title').focus();
+  }
+
+  // ---- saving
+  function scheduleSave() {
+    S.dirty = true; S.dirtySinceBackup = true;
+    $('#st-save').textContent = 'Saving…'; $('#st-save').classList.add('saving');
+    clearTimeout(S.saveTimer);
+    S.saveTimer = setTimeout(flushSave, 700);
+  }
+  async function flushSave() {
+    clearTimeout(S.saveTimer);
+    if (!S.dirty || !S.slug || !S.docId) return;
+    S.dirty = false;
+    const id = S.docId;
+    const html = editor.innerHTML;
+    const f = findNode(id);
+    if (f) { f.node.words = countWords(editor.innerText); f.node.mod = Date.now(); f.node.dev = S.device || ''; }
+    if (S.loadedHTML && S.loadedHTML !== html) autoSnapshotIfNeeded(id, S.loadedHTML).catch(() => {});
+    await api.saveDoc(S.slug, id, html);
+    emit('saved', id, html);
+    if (f && ['characters', 'places', 'items'].includes((rootOf(id) || {}).kind)) scheduleNames();
+    await saveMetaNow();
+    $('#st-save').textContent = 'Saved'; $('#st-save').classList.remove('saving');
+  }
+  function scheduleMeta() { clearTimeout(S.metaTimer); S.metaTimer = setTimeout(saveMetaNow, 600); }
+  async function saveMetaNow() { clearTimeout(S.metaTimer); S.metaTimer = null; if (!S.slug) return; S.project.totalWords = manuscriptWords(); S.project.lastDevice = S.device || S.project.lastDevice; await api.saveProjectMeta(S.slug, S.project); }
+  window.addEventListener('beforeunload', () => { flushSave(); });
+
+  // ---- status bar
+  function updateStatus() {
+    if (!S.project) return;
+    const docWords = S.docId ? countWords(editor.innerText) : 0;
+    const f = S.docId && findNode(S.docId);
+    if (f) f.node.words = docWords;
+    $('#st-doc').textContent = S.docId ? `${fmt(docWords)} words in this document` : 'No document open';
+    const total = manuscriptWords();
+    const sess = S.sessionTyped;
+    $('#st-session').textContent = `Written this session: ${sess >= 0 ? '+' : ''}${fmt(sess)}`;
+    $('#st-session').title = 'Words you typed (pasted text and big deletions are not counted). Click for goals and history.';
+    const goals = S.project.goals || {};
+    const daily = (S.settings || {}).dailyGoal || 0;
+    const todayW = writtenOn(today());
+    if (daily) {
+      const pct = Math.min(100, Math.round(todayW / daily * 100));
+      $('#st-today').innerHTML = `Today ${fmt(todayW)} / ${fmt(daily)}<span class="goal-bar ${pct >= 100 ? 'done' : ''}"><i style="width:${pct}%"></i></span>`;
+    } else $('#st-today').innerHTML = '';
+    $('#st-today').previousElementSibling.classList.toggle('hidden', !daily);
+    if (goals.total) {
+      const pct = Math.min(100, Math.round(total / goals.total * 100));
+      $('#st-project').innerHTML = `Manuscript: ${fmt(total)} / ${fmt(goals.total)}<span class="goal-bar ${pct >= 100 ? 'done' : ''}"><i style="width:${pct}%"></i></span>`;
+    } else $('#st-project').textContent = `Manuscript: ${fmt(total)}`;
+    if (S.sprint) renderSprint();
+    const sel = getSelection();
+    if (sel.rangeCount && !sel.isCollapsed && editor.contains(sel.anchorNode)) {
+      $('#st-sel').textContent = `${fmt(countWords(sel.toString()))} selected`; $('#st-sel').classList.remove('hidden');
+    } else $('#st-sel').classList.add('hidden');
+  }
+  let countTimer;
+  function updateCountsSoon() {
+    clearTimeout(countTimer);
+    countTimer = setTimeout(() => {
+      updateStatus();
+      const row = $(`.tree-row[data-id="${S.docId}"] .tr-count`);
+      if (row) row.textContent = fmt(findNode(S.docId).node.words); else if (S.docId) renderBinderCountsOnly();
+    }, 250);
+  }
+  function renderBinderCountsOnly() {
+    // refresh counts on folders without rebuilding (avoids breaking an open rename box)
+    if (!$('#binder-tree input.rename')) renderBinder();
+  }
+
+  // ---- editor helpers
+  function currentBlock(node) {
+    while (node && node !== editor) {
+      if (node.nodeType === 1 && /^(P|H1|H2|H3|BLOCKQUOTE|LI|DIV)$/.test(node.tagName) && node.parentNode === editor) return node;
+      if (node.nodeType === 1 && /^(P|H1|H2|H3)$/.test(node.tagName)) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+  function markScenes(scope) {
+    const blocks = scope === editor ? $$(':scope > p', editor) : [scope];
+    for (const b of blocks) {
+      if (!b || b.tagName !== 'P') continue;
+      const t = b.textContent;
+      const isScene = Clip.SCENE_BREAK.test(t) && t.trim().length > 0;
+      b.classList.toggle('scene', isScene);
+      if (!b.classList.length) b.removeAttribute('class');
+    }
+  }
+  function ensureParagraphs() {
+    // wrap any stray text that ended up directly in the editor
+    for (const n of [...editor.childNodes]) {
+      if (n.nodeType === 3 && n.nodeValue.trim() || (n.nodeType === 1 && /^(SPAN|B|I|U|S|FONT|EM|STRONG|A)$/.test(n.tagName))) {
+        const p = document.createElement('p');
+        editor.insertBefore(p, n); p.appendChild(n);
+        const sel = getSelection(); const r = document.createRange();
+        r.selectNodeContents(p); r.collapse(false); sel.removeAllRanges(); sel.addRange(r);
+      } else if (n.nodeType === 1 && n.tagName === 'DIV') {
+        const p = document.createElement('p');
+        while (n.firstChild) p.appendChild(n.firstChild);
+        if (n.getAttribute('style')) p.setAttribute('style', n.getAttribute('style'));
+        n.replaceWith(p);
+      }
+    }
+    if (!editor.firstChild) editor.innerHTML = '<p><br></p>';
+  }
+  function fixFontSizeSpans() {
+    for (const el of $$('[style*="xxx-large"], font[size="7"]', editor)) {
+      const pt = S.pendingSize || S.project.style.size;
+      if (el.tagName === 'FONT') {
+        const span = document.createElement('span');
+        while (el.firstChild) span.appendChild(el.firstChild);
+        el.replaceWith(span); span.style.fontSize = pt + 'pt';
+      } else el.style.fontSize = pt + 'pt';
+    }
+  }
+  function cleanEmptySpans() {
+    for (const s of $$('span', editor)) {
+      if (!s.getAttribute('style') && !s.className) s.replaceWith(...s.childNodes);
+      else if (!s.textContent && !s.querySelector('br')) s.remove();
+    }
+  }
+
+  // "Written" words: only what you type. Pastes, drops, undoing a paste and deleting big chunks
+  // change the document's count but not your writing progress.
+  const BIG_CHANGE = 30;
+  function trackTyping() {
+    const w = countWords(editor.innerText);
+    const d = w - S.lastDocWords;
+    S.lastDocWords = w;
+    if (S.programmatic || !d || Math.abs(d) > BIG_CHANGE) return;
+    S.sessionTyped += d;
+    const day = today();
+    const daily = (S.settings || {}).dailyGoal || 0;
+    const before = daily ? writtenOn(day) : 0;
+    S.project.stats.days[day] = (S.project.stats.days[day] || 0) + d;
+    emit('typed', d);
+    if (daily && before < daily && writtenOn(day) >= daily && S.goalCheered !== day) { S.goalCheered = day; quoteToast(`Daily goal reached: ${fmt(daily)} words!`); }
+  }
+  function resyncWords() { S.lastDocWords = countWords(editor.innerText); }
+  editor.addEventListener('input', e => {
+    trackTyping();
+    ensureParagraphs();
+    fixFontSizeSpans();
+    const sel = getSelection();
+    if (sel.rangeCount) { const b = currentBlock(sel.anchorNode); if (b) { markScenes(b); if (b.previousElementSibling) markScenes(b.previousElementSibling); } }
+    scheduleSave();
+    updateCountsSoon();
+    if (typewriterActive()) typewriterScroll();
+    if (S.revise) scheduleRevise();
+    emit('input', e);
+    if (e.inputType === 'insertText') checkAutocomplete(); else hideAutocomplete();
+    if (/^(insert|delete)/.test(e.inputType || '')) noteLastPlace();
+  });
+
+  // ---- “Continue”: remember the last place you typed (project, document and cursor), saved every few seconds
+  function caretOffset() {
+    const sel = getSelection(); if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return null;
+    const r = document.createRange(); r.selectNodeContents(editor); r.setEnd(sel.anchorNode, sel.anchorOffset);
+    return r.toString().length;
+  }
+  function noteLastPlace(now) {
+    if (!S.slug || !S.docId) return;
+    const off = caretOffset(); if (off == null) return;
+    const f = findNode(S.docId);
+    // preview: the words just before the cursor in its paragraph (and the paragraph before, if this one is short)
+    const sel = getSelection(), blk = currentBlock(sel.anchorNode);
+    let snip = '';
+    if (blk) { const r = document.createRange(); r.selectNodeContents(blk); r.setEnd(sel.anchorNode, sel.anchorOffset); snip = r.toString(); if (snip.length < 40 && blk.previousElementSibling) snip = blk.previousElementSibling.textContent + ' ' + snip; }
+    snip = snip.replace(/\s+/g, ' ').trim().slice(-90);
+    S.lastPlace = { slug: S.slug, docId: S.docId, offset: off, project: S.project.title, doc: f ? f.node.title : '', snippet: snip, at: Date.now() };
+    clearTimeout(S.lastPlaceT);
+    const save = () => { if (S.lastPlace) api.setSettings({ lastPlace: S.lastPlace }).then(x => { S.settings = x; }).catch(() => {}); };
+    if (now) save(); else S.lastPlaceT = setTimeout(save, 4000);
+  }
+  // put the cursor back at a text position and bring it into view
+  function placeCaretAt(offset) {
+    const w = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let left = offset, node = null;
+    while ((node = w.nextNode())) { if (left <= node.length) break; left -= node.length; }
+    const r = document.createRange();
+    if (node) r.setStart(node, Math.min(left, node.length)); else { r.selectNodeContents(editor); r.collapse(false); }
+    r.collapse(true);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    editor.focus();
+    const el = (node && node.parentElement) || editor.lastElementChild;
+    if (el) el.scrollIntoView({ block: 'center' });
+  }
+  async function continueWriting(lp) {
+    await openProject(lp.slug);
+    if (!S.project) return;
+    if (lp.docId && findNode(lp.docId) && S.docId !== lp.docId) await openDoc(lp.docId);
+    if (S.docId === lp.docId) requestAnimationFrame(() => placeCaretAt(lp.offset || 0));
+  }
+
+  editor.addEventListener('keydown', e => {
+    emit('keydown', e); if (e.defaultPrevented) return;
+    if (e.key === 'Tab') { e.preventDefault(); return; } // first-line indents are automatic
+    if (e.ctrlKey && e.shiftKey && (e.key === 'V' || e.key === 'v')) { S.plainPaste = true; setTimeout(() => S.plainPaste = false, 400); }
+  });
+
+  // ---- selection tracking + toolbar state
+  document.addEventListener('selectionchange', () => {
+    const sel = getSelection();
+    if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return;
+    S.lastRange = sel.getRangeAt(0).cloneRange();
+    refreshToolbar();
+    updateStatus();
+  });
+  function restoreRange() {
+    editor.focus();
+    if (S.lastRange && editor.contains(S.lastRange.startContainer)) {
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(S.lastRange);
+    }
+  }
+  function refreshToolbar() {
+    if (titleFocused()) {
+      const h = S.project.style.headings.h1;
+      for (const b of $$('.tb-btn[data-cmd]')) {
+        const c = b.dataset.cmd;
+        const on = (c === 'bold' && h.bold) || (c === 'italic' && h.italic) ||
+          (c === 'justifyLeft' && h.align === 'left') || (c === 'justifyCenter' && h.align === 'center') || (c === 'justifyRight' && h.align === 'right');
+        b.classList.toggle('on', !!on);
+      }
+      $('#sel-block').value = 'h1'; $('#sel-block').disabled = true;
+      setFontSelect(h.font); setSizeSelect(h.size);
+      return;
+    }
+    $('#sel-block').disabled = false;
+    for (const b of $$('.tb-btn[data-cmd]')) {
+      let on = false;
+      try { on = document.queryCommandState(b.dataset.cmd); } catch {}
+      b.classList.toggle('on', on && /bold|italic|underline|strike/i.test(b.dataset.cmd));
+    }
+    // when focus is elsewhere (e.g. the Style panel), read the place the cursor was last in the chapter
+    const sel = getSelection();
+    let node = sel.rangeCount ? sel.anchorNode : null; if (node && node.nodeType === 3) node = node.parentNode;
+    if (!node || !editor.contains(node)) {
+      node = S.lastRange && editor.contains(S.lastRange.startContainer) ? S.lastRange.startContainer : (editor.querySelector('p') || null);
+      if (node && node.nodeType === 3) node = node.parentNode;
+      if (!node || !editor.contains(node)) return;
+    }
+    const block = node.closest('h1,h2,h3,blockquote,p');
+    $('#sel-block').value = block ? (block.closest('blockquote') ? 'blockquote' : block.tagName.toLowerCase()) : 'p';
+    const cs = getComputedStyle(node);
+    const fam = (cs.fontFamily.split(',')[0] || '').replace(/["']/g, '').trim();
+    setFontSelect(fam);
+    const pt = Math.round(parseFloat(cs.fontSize) * 0.75 * 2) / 2;
+    setSizeSelect(pt);
+  }
+
+  // ---- narrow windows: tools that don't fit go into a "⋯" menu instead of hiding behind the right-hand buttons
+  (function toolbarOverflow() {
+    const tb = $('#toolbar'); if (!tb) return;
+    const more = document.createElement('button');
+    more.className = 'tb-btn tb-more'; more.id = 'tb-more'; more.title = 'More tools'; more.textContent = '⋯'; more.hidden = true;
+    tb.appendChild(more);
+    const pop = document.createElement('div'); pop.className = 'tb-pop hidden'; document.body.appendChild(pop);
+    const items = [...tb.children].filter(x => x !== more);
+    const order = new Map(items.map((el, i) => [el, i]));
+    // first to be tucked away → last
+    const PRIO = ['#btn-image', '#btn-footnote', '#btn-scene', '#btn-clear', '[data-cmd="strikeThrough"]', '[data-cmd="justifyFull"]', '[data-cmd="justifyRight"]',
+      '[data-cmd="justifyCenter"]', '[data-cmd="justifyLeft"]', '#sel-block', '[data-cmd="underline"]', '#sel-size', '#btn-comment', '#sel-font'];
+    [more, pop].forEach(el => el.addEventListener('mousedown', e => { if (!e.target.closest('select')) e.preventDefault(); }));
+    more.onclick = () => {
+      if (!pop.classList.contains('hidden')) { pop.classList.add('hidden'); return; }
+      const r = more.getBoundingClientRect();
+      pop.classList.remove('hidden');
+      pop.style.top = (r.bottom + 6) + 'px';
+      pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.right - pop.offsetWidth)) + 'px';
+    };
+    document.addEventListener('mousedown', e => { if (!pop.contains(e.target) && e.target !== more) pop.classList.add('hidden'); });
+    const fits = () => tb.scrollWidth <= tb.clientWidth + 1;
+    let busy = false;
+    function fit() {
+      if (busy) return; busy = true;
+      for (const el of items) tb.insertBefore(el, more);
+      more.hidden = true; tb.classList.remove('tight');
+      if (!fits()) {
+        more.hidden = false; tb.classList.add('tight');
+        for (const sel of PRIO) {
+          if (fits()) break;
+          const el = $(sel, tb); if (el && !el.closest('.tb-tucked') && el.offsetParent !== null) pop.appendChild(el);
+        }
+        [...pop.children].sort((a, b) => order.get(a) - order.get(b)).forEach(el => pop.appendChild(el));
+      }
+      if (!pop.children.length) { more.hidden = true; pop.classList.add('hidden'); }
+      busy = false;
+    }
+    new ResizeObserver(() => requestAnimationFrame(fit)).observe(tb);
+    window.addEventListener('resize', () => requestAnimationFrame(fit));
+    setTimeout(fit, 300);
+  })();
+
+  // ---- toolbar actions
+  $$('.tb-btn, #btn-copy-docs').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
+  $$('.tb-btn[data-cmd]').forEach(b => b.addEventListener('click', () => {
+    if (titleFocused()) {
+      const h = S.project.style.headings.h1, c = b.dataset.cmd;
+      if (c === 'bold') setTitleStyle({ bold: !h.bold });
+      else if (c === 'italic') setTitleStyle({ italic: !h.italic });
+      else if (c === 'justifyLeft' || c === 'justifyFull') setTitleStyle({ align: 'left' });
+      else if (c === 'justifyCenter') setTitleStyle({ align: 'center' });
+      else if (c === 'justifyRight') setTitleStyle({ align: 'right' });
+      return;
+    }
+    restoreRange();
+    document.execCommand('styleWithCSS', false, false);
+    document.execCommand(b.dataset.cmd);
+    cleanEmptySpans(); scheduleSave(); refreshToolbar();
+  }));
+
+  $('#sel-block').addEventListener('change', e => {
+    const v = e.target.value;
+    restoreRange();
+    // leaving a quote: formatBlock 'p' inside blockquote doesn't remove it, so unwrap first
+    const sel = getSelection();
+    let node = sel.anchorNode; if (node && node.nodeType === 3) node = node.parentNode;
+    const bq = node && node.closest && node.closest('blockquote');
+    if (bq && v !== 'blockquote') document.execCommand('outdent');
+    document.execCommand('formatBlock', false, v === 'blockquote' ? 'blockquote' : v);
+    if (/^h[1-3]$/.test(v)) {
+      // headings take their font from the manuscript style, so drop pasted font overrides
+      node = getSelection().anchorNode; if (node && node.nodeType === 3) node = node.parentNode;
+      const h = node && node.closest && node.closest('h1,h2,h3');
+      if (h) $$('span', h).forEach(s => { s.style.fontFamily = ''; s.style.fontSize = ''; if (!s.getAttribute('style')) s.replaceWith(...s.childNodes); });
+    }
+    ensureParagraphs(); cleanEmptySpans(); scheduleSave(); refreshToolbar();
+  });
+
+  // fonts dropdown
+  const selFont = $('#sel-font');
+  let allFontsLoaded = false;
+  // fonts you've starred, shown at the top of every font list
+  const fontFavs = () => ((S.settings || {}).fontFavs || []).filter(Boolean);
+  async function toggleFontFav(fam) {
+    const favs = fontFavs(); const i = favs.indexOf(fam);
+    if (i >= 0) favs.splice(i, 1); else favs.unshift(fam);
+    S.settings = await api.setSettings({ fontFavs: favs });
+    buildFontSelect();
+    return i < 0;
+  }
+  // grouped <option>s: your favourites, publishing favourites, imported, everything installed
+  function fontOptionsHTML(sel) {
+    const opt = f => `<option value="${esc(f)}" ${f === sel ? 'selected' : ''} style="font-family:'${esc(f)}'">${esc(f)}</option>`;
+    const grp = (label, list) => list.length ? `<optgroup label="${esc(label)}">${list.map(opt).join('')}</optgroup>` : '';
+    const mine = fontFavs();
+    const pub = Fonts.FAVOURITES.filter(f => Fonts.isAvailable(f));
+    const imp = Fonts.imported.map(i => i.family);
+    const all = Fonts.installed ? [...Fonts.installed].filter(f => !pub.includes(f)).sort((a, b) => a.localeCompare(b)) : [];
+    const known = new Set([...mine, ...pub, ...imp, ...all]);
+    return (sel && !known.has(sel) ? opt(sel) : '') + grp('★ Your favourites', mine) + grp('Publishing favourites', pub) + grp('Imported', imp) + grp('All installed fonts', all);
+  }
+  function buildFontSelect() {
+    const current = selFont.value;
+    selFont.innerHTML = '';
+    const addGroup = (label, fams) => {
+      if (!fams.length) return;
+      const g = document.createElement('optgroup'); g.label = label;
+      for (const f of fams) { const o = document.createElement('option'); o.value = f; o.textContent = f; g.appendChild(o); }
+      selFont.appendChild(g);
+    };
+    const fav = Fonts.FAVOURITES.filter(f => Fonts.isAvailable(f));
+    addGroup('★ Your favourites', fontFavs());
+    addGroup('Publishing favourites', fav);
+    addGroup('Imported', Fonts.imported.map(i => i.family));
+    if (Fonts.installed && Fonts.installed.size) addGroup('All installed fonts', [...Fonts.installed].filter(f => !fav.includes(f)).sort((a, b) => a.localeCompare(b)));
+    const imp = document.createElement('option'); imp.value = '__import'; imp.textContent = 'Import a font file…'; selFont.appendChild(imp);
+    if (current) setFontSelect(current);
+  }
+  function setFontSelect(fam) {
+    if (!fam) return;
+    if (![...selFont.options].some(o => o.value === fam)) {
+      const o = document.createElement('option'); o.value = fam; o.textContent = fam; selFont.insertBefore(o, selFont.firstChild);
+    }
+    selFont.value = fam;
+  }
+  selFont.addEventListener('mousedown', async () => {
+    if (allFontsLoaded) return;
+    allFontsLoaded = true;
+    await Fonts.loadInstalled();
+    buildFontSelect();
+  });
+  selFont.addEventListener('change', async () => {
+    const fam = selFont.value;
+    if (fam === '__import') { await importFonts(); refreshToolbar(); return; }
+    if (titleFocused()) { setTitleStyle({ font: fam }); return; }
+    restoreRange();
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('fontName', false, fam);
+    document.execCommand('styleWithCSS', false, false);
+    cleanEmptySpans(); scheduleSave(); editor.focus();
+  });
+  async function importFonts() {
+    const list = await api.importFonts();
+    if (!list.length) return;
+    await Fonts.loadImported(list);
+    buildFontSelect();
+    toast('Fonts imported. They appear under "Imported" in the font list.');
+  }
+
+  // sizes dropdown
+  const selSize = $('#sel-size');
+  const SIZES = [8, 9, 10, 10.5, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 36, 48, 60, 72];
+  function buildSizeSelect() {
+    selSize.innerHTML = SIZES.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+  function setSizeSelect(pt) {
+    if (!pt) return;
+    if (![...selSize.options].some(o => +o.value === pt)) {
+      const o = document.createElement('option'); o.value = pt; o.textContent = pt;
+      const after = [...selSize.options].find(op => +op.value > pt);
+      selSize.insertBefore(o, after || null);
+    }
+    selSize.value = String(pt);
+  }
+  selSize.addEventListener('change', () => {
+    const pt = parseFloat(selSize.value);
+    if (titleFocused()) { setTitleStyle({ size: pt }); return; }
+    restoreRange();
+    S.pendingSize = pt;
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('fontSize', false, '7');
+    document.execCommand('styleWithCSS', false, false);
+    fixFontSizeSpans(); cleanEmptySpans(); scheduleSave(); editor.focus();
+  });
+
+  $('#btn-scene').addEventListener('click', () => {
+    restoreRange();
+    const sel = getSelection();
+    const b = currentBlock(sel.anchorNode);
+    if (b) { const r = document.createRange(); r.selectNodeContents(b); r.collapse(false); sel.removeAllRanges(); sel.addRange(r); }
+    document.execCommand('insertParagraph');
+    document.execCommand('insertText', false, '* * *');
+    document.execCommand('insertParagraph');
+    markScenes(editor); scheduleSave();
+  });
+  $('#btn-clear').addEventListener('click', () => {
+    restoreRange();
+    document.execCommand('removeFormat');
+    cleanEmptySpans(); scheduleSave(); refreshToolbar();
+  });
+
+  // ================================================================== COPY / PASTE
+  function insertCleanHTML(html) {
+    if (!html) return;
+    S.programmatic = true;
+    try { document.execCommand('insertHTML', false, html); } finally { S.programmatic = false; }
+    ensureParagraphs(); cleanEmptySpans(); markScenes(editor);
+    scheduleSave(); updateCountsSoon();
+  }
+  editor.addEventListener('paste', async e => {
+    e.preventDefault();
+    const dt = e.clipboardData;
+    let html = dt.getData('application/x-unwip') || dt.getData('text/html');
+    let rtf = dt.getData('text/rtf');
+    const text = dt.getData('text/plain');
+    const plain = S.plainPaste;
+    S.plainPaste = false;
+    const st = S.project.style;
+    // Some apps (e.g. Scrivener) only offer RTF; read it straight from the system clipboard if needed
+    if (!plain && !html && !rtf) {
+      try { const c = await api.clipboardRead(); rtf = c.rtf || ''; if (!html) html = c.html || ''; } catch {}
+    }
+    if (!plain && !html && rtf) html = window.FolioRTF.toHTML(rtf);
+    let clean = plain || !html
+      ? Clip.textToHTML(text)
+      : Clip.cleanPaste(html, { docFont: st.font, docSize: st.size, dropFonts: false });
+    if (/<\/p>[\s\S]*<p/i.test(clean)) clean = Clip.dropBlankLines(clean).html;      // no empty lines as spacing: Manuscript style does the spacing
+    insertCleanHTML(clean);
+    offerTitleFromPaste(text || '');
+  });
+  api.onPastePlain(() => { S.plainPaste = true; restoreRange(); api.paste(); });
+  api.onSplit(() => { restoreRange(); splitAtCursor(); });
+
+  // If a pasted chapter starts with its own title ("Chapter 3: ...") and this document has no
+  // real title yet, offer to use that line as the document title.
+  function offerTitleFromPaste(text) {
+    const f = S.docId && findNode(S.docId); if (!f) return;
+    const title = (f.node.title || '').trim();
+    if (title && !/^(untitled|chapter \d+|new .*)$/i.test(title)) return;
+    const firstLine = (text.split(/\r?\n/).find(l => l.trim()) || '').trim();
+    if (!firstLine || firstLine.length > 90 || !/^(chapter|prologue|epilogue|part|interlude|book)\b/i.test(firstLine)) return;
+    toastAction(`This looks like a chapter title: <b>${esc(firstLine)}</b>`, 'Use as document title', () => {
+      f.node.title = firstLine; $('#doc-title').value = firstLine;
+      const block = $$(':scope > p, :scope > h1, :scope > h2, :scope > h3', editor).find(b => b.textContent.trim() === firstLine);
+      if (block) {
+        block.remove();
+        // also drop blank lines left at the top of the chapter
+        while (editor.firstElementChild && editor.firstElementChild.tagName === 'P' && !editor.firstElementChild.textContent.trim() && editor.children.length > 1) editor.firstElementChild.remove();
+      }
+      resyncWords(); scheduleSave(); scheduleMeta(); renderBinder(); updateStatus();
+    });
+  }
+  editor.addEventListener('drop', e => {
+    const html = e.dataTransfer.getData('text/html');
+    const text = e.dataTransfer.getData('text/plain');
+    if (!html && !text) return;
+    e.preventDefault();
+    const r = document.caretRangeFromPoint(e.clientX, e.clientY);
+    if (r) { const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+    const st = S.project.style;
+    insertCleanHTML(html ? Clip.cleanPaste(html, { docFont: st.font, docSize: st.size }) : Clip.textToHTML(text));
+  });
+
+  function selectionFragment() {
+    const sel = getSelection();
+    if (!sel.rangeCount || sel.isCollapsed || !editor.contains(sel.anchorNode)) return null;
+    const range = sel.getRangeAt(0);
+    const box = document.createElement('div');
+    const startB = currentBlock(range.startContainer), endB = currentBlock(range.endContainer);
+    let frag = range.cloneContents();
+    if (startB && startB === endB) {
+      // keep the formatting of the words around the selection (font, bold, etc)
+      let anc = range.commonAncestorContainer;
+      if (anc.nodeType === 3) anc = anc.parentNode;
+      while (anc && anc !== startB && anc !== editor) {
+        const wrap = anc.cloneNode(false); wrap.appendChild(frag);
+        frag = document.createDocumentFragment(); frag.appendChild(wrap);
+        anc = anc.parentNode;
+      }
+      const shell = startB.cloneNode(false); shell.appendChild(frag); box.appendChild(shell);
+    } else box.appendChild(frag);
+    return box;
+  }
+  function exportSettings() { return S.project.style; }
+  function onCopy(e, cut) {
+    const box = selectionFragment(); if (!box) return;
+    const out = Clip.exportFrom(box, exportSettings());
+    if (!S.warnedManualCopy) {
+      const probs = Fonts.docsCheck(fontsInBlocks(Clip.extract(box).blocks));
+      if (probs.length) { S.warnedManualCopy = true; setTimeout(() => toast(`Copied. Note: Google Docs doesn't have ${probs.map(p => esc(p.font)).join(', ')}. Use "Copy for Docs" to swap in the closest Docs font.`, 'warn', 9000), 50); }
+    }
+    e.preventDefault();
+    e.clipboardData.setData('text/html', out.html);
+    e.clipboardData.setData('text/plain', out.text);
+    e.clipboardData.setData('application/x-unwip', box.innerHTML);   // keeps footnotes when pasting back into Unwip
+    if (cut) { document.execCommand('delete'); scheduleSave(); updateCountsSoon(); }
+  }
+  editor.addEventListener('copy', e => onCopy(e, false));
+  editor.addEventListener('cut', e => onCopy(e, true));
+
+  function fontsInBlocks(blocks) {
+    const st = S.project.style; const fams = [st.font];
+    for (const b of blocks) {
+      if (/^h[1-3]$/.test(b.tag)) fams.push(st.headings[b.tag].font);
+      for (const r of b.runs) if (r.font) fams.push(r.font);
+    }
+    return fams;
+  }
+  // After copying for Google Docs: if a font isn't available in Docs, say so and offer a copy
+  // that uses the closest font Docs does have.
+  function warnDocsFonts(blocks, redo) {
+    const probs = Fonts.docsCheck(fontsInBlocks(blocks));
+    if (!probs.length) return;
+    const names = probs.map(p => `<b>${esc(p.font)}</b>`).join(', ');
+    const map = {}; probs.forEach(p => { if (p.suggestion) map[p.font] = p.suggestion; });
+    const swaps = Object.entries(map).map(([a, b]) => `${esc(a)} → ${esc(b)}`).join(', ');
+    if (redo && swaps) {
+      toastAction(`Google Docs doesn't have ${names}, so it will show its own default font there.`, `Copy again with ${swaps}`, () => redo(map), 15000);
+    } else {
+      toast(`Google Docs doesn't have ${names}, so it will show its own default font there. Word is fine if the font is installed.`, 'warn', 9000);
+    }
+  }
+
+  // How chapter headings are made when copying and exporting:
+  //  'names'     - the document's name in the binder becomes the heading
+  //  'firstline' - the chapter's own first line (e.g. "Chapter 2: …") becomes a real heading
+  //  'none'      - nothing added
+  function titleMode() { const st = S.project.style; return st.chapterTitles || (st.titlesAsHeadings === false ? 'none' : 'names'); }
+  const isTitlePage = t => /^\s*(title|title page|front matter|copyright)\s*$/i.test(t || '');
+  async function docBlocks(id, mode) {
+    if (mode === true) mode = titleMode(); else if (!mode) mode = 'none';
+    const f = findNode(id);
+    const html = id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, id);
+    const blocks = Clip.extract(Clip.parseHTML(html)).blocks;
+    if (f && isTitlePage(f.node.title)) { if (blocks[0]) blocks[0] = { ...blocks[0], titleDoc: true }; return blocks; }   // a title page keeps its own layout
+    if (mode === 'names' && f && f.node.title) blocks.unshift(headingBlock('h1', f.node.title));
+    if (mode === 'firstline') {
+      while (blocks.length && !blocks[0].runs.some(r => (r.text || '').trim())) blocks.shift();   // blank lines before it
+      const text = blocks.length ? blocks[0].runs.map(r => r.br ? ' ' : (r.text || '')).join('').trim() : '';
+      if (blocks.length && /^h[1-3]$/.test(blocks[0].tag)) blocks[0].tag = 'h1';
+      else if (blocks.length && blocks[0].tag === 'p' && text.length <= 140 && /^(chapter|prologue|epilogue|interlude|part|book|ch\.|\d+\s*[-–—:.)])/i.test(text)) blocks[0] = headingBlock('h1', text);
+      else if (f && f.node.title) blocks.unshift(headingBlock('h1', f.node.title));   // no heading line in the text: use the document name
+      while (blocks.length > 1 && !blocks[1].runs.some(r => (r.text || '').trim())) blocks.splice(1, 1);   // and right after it
+    }
+    return blocks;
+  }
+  // does this folder hold chapters (e.g. a book or part) or scenes (e.g. "Chapter 3")?
+  const CHAPTERISH = /^\s*(chapter|ch\.|prologue|epilogue|interlude|part|book|\[?book|\d+\s*[-–—:.)])/i;
+  function folderHolds(n) {
+    if (n.holds) return n.holds;
+    if (/^\s*(chapter|ch\.?)\s*[\divxlc]+/i.test(n.title || '') || /^\s*\d+\s*$/.test(n.title || '')) return 'scenes';
+    const docs = (n.children || []).filter(c => c.type === 'doc' && !isTitlePage(c.title));
+    if (!docs.length) return 'chapters';
+    const named = docs.filter(c => CHAPTERISH.test(c.title || '')).length;
+    const avg = docs.reduce((a, c) => a + (c.words || 0), 0) / docs.length;
+    return named >= docs.length / 2 || avg >= 1500 ? 'chapters' : 'scenes';
+  }
+  function headingBlock(tag, text) {
+    return { tag, align: null, indent: null, lineHeight: null, runs: [{ text, bold: false, italic: false, underline: false, strike: false, sup: false, sub: false, font: null, size: null, color: null, bg: null }] };
+  }
+  async function copyDocForDocs(id) {
+    id = id || S.docId; if (!id) return;
+    await flushSave();
+    const inMs = rootOf(id).kind === 'manuscript';
+    const f0 = findNode(id), par = f0 && f0.parent;
+    const asChapter = inMs && (!par || par.root || folderHolds(par) === 'chapters');
+    const blocks = await docBlocks(id, asChapter ? titleMode() : 'none');
+    const doCopy = async (fontMap) => {
+      const out = Clip.exportFromBlocks(blocks, exportSettings(), { fontMap });
+      await api.clipboardWrite(out.html, out.text);
+    };
+    await doCopy();
+    toast(`Copied "${esc(findNode(id).node.title)}". Paste it into Google Docs or Word with Ctrl+V.`);
+    warnDocsFonts(blocks, async map => { await doCopy(map); toast('Copied with Docs-friendly fonts. Paste with Ctrl+V.'); });
+  }
+  $('#btn-copy-docs').onclick = () => copyDocForDocs();
+
+  // ================================================================== COMPILE & EXPORT
+  async function compileManuscript() {
+    await flushSave();
+    const st = S.project.style;
+    const ms = findNode('root-manuscript').node;
+    const out = [];
+    const sceneBreak = () => ({ tag: 'p', align: 'center', indent: 0, lineHeight: null, runs: [{ text: '* * *', bold: false, italic: false, underline: false, strike: false, sup: false, sub: false, font: null, size: null, color: null, bg: null }] });
+    const mode = titleMode();
+    const newPage = (blocks, title) => { if (blocks.length) blocks[0] = { ...blocks[0], newPage: true, chapterTitle: title }; return blocks; };
+    async function walk(nodes, level, parentHolds) {
+      let prevWasScene = false;
+      for (const n of nodes) {
+        if (n.type === 'folder') {
+          const holds = folderHolds(n);
+          if (holds === 'scenes') {
+            // a chapter made of scenes: its title follows the "Chapter titles" choice like any chapter
+            const inner = [];
+            const save = out.length; await walk(n.children || [], level + 1, holds); inner.push(...out.splice(save));
+            if (mode === 'names') out.push(headingBlock('h1', n.title), ...inner);
+            else if (mode === 'firstline') {
+              while (inner.length && !inner[0].runs.some(r => (r.text || '').trim())) inner.shift();
+              const t = inner.length ? inner[0].runs.map(r => r.br ? ' ' : (r.text || '')).join('').trim() : '';
+              if (inner.length && (/^h[1-3]$/.test(inner[0].tag) || (t.length <= 140 && /^(chapter|prologue|epilogue|interlude|part|book|ch\.|\d+\s*[-–—:.)])/i.test(t)))) { inner[0] = headingBlock('h1', t); out.push(...inner); }
+              else out.push(headingBlock('h1', n.title), ...inner);
+            } else out.push(...newPage(inner, n.title));
+          } else {
+            if (mode !== 'none') out.push({ ...headingBlock('h1', n.title), part: true });   // a book or part title
+            await walk(n.children || [], level + 1, holds);
+          }
+          prevWasScene = false;
+        } else if (level === 0 || parentHolds === 'chapters') {
+          const b = await docBlocks(n.id, mode);
+          out.push(...(mode === 'none' && !isTitlePage(n.title) ? newPage(b, n.title) : b));
+          prevWasScene = false;
+        } else {
+          // documents inside a folder are scenes: separate them with a scene break
+          if (prevWasScene) out.push(sceneBreak());
+          out.push(...await docBlocks(n.id, false));
+          prevWasScene = true;
+        }
+      }
+    }
+    await walk(ms.children || [], 0);
+    return out;
+  }
+
+  // ================================================================== PREVIEW & EXPORT
+  const TRIMS = { '5 × 8 in': [5, 8], '5.25 × 8 in': [5.25, 8], '5.5 × 8.5 in': [5.5, 8.5], '6 × 9 in': [6, 9], 'A5': [5.83, 8.27] };
+  const DEVICES = {
+    'Kindle Paperwhite': { w: 3.9, h: 5.3, m: 0.22 },
+    'Phone': { w: 2.75, h: 5.6, m: 0.16 },
+    'Tablet': { w: 5.9, h: 7.9, m: 0.45 },
+    'Kindle Scribe': { w: 6.2, h: 8.3, m: 0.4 }
+  };
+  const DOC_PAGES = { 'A4': [8.27, 11.69], 'Letter': [8.5, 11] };
+  const PX = 96, SPACE = 28;
+  // what publishers, agents and Amazon expect
+  const STANDARDS = [
+    { id: 'smf', label: 'Agent & publisher submission', sub: 'Standard manuscript format: Times New Roman 12 pt, double-spaced, 1 inch margins, name / title / page header',
+      apply: () => { PV.format = 'docs'; PV.smf = true; }, match: () => PV.format === 'docs' && PV.smf },
+    { id: 'fiction', label: 'Novel paperback', sub: '5.5 × 8.5 in, 11 pt, 1.3 spacing. The most common size for fiction',
+      apply: () => { PV.format = 'paperback'; setDesignQuiet({ trim: '5.5 × 8.5 in', size: 0, leading: 0, largePrint: false }); }, match: () => PV.format === 'paperback' && PV.trim === '5.5 × 8.5 in' && !bookDesign().size && !bookDesign().largePrint },
+    { id: 'trade', label: 'Trade paperback', sub: '6 × 9 in, 11 pt, 1.3 spacing. Common for longer fantasy and non-fiction',
+      apply: () => { PV.format = 'paperback'; setDesignQuiet({ trim: '6 × 9 in', size: 0, leading: 0, largePrint: false }); }, match: () => PV.format === 'paperback' && PV.trim === '6 × 9 in' && !bookDesign().size && !bookDesign().largePrint },
+    { id: 'kdp', label: 'Kindle / KDP e-book', sub: 'Reflowable EPUB with a clickable contents page. KDP, Apple Books and Kobo accept it',
+      apply: () => { PV.format = 'ebook'; PV.device = 'Kindle Paperwhite'; PV.ebookSize = 12; }, match: () => PV.format === 'ebook' }
+  ];
+  const STANDARD_TRIMS = ['5.5 × 8.5 in', '6 × 9 in', '5 × 8 in'];
+  const THEMEHEAD = d => (TS.THEMES[d.theme] || TS.THEMES.classic).head;
+  // front and back matter: title page, copyright, dedication, epigraph, contents, acknowledgements, about the author, also by
+  async function editBookMatter() {
+    const b = S.project.book || {}, d = bookDesign(), cfg = S.settings || {};
+    const f = (id, label, val, ph = '', area = 0) => `<div class="field ${area ? 'full' : ''}"><label for="${id}">${label}</label>${area ? `<textarea id="${id}" rows="${area}" placeholder="${esc(ph)}">${esc(val || '')}</textarea>` : `<input id="${id}" value="${esc(val || '')}" placeholder="${esc(ph)}">`}</div>`;
+    const c = (id, label, on) => `<label class="check"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span>${label}</span></label>`;
+    let el;
+    const ok = await modal({ title: 'Title page, copyright & more', wide: true, onOpen: x => { el = x; }, buttons: [{ label: 'Cancel', value: false }, { label: 'Save', value: true, kind: 'primary' }],
+      body: `<p class="hint">Used in the print PDF and the e-book. Leave anything blank to skip it.</p>
+        <div class="grid2 bm-grid">
+          ${f('bm-title', 'Book title', b.title || S.project.title)}${f('bm-sub', 'Subtitle', b.subtitle, 'e.g. Book One of the Salt Coast')}
+          ${f('bm-author', 'Author name (as printed)', b.author || cfg.author, 'Ima Novelist')}${f('bm-pub', 'Publisher / imprint', b.publisher, 'e.g. your own imprint name')}
+          ${f('bm-isbn', 'ISBN (paperback)', b.isbn, 'From your ISBN agency or KDP')}${f('bm-isbne', 'ISBN (e-book, optional)', b.isbnEbook, 'Not needed for Kindle')}
+          ${f('bm-year', 'Copyright year', b.year || new Date().getFullYear())}
+          ${f('bm-ded', 'Dedication', b.dedication, 'For Mum, who read everything first.', 2)}
+          ${f('bm-epi', 'Epigraph (a quotation before the story)', b.epigraph, '', 2)}${f('bm-epiby', 'Epigraph by', b.epigraphBy)}
+          ${f('bm-copy', 'Copyright page (leave blank for a standard one)', b.copyright, 'Copyright © year Author. All rights reserved. …', 3)}
+          ${f('bm-ack', 'Acknowledgements', b.acknowledgements, '', 3)}
+          ${f('bm-about', 'About the author', b.about, '', 3)}
+          ${f('bm-also', 'Also by (one title per line)', b.alsoBy, '', 3)}
+        </div>
+        <div class="bm-toggles"><b>Include</b>
+          ${c('bm-f-half', 'Half-title page', d.front.halfTitle)}${c('bm-f-title', 'Title page', d.front.titlePage)}${c('bm-f-copy', 'Copyright page', d.front.copyright)}
+          ${c('bm-f-ded', 'Dedication', d.front.dedication)}${c('bm-f-epi', 'Epigraph', d.front.epigraph)}${c('bm-f-toc', 'Contents with page numbers', d.front.toc)}
+          ${c('bm-b-ack', 'Acknowledgements', d.back.acknowledgements)}${c('bm-b-about', 'About the author', d.back.about)}${c('bm-b-also', 'Also by', d.back.alsoBy)}
+        </div>` });
+    if (!ok || !el) return false;
+    const v = id => (el.querySelector('#' + id) || {}).value || '', k = id => !!(el.querySelector('#' + id) || {}).checked;
+    S.project.book = { title: v('bm-title').trim(), subtitle: v('bm-sub').trim(), author: v('bm-author').trim(), publisher: v('bm-pub').trim(), isbn: v('bm-isbn').trim(), isbnEbook: v('bm-isbne').trim(),
+      year: v('bm-year').trim(), dedication: v('bm-ded'), epigraph: v('bm-epi'), epigraphBy: v('bm-epiby').trim(), copyright: v('bm-copy'), acknowledgements: v('bm-ack'), about: v('bm-about'), alsoBy: v('bm-also') };
+    S.project.design = { ...d, front: { halfTitle: k('bm-f-half'), titlePage: k('bm-f-title'), copyright: k('bm-f-copy'), dedication: k('bm-f-ded'), epigraph: k('bm-f-epi'), toc: k('bm-f-toc') },
+      back: { acknowledgements: k('bm-b-ack'), about: k('bm-b-about'), alsoBy: k('bm-b-also') } };
+    scheduleMeta();
+    return true;
+  }
+  const TS = window.UnwipTypeset;
+  const bookDesign = () => TS ? TS.design(S.project) : {};
+  function setDesignQuiet(patch) { S.project.design = { ...bookDesign(), ...patch }; PV.trim = S.project.design.trim; scheduleMeta(); }
+  const PV = { smf: false, format: 'paperback', trim: '5.5 × 8.5 in', bookSize: 11, bookLine: 1.3, device: 'Kindle Paperwhite', ebookSize: 12, docPage: 'A4', scope: 'ms', page: 0, pages: 1, blocks: [], counts: {} };
+
+  function bookStyle() {
+    const st = JSON.parse(JSON.stringify(S.project.style));
+    st.size = PV.bookSize; st.lineHeight = PV.bookLine; st.indent = 0.3; st.paraSpacing = 0; st.justify = true; st.noIndentFirst = true;
+    st.headings.h1 = { ...st.headings.h1, size: Math.round(PV.bookSize * Math.min(3.5, Math.max(1.2, S.project.style.headings.h1.size / (S.project.style.size || 12)))), spaceBefore: 90, spaceAfter: 30 };
+    st.headings.h2 = { ...st.headings.h2, size: Math.round(PV.bookSize * 1.2) };
+    return st;
+  }
+  // Standard manuscript format (what agents and editors ask for)
+  function smfStyle() {
+    const st = JSON.parse(JSON.stringify(S.project.style));
+    Object.assign(st, { font: 'Times New Roman', size: 12, lineHeight: 2, indent: 0.5, paraSpacing: 0, justify: false, noIndentFirst: false });
+    st.headings.h1 = { font: 'Times New Roman', size: 12, bold: false, italic: false, align: 'center', spaceBefore: 200, spaceAfter: 24 };
+    st.headings.h2 = { ...st.headings.h2, font: 'Times New Roman', size: 12 };
+    st.headings.h3 = { ...st.headings.h3, font: 'Times New Roman', size: 12 };
+    return st;
+  }
+  function ebookStyle() {
+    const st = JSON.parse(JSON.stringify(S.project.style));
+    st.size = PV.ebookSize; st.lineHeight = 1.45; st.indent = 0.25; st.paraSpacing = 0; st.justify = false; st.noIndentFirst = true;
+    st.headings.h1 = { ...st.headings.h1, size: Math.round(PV.ebookSize * Math.min(3, Math.max(1.2, S.project.style.headings.h1.size / (S.project.style.size || 12)))), spaceBefore: 40, spaceAfter: 20 };
+    return st;
+  }
+  // page geometry (inches) for a format
+  function geometry(fmt) {
+    if (fmt === 'paperback') { const [w, h] = TRIMS[PV.trim]; return { w, h, mt: 0.7, mb: 0.75, ml: 0.75, mr: 0.55, style: bookStyle(), dropBlank: false }; }
+    if (fmt === 'ebook') { const d = DEVICES[PV.device]; return { w: d.w, h: d.h, mt: d.m, mb: d.m, ml: d.m, mr: d.m, style: ebookStyle(), dropBlank: true }; }
+    const [w, h] = DOC_PAGES[PV.docPage]; return { w, h, mt: 1, mb: 1, ml: 1, mr: 1, style: PV.smf ? smfStyle() : S.project.style, dropBlank: false, smf: PV.smf };
+  }
+  function layoutHTML(fmt, g) {
+    let blocks = PV.blocks;
+    if (g.dropBlank) blocks = blocks.filter(b => b.runs.some(r => !r.br && (r.text || '').trim()));
+    if (g.smf) blocks = blocks.map(b => Clip.SCENE_BREAK.test(b.runs.map(r => r.text || '').join('')) && b.runs.some(r => (r.text || '').trim()) ? { ...b, runs: [{ ...b.runs.find(r => !r.br), text: '#' }] } : b);
+    let html = Clip.exportFromBlocks(blocks, g.style, { pageBreaks: true }).html;
+    // in the preview, "new page" means "new column"
+    return html.replace(/page-break-before: always; break-before: page/g, 'break-before: column');
+  }
+  // Flow the text into page-sized columns and count them
+  function layoutInto(flow, fmt) {
+    // paperback: the real book layout (typeset.js), page by page
+    if (fmt === 'paperback' && PV.book && flow.id === 'pv-flow') {
+      TS.ensureStyle(PV.book);
+      const g = PV.book.geo;
+      flow.style.cssText = ''; flow.innerHTML = '';
+      TS.fill(flow, PV.book, 0, 1, SPACE);
+      return { pages: PV.book.pages.length, P: g.P, H: g.PH, g };
+    }
+    const g = geometry(fmt);
+    const W = Math.round((g.w - g.ml - g.mr) * PX), H = Math.round((g.h - g.mt - g.mb) * PX);
+    const P = Math.round(g.w * PX), gap = Math.round((g.mr + g.ml) * PX) + SPACE;
+    const ml = Math.round(g.ml * PX), mr = P - W - ml, mt = Math.round(g.mt * PX), mb = Math.round(g.h * PX) - H - mt;
+    flow.style.cssText = `position:relative; box-sizing:content-box; width:${W}px; height:${H}px; padding:${mt}px ${mr}px ${mb}px ${ml}px;
+      column-width:${W}px; column-gap:${gap}px; column-fill:auto; color:#1d1b18;`;
+    flow.innerHTML = layoutHTML(fmt, g) + '<span class="pv-end"></span>';
+    const end = flow.querySelector('.pv-end');
+    const fr = flow.getBoundingClientRect(), er = end.getBoundingClientRect();
+    const scale = fr.width / flow.offsetWidth || 1;
+    const n = Math.max(1, Math.floor(((er.left - fr.left) / scale - ml) / (W + gap)) + 1);
+    flow.style.columnCount = n;
+    flow.style.width = (n * W + (n - 1) * gap) + 'px';
+    flow.style.backgroundImage = `linear-gradient(to right, #fffefb 0, #fffefb ${P}px, transparent ${P}px)`;
+    flow.style.backgroundSize = `${P + SPACE}px 100%`;
+    flow.style.backgroundRepeat = 'repeat-x';
+    return { pages: n, P, H: H + mt + mb, g };
+  }
+  async function measureAll() {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed; left:-100000px; top:0; visibility:hidden;';
+    document.body.appendChild(box);
+    const saved = { format: PV.format };
+    for (const f of ['paperback', 'ebook', 'docs']) {
+      if (f === 'paperback' && PV.book) { PV.counts[f] = PV.book.pages.length; continue; }
+      const flow = document.createElement('div'); box.appendChild(flow);
+      PV.counts[f] = layoutInto(flow, f).pages;
+      flow.remove();
+      await new Promise(r => requestAnimationFrame(r));
+    }
+    box.remove();
+    PV.format = saved.format;
+  }
+
+  async function openPreview(format) {
+    await flushSave();
+    if (format === 'paperback' || format === 'ebook' || format === 'docs') { PV.format = format; if (format !== 'docs') PV.smf = false; }
+    const hasDoc = !!S.docId && rootOf(S.docId).kind === 'manuscript';
+    try { await Fonts.loadInstalled(); } catch {}
+    PV.scope = 'ms'; PV.page = 0; PV.book = null;
+    if (TS) PV.trim = bookDesign().trim;
+    if (!PV.docPageSet) { const lang = ((await api.spellSettings().catch(() => ({ current: [] }))).current[0]) || ''; PV.docPage = /en-US|en-CA/.test(lang) ? 'Letter' : 'A4'; PV.docPageSet = true; }
+    const back = document.createElement('div');
+    back.className = 'pv-back';
+    back.innerHTML = `
+      <div class="pv">
+        <header class="pv-head">
+          <div class="pv-title">Preview</div>
+          <div class="pv-tabs">
+            <button data-f="paperback">Paperback / PDF</button>
+            <button data-f="ebook">Kindle / EPUB</button>
+            <button data-f="docs">Google Docs / Word</button>
+          </div>
+          <button class="icon-btn" id="pv-close" title="Close (Esc)">&#10005;</button>
+        </header>
+        <div class="pv-body">
+          <aside class="pv-side">
+            <div class="field"><label>What to preview</label>
+              <select id="pv-scope"><option value="ms">Whole manuscript</option>${hasDoc ? '<option value="doc">This chapter only</option>' : ''}</select></div>
+            <div class="field"><label>Chapter titles</label>
+              <select id="pv-titles">${[['names', 'Document names from the binder'], ['firstline', 'The first line of each chapter'], ['none', 'Don’t add titles']].map(([v, l]) => `<option value="${v}" ${titleMode() === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+              <div class="pv-hint" id="pv-titles-hint"></div></div>
+            <div class="field pv-tstyle"><label>Chapter title look <span class="tip-q" data-tip="The font and size for chapter titles, in the editor and in every export (paperback, e-book, PDF, Word, Google Docs). Agent submission format always uses Times New Roman 12, as agents expect.">?</span></label>
+              <div class="pv-trow pv-fontrow"><select id="pv-tf">${fontOptionsHTML(S.project.style.headings.h1.font)}</select><button class="tb-btn pv-fav" id="pv-tfav" data-tip="Add this font to your favourites (shown at the top of every font list)">${fontFavs().includes(S.project.style.headings.h1.font) ? '★' : '☆'}</button></div>
+              <div class="pv-trow">
+                <select id="pv-tsz" title="Size">${[14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48].map(n => `<option value="${n}" ${+S.project.style.headings.h1.size === n ? 'selected' : ''}>${n} pt</option>`).join('')}${[14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48].includes(+S.project.style.headings.h1.size) ? '' : `<option selected value="${S.project.style.headings.h1.size}">${S.project.style.headings.h1.size} pt</option>`}</select>
+                <button class="tb-btn ${S.project.style.headings.h1.bold ? 'on' : ''}" id="pv-tb" title="Bold"><b>B</b></button>
+                <button class="tb-btn ${S.project.style.headings.h1.italic ? 'on' : ''}" id="pv-ti" title="Italic"><i>I</i></button>
+                <select id="pv-ta" title="Alignment">${[['left', 'Left'], ['center', 'Centre'], ['right', 'Right']].map(([v, l]) => `<option value="${v}" ${S.project.style.headings.h1.align === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+              </div>
+              <div class="pv-hint" id="pv-tlook-hint"></div></div>
+            <div class="pv-std">
+              <div class="pv-std-head">Publishing standards</div>
+              <div id="pv-stds"></div>
+              <div class="pv-std-status" id="pv-std-status"></div>
+            </div>
+            <div class="pv-counts" id="pv-counts"></div>
+            <div id="pv-opts"></div>
+            <div class="pv-actions" id="pv-actions"></div>
+            <p class="pv-note" id="pv-note"></p>
+          </aside>
+          <main class="pv-stage">
+            <div class="pv-viewport" id="pv-viewport"><div class="pv-scale" id="pv-scale"><div id="pv-flow"></div></div></div>
+            <div class="pv-nav">
+              <button class="icon-btn" id="pv-prev" title="Previous (←)">&#8592;</button>
+              <input type="range" id="pv-slider" min="0" value="0">
+              <button class="icon-btn" id="pv-next" title="Next (→)">&#8594;</button>
+              <span id="pv-pageinfo"></span>
+            </div>
+          </main>
+        </div>
+      </div>`;
+    document.body.appendChild(back);
+    const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', fit); };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); }
+      else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); go(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    $('#pv-close', back).onclick = close;
+
+    let geo = null;
+    const flow = $('#pv-flow', back), scaleEl = $('#pv-scale', back), vp = $('#pv-viewport', back);
+    const perView = () => PV.format === 'docs' ? 1 : 2;
+    function fit() {
+      if (!geo) return;
+      const stage = $('.pv-stage', back).getBoundingClientRect();
+      const n = perView();
+      const wNeeded = n * geo.P + (n - 1) * SPACE;
+      const s = Math.min((stage.width - 40) / wNeeded, (stage.height - 80) / geo.H, 1.4);
+      scaleEl.style.transform = `scale(${s})`;
+      vp.style.width = Math.floor(wNeeded * s) + 'px';
+      vp.style.height = Math.floor(geo.H * s) + 'px';
+      show();
+    }
+    function show() {
+      const n = perView();
+      PV.page = Math.max(0, Math.min(PV.page, PV.pages - 1));
+      if (n === 2 && PV.format === 'paperback') PV.page = PV.page === 0 ? 0 : PV.page - ((PV.page - 1) % 2); // book spreads: 1, 2–3, 4–5…
+      const bookMode = PV.format === 'paperback' && PV.book;
+      // in a printed book page 1 is a right-hand page, so it sits on the right with nothing beside it
+      flow.style.transform = `translateX(${-(bookMode ? PV.page - (PV.page === 0 ? 1 : 0) : PV.page) * (geo.P + SPACE)}px)`;
+      if (bookMode) TS.fill(flow, PV.book, PV.page - 1, PV.page + 2, SPACE);
+      const last = bookMode && PV.page === 0 ? 1 : Math.min(PV.pages, PV.page + n);
+      const unit = PV.format === 'ebook' ? 'Screen' : 'Page';
+      $('#pv-pageinfo', back).textContent = last > PV.page + 1 ? `${unit}s ${PV.page + 1}–${last} of ${fmt(PV.pages)}` : `${unit} ${PV.page + 1} of ${fmt(PV.pages)}`;
+      const sl = $('#pv-slider', back); sl.max = Math.max(0, PV.pages - 1); sl.value = PV.page;
+    }
+    function go(d) { PV.page += d * perView(); if (PV.format === 'paperback' && PV.page === 1 && d < 0) PV.page = 0; show(); }
+    $('#pv-prev', back).onclick = () => go(-1);
+    $('#pv-next', back).onclick = () => go(1);
+    $('#pv-slider', back).oninput = e => { PV.page = +e.target.value; show(); };
+    window.addEventListener('resize', fit);
+
+    function renderCounts() {
+      const words = PV.blocks.reduce((a, b) => a + countWords(b.runs.map(r => r.text || '').join(' ')), 0);
+      const chars = PV.blocks.reduce((a, b) => a + b.runs.reduce((x, r) => x + (r.text || '').length, 0), 0);
+      const c = PV.counts;
+      $('#pv-counts', back).innerHTML = `
+        <button class="pv-count ${PV.format === 'paperback' ? 'on' : ''}" data-f="paperback"><b>${c.paperback != null ? fmt(c.paperback) : '…'}</b><span>paperback pages<br>${esc(PV.trim)}</span></button>
+        <button class="pv-count ${PV.format === 'ebook' ? 'on' : ''}" data-f="ebook"><b>${c.ebook != null ? fmt(c.ebook) : '…'}</b><span>e-reader screens<br>${esc(PV.device)}</span></button>
+        <button class="pv-count ${PV.format === 'docs' ? 'on' : ''}" data-f="docs"><b>${c.docs != null ? fmt(c.docs) : '…'}</b><span>Docs / Word pages<br>${PV.docPage}</span></button>
+        <div class="pv-count static"><b>${fmt(words)}</b><span>words · about ${fmt(Math.max(1, Math.round(words / 238)))} min to read<br>≈ ${fmt(Math.ceil(chars / 128))} Kindle locations</span></div>`;
+      $$('.pv-count[data-f]', back).forEach(b => b.onclick = () => setFormat(b.dataset.f));
+    }
+    function renderStandards() {
+      const hit = STANDARDS.find(x => x.match());
+      $('#pv-stds', back).innerHTML = STANDARDS.map(x => `<button class="pv-stdbtn ${hit === x ? 'on' : ''}" data-s="${x.id}"><span class="star">★</span><span><b>${esc(x.label)}</b><small>${esc(x.sub)}</small></span></button>`).join('');
+      $('#pv-std-status', back).innerHTML = hit ? `<span class="ok">✓ Matches the ${esc(hit.label.toLowerCase())} standard</span>` : '<span class="custom">Custom settings. Pick a standard above to match what publishers expect.</span>';
+      $$('.pv-stdbtn', back).forEach(b => b.onclick = () => { const x = STANDARDS.find(y => y.id === b.dataset.s); x.apply(); PV.page = 0; setFormat(PV.format); });
+    }
+    function renderOptions() {
+      const o = $('#pv-opts', back), a = $('#pv-actions', back), note = $('#pv-note', back);
+      // ★ marks the values publishers treat as standard
+      const sel = (id, opts, cur, label, std = []) => `<div class="field"><label>${label}</label><select id="${id}">${opts.map(v => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${v}${std.map(String).includes(String(v)) ? '  ★ standard' : ''}</option>`).join('')}</select></div>`;
+      if (PV.format === 'paperback') {
+        const d = bookDesign(), t = TS.resolved(d);
+        const chk = (id, on, label, tip) => `<label class="check pv-chk"${tip ? ` data-tip="${esc(tip)}"` : ''}><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span>${label}</span></label>`;
+        const fontsList = [...new Set([...TS.FONTS, ...fontFavs(), 'Garamond', 'Georgia', 'Palatino Linotype', 'Book Antiqua', 'Times New Roman'])];
+        const fsel = (id, cur, label, def) => `<div class="field"><label>${label}</label><select id="${id}"><option value="">${esc(def)} (theme)</option>${fontsList.map(f => `<option ${f === cur ? 'selected' : ''} style="font-family:'${esc(f)}'">${esc(f)}</option>`).join('')}</select></div>`;
+        o.innerHTML = `<div class="field"><label>Book design</label><div class="pv-themes">${Object.entries(TS.THEMES).map(([k, th]) => `<button class="pv-theme ${d.theme === k ? 'on' : ''}" data-theme="${k}" data-tip="${esc(th.blurb)}"><span class="pv-th-a" style="font-family:'${esc(th.head)}', serif${th.titleStyle === 'italic' ? ';font-style:italic' : ''}">${th.number === 'digits' ? '1' : th.number === 'none' ? 'Aa' : 'One'}</span><span class="pv-th-n">${esc(th.name)}</span></button>`).join('')}</div></div>` +
+          sel('pv-trim', Object.keys(TS.TRIMS), d.trim, 'Trim size', STANDARD_TRIMS) +
+          `<div class="pv-row">${sel('pv-bsize', ['Theme', 10, 10.5, 11, 11.5, 12, 13], d.size || 'Theme', 'Text size (pt)')}${sel('pv-bline', ['Theme', 1.25, 1.3, 1.35, 1.4, 1.5], d.leading || 'Theme', 'Line spacing')}</div>` +
+          `<div class="pv-row">${fsel('pv-bfont', d.bodyFont, 'Text font', t.body)}${fsel('pv-hfont', d.headFont, 'Heading font', THEMEHEAD(d))}</div>` +
+          sel('pv-scene', TS.SCENES.map(x => x === 'theme' ? `Theme (${t.scene})` : x), d.scene === 'theme' ? `Theme (${t.scene})` : d.scene, 'Scene breaks') +
+          `<div class="pv-checks">` +
+          chk('pv-recto', d.recto, 'Chapters start on a right-hand page', 'How printed novels do it. May add a blank page before some chapters.') +
+          chk('pv-drop', t.drop, 'Drop capitals') + chk('pv-lead', t.lead, 'Small capitals on the first line') +
+          chk('pv-heads', d.headers, 'Running heads (author / title)') + chk('pv-nums', d.pageNumbers, 'Page numbers') +
+          chk('pv-just', d.justify, 'Justified text') + chk('pv-hyph', d.hyphenate, 'Hyphenation', 'Splits long words at line ends so justified lines don’t get big gaps.') +
+          chk('pv-large', d.largePrint, 'Large print (16 pt)') +
+          `</div>` + sel('pv-hright', ['Book title', 'Chapter title'], d.headerRight === 'chapter' ? 'Chapter title' : 'Book title', 'Right-hand page head') +
+          `<button class="btn" id="pv-matter" style="width:100%;margin-top:6px">Title page, copyright & more…</button>`;
+        a.innerHTML = `<button class="btn primary" data-a="pdf">Export print PDF</button><button class="btn" data-a="exact">Check exact PDF page count</button>`;
+        const gut = PV.book ? PV.book.geo.gutter : 0.5;
+        note.textContent = `Print-ready interior for Amazon KDP, IngramSpark and other printers: fonts are embedded, chapters open on right-hand pages, and the inside margin (${gut} in) is sized for ${PV.book ? fmt(PV.book.pages.length) : 'this many'} pages. What you see here is exactly what prints.`;
+            } else if (PV.format === 'ebook') {
+        o.innerHTML = sel('pv-device', Object.keys(DEVICES), PV.device, 'Device') + sel('pv-esize', ['Small', 'Medium', 'Large'], { 10: 'Small', 12: 'Medium', 14: 'Large' }[PV.ebookSize], 'Reader text size');
+        a.innerHTML = `<button class="btn primary" data-a="epub">Export EPUB</button>`;
+        note.textContent = 'E-books have no fixed pages: readers pick their own font and size. This shows a typical screen. The EPUB works with Kindle (Send to Kindle or upload to KDP), Apple Books, Kobo and Google Play. Open it in Amazon’s free Kindle Previewer to see exactly how Kindle shows it.';
+      } else {
+        o.innerHTML = `<label class="check pv-smf"><input type="checkbox" id="pv-smf" ${PV.smf ? 'checked' : ''}><span>Standard manuscript format <span class="star">★</span></span><small>For agents and publishers. Overrides your Manuscript style.</small></label>` +
+          sel('pv-docpage', Object.keys(DOC_PAGES), PV.docPage, 'Paper size', ['A4', 'Letter']);
+        a.innerHTML = `<button class="btn primary" data-a="copy">Copy for Google Docs</button><button class="btn" data-a="docx">Export Word (.docx)</button><button class="btn" data-a="docpdf">Export manuscript PDF</button>`;
+        note.textContent = PV.smf
+          ? 'Standard manuscript format: Times New Roman 12 pt, double-spaced, every paragraph indented half an inch, chapters starting a third of the way down a new page, # for scene breaks. The PDF adds your surname, the title and the page number at the top right. US agents usually want Letter paper; UK and Australian agents A4.'
+          : 'Uses your Manuscript style (font, spacing, indents) on standard pages with 1 inch margins, like a fresh Google Doc or Word file.';
+      }
+      const on = (id, fn) => { const el = $('#' + id, back); if (el) el.onchange = fn; };
+      const des = patch => { setDesignQuiet(patch); renderOptions(); rebuildBook(); };
+      on('pv-trim', e => des({ trim: e.target.value }));
+      on('pv-bsize', e => des({ size: e.target.value === 'Theme' ? 0 : +e.target.value }));
+      on('pv-bline', e => des({ leading: e.target.value === 'Theme' ? 0 : +e.target.value }));
+      on('pv-bfont', e => des({ bodyFont: e.target.value }));
+      on('pv-hfont', e => des({ headFont: e.target.value }));
+      on('pv-scene', e => des({ scene: /^Theme/.test(e.target.value) ? 'theme' : e.target.value }));
+      on('pv-recto', e => des({ recto: e.target.checked }));
+      on('pv-drop', e => des({ drop: e.target.checked }));
+      on('pv-lead', e => des({ lead: e.target.checked }));
+      on('pv-heads', e => des({ headers: e.target.checked }));
+      on('pv-nums', e => des({ pageNumbers: e.target.checked }));
+      on('pv-just', e => des({ justify: e.target.checked }));
+      on('pv-hyph', e => des({ hyphenate: e.target.checked }));
+      on('pv-large', e => des({ largePrint: e.target.checked, ...(e.target.checked && !/6 ×/.test(bookDesign().trim) ? { trim: '6 × 9 in' } : {}) }));
+      on('pv-hright', e => des({ headerRight: e.target.value === 'Chapter title' ? 'chapter' : 'title' }));
+      $$('.pv-theme', back).forEach(b => b.onclick = () => des({ theme: b.dataset.theme, drop: 'theme', lead: 'theme', scene: 'theme', bodyFont: '', headFont: '' }));
+      const mb = $('#pv-matter', back); if (mb) mb.onclick = async () => { if (await editBookMatter()) rebuildBook(); };
+      on('pv-device', e => { PV.device = e.target.value; relayout(true); });
+      on('pv-esize', e => { PV.ebookSize = { Small: 10, Medium: 12, Large: 14 }[e.target.value]; relayout(true); });
+      on('pv-docpage', e => { PV.docPage = e.target.value; relayout(true); });
+      on('pv-smf', e => { PV.smf = e.target.checked; renderOptions(); relayout(true); });
+      $$('[data-a]', a).forEach(b => b.onclick = () => doExport(b.dataset.a, b));
+    }
+    function setFormat(f) {
+      PV.format = f; PV.page = 0;
+      $$('.pv-tabs button', back).forEach(b => b.classList.toggle('on', b.dataset.f === f));
+      renderOptions(); relayout(false);
+    }
+    $$('.pv-tabs button', back).forEach(b => b.onclick = () => setFormat(b.dataset.f));
+    function relayout(recount) {
+      geo = layoutInto(flow, PV.format);
+      PV.pages = geo.pages; PV.counts[PV.format] = geo.pages;
+      vp.dataset.format = PV.format;
+      fit(); renderCounts(); renderStandards();
+      const tst = $('.pv-tstyle', back); if (tst) tst.hidden = PV.format === 'paperback' && !!PV.book;   // paperback headings come from the book design
+      const th = $('#pv-tlook-hint', back);
+      if (th) th.innerHTML = PV.format === 'docs' && PV.smf ? 'Agent submission format always uses plain Times New Roman 12 for titles, as agents expect, so your title look isn’t shown here. Switch to <b>Paperback</b> or <b>E-book</b> to see it.' : '';
+      $$('#pv-tf, #pv-tsz, #pv-ta, #pv-tb, #pv-ti, #pv-tfav', back).forEach(x => x.classList.toggle('pv-dim', PV.format === 'docs' && !!PV.smf));
+      if (recount) { /* other formats unaffected by these options */ }
+    }
+    async function rebuildBook() {
+      if (!TS) return;
+      const token = PV.bookToken = (PV.bookToken || 0) + 1;
+      const info = $('#pv-pageinfo', back); if (info && PV.format === 'paperback') info.textContent = 'Setting the pages…';
+      let book;
+      try { book = await TS.build(PV.blocks, S.project, { author: (S.settings || {}).author || '', yield: true }); }
+      catch (e) { console.error(e); toast('Couldn’t lay out the book: ' + esc(e.message || ''), 'warn'); return; }
+      if (token !== PV.bookToken) return;
+      PV.book = book; PV.trim = book.design.trim; PV.counts.paperback = book.pages.length;
+      if (PV.format === 'paperback') { relayout(false); renderOptions(); }
+      renderCounts(); renderStandards();
+    }
+    async function loadScope() {
+      PV.blocks = PV.scope === 'doc' ? await docBlocks(S.docId, titleMode()) : await compileManuscript();
+      PV.counts = {};
+      PV.book = null;
+      await rebuildBook();
+      renderCounts();
+      relayout(false);
+      await measureAll();
+      PV.counts[PV.format] = PV.pages;
+      renderCounts();
+    }
+    $('#pv-scope', back).onchange = e => { PV.scope = e.target.value; PV.page = 0; loadScope(); };
+    const titleLook = change => { Object.assign(S.project.style.headings.h1, change); applyStyle(); scheduleMeta(); refreshToolbar(); relayout(false); measureAll().then(() => { PV.counts[PV.format] = PV.pages; renderCounts(); }); };
+    const favBtn = () => { const b = $('#pv-tfav', back); if (b) b.textContent = fontFavs().includes(S.project.style.headings.h1.font) ? '★' : '☆'; };
+    $('#pv-tf', back).onchange = e => { titleLook({ font: e.target.value }); favBtn(); };
+    $('#pv-tf', back).addEventListener('mousedown', async () => {
+      if (Fonts.installed && Fonts.installed.size) return;
+      await Fonts.loadInstalled(); const sel = $('#pv-tf', back); sel.innerHTML = fontOptionsHTML(S.project.style.headings.h1.font);
+    });
+    $('#pv-tfav', back).onclick = async () => {
+      const fam = S.project.style.headings.h1.font, added = await toggleFontFav(fam);
+      $('#pv-tf', back).innerHTML = fontOptionsHTML(fam); favBtn();
+      toast(added ? `★ ${esc(fam)} added to your favourite fonts.` : `${esc(fam)} removed from your favourites.`);
+    };
+    $('#pv-tsz', back).onchange = e => titleLook({ size: +e.target.value });
+    $('#pv-ta', back).onchange = e => titleLook({ align: e.target.value });
+    $('#pv-tb', back).onclick = e => { const on = !S.project.style.headings.h1.bold; e.currentTarget.classList.toggle('on', on); titleLook({ bold: on }); };
+    $('#pv-ti', back).onclick = e => { const on = !S.project.style.headings.h1.italic; e.currentTarget.classList.toggle('on', on); titleLook({ italic: on }); };
+    $('#pv-titles', back).onchange = e => { S.project.style.chapterTitles = e.target.value; scheduleMeta(); titlesHint(); loadScope(); };
+    // if chapters already begin with "Chapter 2: …", say so, so both don't end up in the book
+    async function titlesHint() {
+      const el = $('#pv-titles-hint', back); if (!el) return;
+      const docs = []; walkTree(findNode('root-manuscript').node.children || [], n => { if (n.type === 'doc' && !isTitlePage(n.title)) docs.push(n); });
+      let starts = 0, example = '';
+      for (const n of docs.slice(0, 12)) {
+        const html = n.id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, n.id);
+        const first = (Clip.extract(Clip.parseHTML(html)).blocks.find(b => b.runs.some(r => (r.text || '').trim())) || { runs: [] }).runs.map(r => r.text || '').join('').trim();
+        if (/^(chapter|prologue|epilogue|interlude)\b/i.test(first) && first.length < 140) { starts++; example = example || first; }
+      }
+      const many = docs.length && starts >= Math.min(docs.length, 12) / 2;
+      el.innerHTML = many && titleMode() === 'names' ? `Your chapters already start with a heading like “${esc(example)}”, so the book will show both. Choose <b>The first line of each chapter</b> to use just that one.` : many && titleMode() === 'firstline' ? `Using each chapter’s own first line, like “${esc(example)}”, as its heading.` : '';
+    }
+    titlesHint();
+
+    async function doExport(kind, btn) {
+      const name = PV.scope === 'doc' ? findNode(S.docId).node.title : S.project.title;
+      const settings = await api.getSettings().catch(() => ({}));
+      const pageDoc = (g) => `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>
+          body { margin: 0; } p, h1, h2, h3 { orphans: 2; widows: 2; } h1, h2, h3 { break-after: avoid; }
+        </style></head><body>${Clip.exportFromBlocks(g.dropBlank ? PV.blocks.filter(b => b.runs.some(r => (r.text || '').trim())) : PV.blocks, g.style, { pageBreaks: true }).html}</body></html>`;
+      if ((kind === 'pdf' || kind === 'exact') && PV.book) {
+        const imp = await api.importedFonts().catch(() => []);
+        const faces = imp.map(f => `@font-face{font-family:"${(Fonts.imported.find(i => i.file === f.file) || {}).family || f.file.replace(/\.[^.]+$/, '')}";src:url(data:font/${/otf$/i.test(f.file) ? 'otf' : /woff2$/i.test(f.file) ? 'woff2' : /woff$/i.test(f.file) ? 'woff' : 'ttf'};base64,${f.data})}`).join('');
+        const html = TS.documentHTML(PV.book, faces);
+        const size = { width: PV.book.geo.w, height: PV.book.geo.h };
+        if (kind === 'exact') {
+          btn.disabled = true; btn.textContent = 'Counting…';
+          try { const n = await api.pdfPages(html, size, { raw: true }); btn.textContent = `Exact: ${fmt(n)} pages`; }
+          catch { btn.textContent = 'Could not count'; }
+          btn.disabled = false; return;
+        }
+        btn.disabled = true; const was = btn.textContent; btn.textContent = 'Making the PDF…';
+        try { const r = await api.exportPDF(html, name, size, { raw: true }); if (r) toast(`Print PDF saved (${fmt(r.pages)} pages, ${esc(PV.book.design.trim)}).`, '', 6000); }
+        finally { btn.disabled = false; btn.textContent = was; }
+        return;
+      }
+      if (kind === 'pdf' || kind === 'exact' || kind === 'docpdf') {
+        const g = geometry(kind === 'docpdf' ? 'docs' : 'paperback');
+        const surname = (settings.author || '').trim().split(/\s+/).pop() || '';
+        const opts = { margins: { top: g.mt, bottom: g.mb, left: g.ml, right: g.mr }, pageNumbers: !g.smf, font: g.style.font,
+          header: g.smf ? `${surname ? surname + ' / ' : ''}${name.toUpperCase()} / ` : null };
+        if (kind === 'exact') {
+          btn.disabled = true; btn.textContent = 'Counting…';
+          try { const n = await api.pdfPages(pageDoc(g), { width: g.w, height: g.h }, opts); btn.textContent = `Exact: ${fmt(n)} pages`; }
+          catch { btn.textContent = 'Could not count'; }
+          btn.disabled = false; return;
+        }
+        const r = await api.exportPDF(pageDoc(g), name, { width: g.w, height: g.h }, opts);
+        if (r) toast(`PDF saved (${fmt(r.pages)} pages).`);
+      } else if (kind === 'epub') {
+        const lang = ((await api.spellSettings().catch(() => ({ current: ['en'] }))).current[0]) || 'en';
+        if (!S.project.epubId) { S.project.epubId = 'urn:uuid:' + crypto.randomUUID(); scheduleMeta(); }
+        const bk = S.project.book || {};
+        const typeset = TS ? { t: TS.resolved(bookDesign()), d: bookDesign(), book: bk } : null;
+        const { bytes, chapters } = window.FolioEPUB.build({ blocks: PV.blocks, style: S.project.style, title: PV.scope === 'doc' ? name : (bk.title || name), author: bk.author || settings.author || '', lang, id: S.project.epubId, typeset: PV.scope === 'doc' ? null : typeset });
+        const p = await api.exportBinary(bytes, name, 'epub', 'EPUB e-book');
+        if (p) toast(`EPUB saved with ${chapters} chapter${chapters === 1 ? '' : 's'}.${settings.author ? '' : ' Tip: add your author name in Settings.'}`, '', 6000);
+      } else if (kind === 'copy') {
+        const out = Clip.exportFromBlocks(PV.blocks, PV.smf ? smfStyle() : exportSettings(), { pageBreaks: true });
+        await api.clipboardWrite(out.html, out.text);
+        toast('Copied. Paste into Google Docs or Word with Ctrl+V.');
+        warnDocsFonts(PV.blocks, async map => { const o = Clip.exportFromBlocks(PV.blocks, exportSettings(), { pageBreaks: true, fontMap: map }); await api.clipboardWrite(o.html, o.text); toast('Copied with Docs-friendly fonts.'); });
+      } else if (kind === 'docx') {
+        const lang = ((await api.spellSettings().catch(() => ({ current: ['en-AU'] }))).current[0]) || 'en-AU';
+        const bytes = window.FolioDOCX.build(PV.blocks, PV.smf ? smfStyle() : S.project.style, { title: name, author: settings.author || '', page: PV.docPage, smf: PV.smf, pageBreaks: true, lang });
+        const p = await api.exportBinary(bytes, name, 'docx', 'Word document');
+        if (p) toast(`Word file saved.${PV.smf ? ' It has the name / title / page header agents expect.' : ''} It also opens in Google Docs (upload it to Drive).`, '', 6000);
+      } else if (kind === 'html') {
+        const p = await api.exportHTML(pageDoc(geometry('docs')), name);
+        if (p) toast('Saved. Open it in Word, or upload it to Google Drive and open with Google Docs.');
+      }
+    }
+
+    $$('.pv-tabs button', back).forEach(b => b.classList.toggle('on', b.dataset.f === PV.format));
+    renderOptions();
+    await loadScope();
+  }
+  $('#btn-export').onclick = () => openPreview();
+  // the arrow beside Copy for Docs: every other way to get the book out
+  $('#btn-export-more').onclick = e => {
+    e.stopPropagation();
+    const open = document.querySelector('.export-pop'); if (open) { open.remove(); return; }
+    const items = [
+      ['copy', 'Copy for Docs', 'This chapter, ready to paste into Google Docs or Word', 'Ctrl+Shift+C', () => copyDocForDocs()],
+      ['preview', 'Preview & page counts', 'See it as a paperback, Kindle or Word page', '', () => openPreview()],
+      null,
+      ['doc', 'Print-ready PDF', 'Paperback interior with page numbers and chapter openers', '', () => openPreview('paperback')],
+      ['book', 'EPUB e-book', 'For Kindle (KDP), Apple Books and Kobo', '', () => openPreview('ebook')],
+      ['doc', 'Word document (.docx)', 'For an editor, agent or beta reader', '', () => openPreview('docs')]
+    ];
+    const pop = document.createElement('div'); pop.className = 'export-pop'; pop.setAttribute('role', 'menu');
+    pop.innerHTML = items.map((x, i) => x ? `<button class="ex-item" role="menuitem" data-i="${i}"><span class="ex-ic">${I[x[0]] || ''}</span><span class="ex-t"><b>${esc(x[1])}</b><small>${esc(x[2])}</small></span>${x[3] ? `<kbd>${x[3]}</kbd>` : ''}</button>` : '<hr>').join('') + '<p class="ex-note">Whole book or this chapter? Choose in Preview.</p>';
+    document.body.appendChild(pop);
+    const r = $('#export-split').getBoundingClientRect();
+    pop.style.top = (r.bottom + 6) + 'px'; pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.right - pop.offsetWidth)) + 'px';
+    $$('.ex-item', pop).forEach(b => b.onclick = () => { pop.remove(); items[+b.dataset.i][4](); });
+    setTimeout(() => document.addEventListener('mousedown', function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('mousedown', off); } }), 0);
+  };
+  function fontFaceCSS() { return ''; } // imported fonts embed in a later version
+
+  // ================================================================== STYLE SETTINGS
+  function applyStyle() {
+    const st = S.project.style;
+    const q = Clip.quoteFamily;
+    const set = (k, v) => editor.style.setProperty(k, v);
+    set('--doc-font', q(st.font)); set('--doc-size', st.size + 'pt'); set('--doc-lh', st.lineHeight);
+    set('--doc-indent', st.indent + 'in'); set('--doc-pspace', st.paraSpacing + 'pt'); set('--doc-align', st.justify ? 'justify' : 'left');
+    for (const h of ['h1', 'h2', 'h3']) {
+      const s = st.headings[h];
+      set(`--${h}-font`, q(s.font)); set(`--${h}-size`, s.size + 'pt'); set(`--${h}-align`, s.align);
+      set(`--${h}-weight`, s.bold ? 700 : 400); set(`--${h}-style`, s.italic ? 'italic' : 'normal');
+      set(`--${h}-before`, s.spaceBefore + 'pt'); set(`--${h}-after`, s.spaceAfter + 'pt');
+    }
+    editor.classList.toggle('no-first-indent', !!st.noIndentFirst);
+    $('#page').style.setProperty('--page-width', st.pageWidth + 'px');
+    const t = $('#doc-title'), h1 = st.headings.h1;
+    t.style.setProperty('--t-font', q(h1.font)); t.style.setProperty('--t-size', h1.size + 'pt');
+    t.style.setProperty('--t-weight', h1.bold ? 700 : 400); t.style.setProperty('--t-style', h1.italic ? 'italic' : 'normal');
+    t.style.setProperty('--t-align', h1.align);
+  }
+
+  function langName(code) {
+    try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; }
+  }
+  function spellOptions(sp) {
+    const list = [...sp.available].sort((a, b) => {
+      const ea = a.startsWith('en'), eb = b.startsWith('en');
+      return ea !== eb ? (ea ? -1 : 1) : langName(a).localeCompare(langName(b));
+    });
+    const cur = sp.current[0] || '';
+    return list.map(c => `<option value="${esc(c)}" ${c === cur ? 'selected' : ''}>${esc(langName(c))}</option>`).join('');
+  }
+  async function dictionaryDialog() {
+    const words = (await api.spellWords()).sort((a, b) => a.localeCompare(b));
+    const body = document.createElement('div');
+    const render = () => {
+      body.innerHTML = words.length
+        ? `<p>Words you've added (character and place names are added automatically). Remove any you added by mistake.</p><div class="dict-list">${words.map((w, i) => `<div class="dict-row"><span>${esc(w)}</span><button class="rc-btn ghost" data-i="${i}">Remove</button></div>`).join('')}</div>`
+        : '<p>No words added yet. Right-click a word with a red underline and choose “Add to dictionary”.</p>';
+      $$('.dict-row button', body).forEach(b => b.onclick = async () => { const w = words[+b.dataset.i]; await api.removeSpellWord(w); words.splice(+b.dataset.i, 1); render(); });
+    };
+    render();
+    await modal({ title: 'Custom dictionary', body, buttons: [{ label: 'Done', value: true, kind: 'primary' }] });
+  }
+
+  // Manuscript style form: used in the side panel (changes show on the page straight away) and kept for the old dialog
+  async function styleForm() {
+    await Fonts.loadInstalled();
+    const st = JSON.parse(JSON.stringify(S.project.style));
+    const fontOptions = sel => {
+      const fams = [...new Set([...Fonts.FAVOURITES.filter(f => Fonts.isAvailable(f)), ...Fonts.imported.map(i => i.family), ...(Fonts.installed ? [...Fonts.installed].sort() : [])])];
+      if (!fams.includes(sel)) fams.unshift(sel);
+      return fams.map(f => `<option ${f === sel ? 'selected' : ''}>${esc(f)}</option>`).join('');
+    };
+    const opt = (vals, cur) => vals.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${l}</option>`).join('');
+    const align = cur => opt([['left', 'Left'], ['center', 'Centre'], ['right', 'Right']], cur);
+    const body = document.createElement('div');
+    body.innerHTML = `
+      <div class="form-grid">
+        <div class="section-label">Body text</div>
+        <div class="field"><label>Font</label><select id="s-font">${fontOptions(st.font)}</select></div>
+        <div class="field"><label>Size (pt)</label><input type="number" id="s-size" min="6" max="40" step="0.5" value="${st.size}"></div>
+        <div class="field"><label>Line spacing</label><select id="s-lh">${opt([[1, 'Single'], [1.15, '1.15'], [1.5, '1.5'], [2, 'Double']], st.lineHeight)}</select></div>
+        <div class="field"><label>First-line indent (inches)</label><input type="number" id="s-indent" min="0" max="2" step="0.05" value="${st.indent}"></div>
+        <div class="field"><label>Space after paragraphs (pt)</label><input type="number" id="s-pspace" min="0" max="36" step="1" value="${st.paraSpacing}"></div>
+        <div class="field"><label>Page width on screen</label><select id="s-width">${opt([[640, 'Narrow'], [760, 'Medium'], [900, 'Wide']], st.pageWidth)}</select></div>
+        <label class="check"><input type="checkbox" id="s-justify" ${st.justify ? 'checked' : ''}> Justify text</label>
+        <label class="check"><input type="checkbox" id="s-nofirst" ${st.noIndentFirst ? 'checked' : ''}> No indent after headings and scene breaks</label>
+        <div class="field full"><label>Chapter titles when copying and exporting</label><select id="s-titles">${[['names', 'Document names from the binder'], ['firstline', 'The first line of each chapter (e.g. “Chapter 2: …”)'], ['none', 'Don’t add titles']].map(([v, l]) => `<option value="${v}" ${titleMode() === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        ${['h1', 'h2'].map(h => `
+          <div class="section-label">${h === 'h1' ? 'Heading 1 (chapter titles)' : 'Heading 2'}</div>
+          <div class="field"><label>Font</label><select id="s-${h}-font">${fontOptions(st.headings[h].font)}</select></div>
+          <div class="field"><label>Size (pt)</label><input type="number" id="s-${h}-size" min="6" max="72" step="0.5" value="${st.headings[h].size}"></div>
+          <div class="field"><label>Alignment</label><select id="s-${h}-align">${align(st.headings[h].align)}</select></div>
+          <div class="field" style="display:flex;gap:14px;align-items:flex-end;padding-bottom:6px">
+            <label class="check"><input type="checkbox" id="s-${h}-bold" ${st.headings[h].bold ? 'checked' : ''}> Bold</label>
+            <label class="check"><input type="checkbox" id="s-${h}-italic" ${st.headings[h].italic ? 'checked' : ''}> Italic</label>
+          </div>`).join('')}
+      </div>`;
+    const read = () => {
+      const v = id => $('#' + id, body).value, c = id => $('#' + id, body).checked;
+      st.font = v('s-font'); st.size = +v('s-size') || 12; st.lineHeight = +v('s-lh'); st.indent = +v('s-indent'); st.paraSpacing = +v('s-pspace');
+      st.pageWidth = +v('s-width'); st.justify = c('s-justify'); st.noIndentFirst = c('s-nofirst'); st.chapterTitles = v('s-titles'); st.titlesAsHeadings = st.chapterTitles !== 'none';
+      for (const h of ['h1', 'h2']) {
+        Object.assign(st.headings[h], { font: v(`s-${h}-font`), size: +v(`s-${h}-size`) || st.headings[h].size, align: v(`s-${h}-align`), bold: c(`s-${h}-bold`), italic: c(`s-${h}-italic`) });
+      }
+      st.headings.h3.font = st.headings.h2.font;
+      return st;
+    };
+    return { body, read };
+  }
+  function applyStyleNow(st) { S.project.style = st; applyStyle(); scheduleMeta(); refreshToolbar(); }
+  $('#btn-style').onclick = async () => {
+    if (window.UnwipSide) { window.UnwipSide.open('style'); return; }
+    const f = await styleForm();
+    const ok = await modal({ title: 'Manuscript style', body: f.body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
+    if (ok) applyStyleNow(f.read());
+  };
+
+  // ================================================================== SETTINGS (app-wide)
+  async function openSettings() {
+    const sp = await api.spellSettings().catch(() => ({ available: [], current: [], enabled: true }));
+    const cfg = S.settings;
+    const opt = (vals, cur) => vals.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${l}</option>`).join('');
+    const theme = localStorage.getItem('folio-theme') || 'system';
+    const body = document.createElement('div');
+    body.innerHTML = `
+      <div class="form-grid">
+        <div class="section-label">You</div>
+        <div class="field"><label>Author name (used on title pages and e-books)</label><input type="text" id="g-author" value="${esc(cfg.author || '')}" placeholder="e.g. Ima Novelist"></div>
+        <div class="field"><label>Daily writing goal (all projects)</label><input type="number" id="g-daily" min="0" step="50" value="${cfg.dailyGoal || ''}" placeholder="e.g. 1000"></div>
+        <label class="check full"><input type="checkbox" id="g-quotes" ${cfg.quotes !== false ? 'checked' : ''}> Show quotes from writers (front page, writer mode, sprints, goals)</label>
+        <div class="section-label">Appearance</div>
+        <div class="field"><label>Theme and colours</label><button class="btn" id="s-themes" type="button">Themes &amp; colours…</button></div>
+        <div class="field"><label>Typing feel</label><button class="btn" id="s-typing" type="button">Typewriter &amp; animations…</button></div>
+        <div class="field"><label>Fonts</label><button class="btn" id="s-import" type="button">Import font files…</button></div>
+        <div class="section-label">Name suggestions</div>
+        <label class="check"><input type="checkbox" id="s-ac" ${acPrefs().on ? 'checked' : ''}> Suggest character, place and item names as I type</label>
+        <div class="field"><label>Start suggesting after</label><select id="s-acmin">${opt([[2, '2 letters'], [3, '3 letters'], [4, '4 letters']], acPrefs().min)}</select></div>
+        <div class="section-label">Language &amp; spelling</div>
+        <div class="field"><label>Spelling language</label>${sp.available.length ? `<select id="s-lang">${spellOptions(sp)}</select>` : '<div style="padding-top:8px;color:var(--muted)">Uses your Windows language settings</div>'}</div>
+        <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>
+        <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
+        <div class="section-label">Help</div>
+        <div class="field"><label>New here, or showing someone?</label><button class="btn" id="g-intro" type="button">Welcome setup…</button></div>
+        <div class="field"><label>A quick look around a project</label><button class="btn" id="g-tour" type="button">Take the tour</button></div>
+        <div class="field"><label>What everything does, and keyboard shortcuts</label><button class="btn" id="g-help" type="button">Open Help (F1)</button></div>
+        <div class="section-label">Updates</div>
+        <label class="check"><input type="checkbox" id="g-autoup" ${cfg.autoUpdate !== false ? 'checked' : ''}> Install updates automatically</label>
+        <div class="field"><label id="g-version">Unwip</label><button class="btn" id="g-checkup" type="button">Check for updates now</button></div>
+        <div class="field full"><label>Update key (only needed while your updates repo on GitHub is private)</label><input type="password" id="g-upkey" value="${esc(cfg.updateKey || '')}" placeholder="Paste the read-only key from GitHub here" autocomplete="off" spellcheck="false"></div>
+        <div class="section-label">Where your projects live</div>
+        <div class="field full" id="s-lib"><label>Loading…</label></div>
+        <div class="section-label">Extra backup copy</div>
+        <div class="field full" id="s-extra"></div>
+      </div>`;
+    $('#s-import', body).onclick = importFonts;
+    $('#s-themes', body).onclick = () => window.UnwipLook && window.UnwipLook.openThemes();
+    $('#s-typing', body).onclick = () => window.UnwipLook && window.UnwipLook.openTyping();
+    $('#s-dict', body).onclick = dictionaryDialog;
+    if (window.UnwipSync) window.UnwipSync.settingsSection(body);
+    $('#g-intro', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.start(); };
+    $('#g-tour', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.tour(); };
+    $('#g-help', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipHelp && window.UnwipHelp.open(); };
+    api.updateState().then(st => { const l = $('#g-version', body); if (l) l.textContent = `You have Unwip ${st.current}`; }).catch(() => {});
+    $('#g-checkup', body).onclick = async () => { S.settings = await api.setSettings({ updateKey: $('#g-upkey', body).value.trim() }); window.UnwipUpdates && window.UnwipUpdates.checkNow(); };
+    const ok = await modal({ title: 'Settings', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
+    if (!ok) return;
+    const v = id => $('#' + id, body).value, c = id => $('#' + id, body).checked;
+    S.settings = await api.setSettings({ author: v('g-author').trim(), dailyGoal: Math.max(0, +v('g-daily') || 0), quotes: c('g-quotes'), autoUpdate: c('g-autoup'), updateKey: v('g-upkey').trim() });
+    try { localStorage.setItem('folio-ac', JSON.stringify({ on: c('s-ac'), min: +v('s-acmin') })); } catch {}
+    const langSel = $('#s-lang', body);
+    const newLangs = langSel ? [langSel.value] : sp.current;
+    if ((langSel && newLangs[0] !== sp.current[0]) || c('s-spell') !== sp.enabled) {
+      await api.setSpell(newLangs, c('s-spell'));
+      editor.spellcheck = false; requestAnimationFrame(() => { editor.spellcheck = c('s-spell'); });
+      if (langSel && newLangs[0] !== sp.current[0]) toast(`Spelling language: ${esc(langName(newLangs[0]))}. The first time, Unwip may need the internet once to download that dictionary.`, '', 6000);
+    }
+    if (S.project) updateStatus(); else showLibrary();
+  }
+  $('#btn-settings').onclick = openSettings;
+  $('#btn-settings-lib').onclick = openSettings;
+
+  // ================================================================== WRITER MODE
+  async function setWriter(on) {
+    const was = document.body.classList.contains('writer');
+    if (on === was) return;
+    document.body.classList.toggle('writer', on);
+    renderSprint();
+    await api.fullscreen(on);
+    if (on) { editor.focus(); typewriterScroll(true); writerQuote(); }
+    emit('writer', on);
+  }
+  // Typewriter scrolling: keep the line you're typing on at the same height on screen.
+  // Settings live in look.js (Typing & typewriter); without it, it's on in writer mode only.
+  function typewriterActive() { const L = window.UnwipLook; return L ? L.typewriterActive() : document.body.classList.contains('writer'); }
+  let twAnim = null;
+  function typewriterScroll(instant) {
+    const sel = getSelection(); if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return;
+    const r = sel.getRangeAt(0).cloneRange(); r.collapse(true);
+    let rect = r.getBoundingClientRect();
+    if (!rect.height) { const b = currentBlock(sel.anchorNode); if (b) rect = b.getBoundingClientRect(); }
+    const L = window.UnwipLook;
+    const wrap = editorWrap.getBoundingClientRect();
+    const target = wrap.top + wrap.height * (L ? L.typewriterPosition() : 0.45);
+    const delta = rect.top - target;
+    if (Math.abs(delta) < 2) return;
+    cancelAnimationFrame(twAnim);
+    if (instant || !L || !L.smoothScroll()) { editorWrap.scrollTop += delta; return; }
+    const from = editorWrap.scrollTop, to = from + delta, t0 = performance.now(), dur = 160;
+    const step = now => { const k = Math.min(1, (now - t0) / dur); editorWrap.scrollTop = from + (to - from) * (1 - Math.pow(1 - k, 3)); if (k < 1) twAnim = requestAnimationFrame(step); };
+    twAnim = requestAnimationFrame(step);
+  }
+  $('#btn-writer').onclick = () => setWriter(true);
+
+  // ================================================================== FIND
+  const findbar = $('#findbar'), findInput = $('#find-input');
+  function openFind() {
+    findbar.classList.remove('hidden');
+    const sel = getSelection().toString().trim();
+    if (sel && sel.length < 60) findInput.value = sel;
+    findInput.focus(); findInput.select();
+  }
+  function closeFind() { findbar.classList.add('hidden'); $('#find-count').textContent = ''; api.stopFind(); restoreRange(); }
+  function runFind(forward = true, next = true) {
+    const t = findInput.value; if (!t) { $('#find-count').textContent = ''; api.stopFind(); return; }
+    api.find(t, { forward, findNext: next });
+  }
+  findInput.addEventListener('input', () => runFind(true, false));
+  findInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); runFind(!e.shiftKey, true); }
+    if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+  });
+  $('#find-next').onclick = () => runFind(true, true);
+  $('#find-prev').onclick = () => runFind(false, true);
+  $('#find-close').onclick = closeFind;
+  api.onFindResult(r => {
+    if (r.finalUpdate) $('#find-count').textContent = r.matches ? `${Math.max(0, r.activeMatchOrdinal - 0)} of ${r.matches}` : 'No matches';
+  });
+
+
+  // ================================================================== REVISION MODE
+  const Rev = window.FolioRevise;
+  const hasHighlights = !!(window.CSS && CSS.highlights && window.Highlight);
+  let revTimer = null, revResult = null;
+  const revJump = {};
+  function revisePrefs() {
+    try { return JSON.parse(localStorage.getItem('folio-revise') || '{}'); } catch { return {}; }
+  }
+  function saveRevisePrefs(p) { try { localStorage.setItem('folio-revise', JSON.stringify(p)); } catch {} }
+  // Focused shows the five big things (like Hemingway); Detailed shows every check. Follows the binder's Focused/Detailed until changed here.
+  function reviseLevel() { if (document.documentElement.classList.contains('m-phone')) return 'focused'; const p = revisePrefs(); return p.level || (S.mode === 'detailed' ? 'detailed' : 'focused'); }
+  function catShown(id) { if (id === 'more' && !window.UnwipHarper) return false; return reviseLevel() === 'detailed' || !!Rev.CATS.find(c => c.id === id).focused; }
+  function catOn(id) { if (!catShown(id)) return false; const p = revisePrefs(); return p[id] !== undefined ? p[id] : Rev.CATS.find(c => c.id === id).on; }
+  $$('#rp-level button').forEach(b => b.onclick = () => { const p = revisePrefs(); p.level = b.dataset.l; saveRevisePrefs(p); runRevise(); });
+
+  // only the revision highlights (other modules use their own: focus fading, letter animations, comments)
+  function clearRvHighlights() { if (!(window.CSS && CSS.highlights)) return; for (const k of [...CSS.highlights.keys()]) if (k.startsWith('rv-')) CSS.highlights.delete(k); }
+  function setRevise(on) {
+    if (on) emit('revise', true);
+    S.revise = !!on;
+    $('#revise-panel').classList.toggle('hidden', !on);
+    $('#btn-revise').classList.toggle('on', !!on);
+    if (on) { if (!hasHighlights) toast('Revision highlights need a newer app engine.'); runRevise(); }
+    else { if (hasHighlights) clearRvHighlights(); hideTip(); revResult = null; }
+  }
+  $('#btn-revise').onclick = () => setRevise(!S.revise);
+  { const rb = $('#btn-revise'); if (rb && !rb.querySelector('svg')) rb.innerHTML = I.revise + '<span>Revise</span>'; }
+  $('#rp-close').onclick = () => setRevise(false);
+
+  function scheduleRevise() { clearTimeout(revTimer); revTimer = setTimeout(runRevise, 450); }
+  if (window.UnwipHarper) window.UnwipHarper.onReady(() => { if (S.revise) runRevise(); });
+  function nameWords() { return new Set(window.FolioNames.allWords().map(w => w.toLowerCase())); }
+
+  function runRevise() {
+    clearTimeout(revTimer);
+    if (!S.revise || !S.docId) return;
+    if (!S.spellPrefer) { S.spellPrefer = 'uk'; S.spellDialect = 'uk'; api.spellSettings().then(x => { const l = (x.current || [])[0] || ''; S.spellPrefer = /en-(US|CA)/i.test(l) ? 'us' : 'uk'; S.spellDialect = /en-US/i.test(l) ? 'us' : /en-CA/i.test(l) ? 'ca' : /en-AU|en-NZ/i.test(l) ? 'au' : /en-IN/i.test(l) ? 'in' : 'uk'; }).catch(() => {}); }
+    if (window.UnwipHarper) window.UnwipHarper.setDialect(S.spellDialect);
+    revResult = Rev.analyse(editor, { names: nameWords(), ignored: new Set(S.project.reviseIgnored || []), spellingPrefer: S.spellPrefer, harper: catOn('more') });
+    // a very hard sentence is not also listed as hard
+    if (hasHighlights) {
+      clearRvHighlights();
+      for (const c of Rev.CATS) {
+        if (!catOn(c.id)) continue;
+        const ranges = revResult.issues.filter(i => i.cat === c.id).map(i => i.range);
+        if (ranges.length) CSS.highlights.set('rv-' + c.id, new Highlight(...ranges));
+      }
+    }
+    renderRevisePanel();
+    S.revCheckedAt = Date.now(); updateChecked();
+  }
+  function updateChecked() {
+    if (!S.revCheckedAt) return;
+    const sec = Math.round((Date.now() - S.revCheckedAt) / 1000);
+    $('#rp-checked').textContent = sec < 10 ? '· checked just now' : sec < 60 ? `· checked ${sec}s ago` : `· checked ${Math.round(sec / 60)} min ago`;
+  }
+  setInterval(() => { if (S.revise) updateChecked(); }, 10000);
+  $('#rp-refresh').onclick = () => {
+    const btn = $('#rp-refresh'); btn.classList.add('spin');
+    scheduleNames(0);
+    setTimeout(() => { runRevise(); btn.classList.remove('spin'); }, 250);
+  };
+
+  function renderRevisePanel() {
+    if (!revResult) return;
+    const st = revResult.stats;
+    $('#rp-grade').textContent = st.words ? st.grade : '–';
+    $('#rp-grade-label').textContent = st.words ? `Grade ${st.grade} · ${Rev.gradeLabel(st.grade)}` : 'Reading grade';
+    $('#rp-stats').innerHTML = [
+      [fmt(st.words), 'words'], [fmt(st.sentences), 'sentences'],
+      [st.avgSentence, 'words per sentence'], [`${st.readingMinutes} min`, 'reading time']
+    ].map(([b, l]) => `<div class="rp-stat"><b>${b}</b><span>${l}</span></div>`).join('');
+    const nIgn = (S.project.reviseIgnored || []).length;
+    const ign = $('#rp-ignored');
+    ign.innerHTML = nIgn ? `${nIgn} highlight${nIgn === 1 ? '' : 's'} ignored in this project. <a href="#" id="rp-unignore">Show them again</a>` : '';
+    if (nIgn) $('#rp-unignore').onclick = e => { e.preventDefault(); S.project.reviseIgnored = []; scheduleMeta(); runRevise(); };
+    const cats = $('#rp-cats');
+    cats.innerHTML = '';
+    $$('#rp-level button').forEach(b => b.classList.toggle('on', b.dataset.l === reviseLevel()));
+    for (const c of Rev.CATS) {
+      if (!catShown(c.id)) continue;
+      const count = revResult.issues.filter(i => i.cat === c.id).length;
+      const on = catOn(c.id);
+      const row = document.createElement('div');
+      row.className = 'rp-cat' + (on ? '' : ' off') + (count ? '' : ' zero');
+      row.title = c.hint + (count ? ' Click to jump through them.' : '');
+      const busy = c.id === 'more' && on && revResult.pendingMore;
+      row.innerHTML = `<input type="checkbox" ${on ? 'checked' : ''} title="Show or hide these highlights"><span class="sw ${c.id}"></span><span class="nm">${esc(c.label)}</span><span class="ct">${busy ? '<span class="rp-busy" title="Still checking…">…</span>' : ''}${count}</span>`;
+      $('input', row).addEventListener('click', e => {
+        e.stopPropagation();
+        const p = revisePrefs(); p[c.id] = e.target.checked; saveRevisePrefs(p); runRevise();
+      });
+      row.addEventListener('click', () => jumpTo(c.id));
+      cats.appendChild(row);
+    }
+  }
+
+  function jumpTo(cat) {
+    if (!revResult) return;
+    const list = revResult.issues.filter(i => i.cat === cat);
+    if (!list.length) return;
+    revJump[cat] = ((revJump[cat] ?? -1) + 1) % list.length;
+    const issue = list[revJump[cat]];
+    const rect = issue.range.getBoundingClientRect();
+    const wrap = editorWrap.getBoundingClientRect();
+    editorWrap.scrollTop += rect.top - wrap.top - wrap.height * 0.35;
+    if (hasHighlights) {
+      CSS.highlights.set('rv-focus', new Highlight(issue.range));
+      clearTimeout(jumpTo.t); jumpTo.t = setTimeout(() => CSS.highlights.delete('rv-focus'), 1600);
+    }
+    // put the cursor at the start of it so you can fix it straight away
+    const r = issue.range.cloneRange(); r.collapse(true);
+    editor.focus(); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    const after = editor.getBoundingClientRect();
+    showTip(issue.msg, rect.left, rect.bottom + 6 + (issue.range.getBoundingClientRect().top - rect.top));
+    clearTimeout(hideTip.t); hideTip.t = setTimeout(hideTip, 2600);
+  }
+
+  // ---- hover card: why it's marked, an example, and fixes where a rule can be sure
+  const tip = $('#rv-tip');
+  let cardIssues = [], cardHideTimer = null;
+  const CAT_LABEL = Object.fromEntries(Rev.CATS.map(c => [c.id, c.label]));
+  function showTip(text, x, y) {   // simple text tip (used after jumping)
+    tip.className = 'rv-tip'; tip.textContent = text; tip.classList.remove('hidden');
+    placeTip(x, y);
+  }
+  function placeTip(x, y, above) {
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+    tip.style.top = (y + h > innerHeight - 36 ? Math.max(8, (above ?? y) - h - 8) : y) + 'px';
+  }
+  function hideTip() { tip.classList.add('hidden'); cardIssues = []; }
+  function previewHTML(p) {
+    return `<div class="rc-prev">${esc(p.before)}${p.removed ? `<del>${esc(p.removed)}</del>` : ''}${p.added ? `<ins>${esc(p.added)}</ins>` : ''}${esc(p.after)}</div>`;
+  }
+  function showCard(issues, rect) {
+    cardIssues = issues;
+    tip.className = 'rv-tip rv-card';
+    tip.innerHTML = issues.map((is, i) => `
+      <div class="rc">
+        <div class="rc-cat"><span class="sw ${is.cat}"></span>${esc(CAT_LABEL[is.cat])}</div>
+        <div class="rc-msg">${esc(is.msg)}</div>
+        ${is.preview ? previewHTML(is.preview) : ''}
+        ${is.example && !is.preview && !is.fixes.length ? `<div class="rc-ex"><span>e.g.</span> ${esc(is.example[0])}<br><span>→</span> ${esc(is.example[1])}</div>` : ''}
+        <div class="rc-actions">
+          ${is.fixes.map((f, j) => `<button class="rc-btn primary" data-i="${i}" data-fix="${j}">${esc(f.label)}</button>`).join('')}
+          ${is.prev ? `<button class="rc-btn" data-i="${i}" data-act="prev">Show earlier use</button>` : ''}
+          <button class="rc-btn ghost" data-i="${i}" data-act="ignore" title="Hide this one">Ignore</button>
+          ${is.canIgnoreAll ? `<button class="rc-btn ghost" data-i="${i}" data-act="ignoreall" title="Never flag this word for this reason in this project">Ignore “${esc(is.word.length > 18 ? is.word.slice(0, 18) + '…' : is.word)}” everywhere</button>` : ''}
+        </div>
+      </div>`).join('');
+    tip.classList.remove('hidden');
+    placeTip(rect.left, rect.bottom + 6, rect.top);
+  }
+  function issuesAt(x, y) {
+    if (!revResult) return [];
+    const pos = document.caretRangeFromPoint(x, y);
+    if (!pos) return [];
+    const hits = revResult.issues.filter(i => catOn(i.cat) && i.range.isPointInRange(pos.startContainer, pos.startOffset) &&
+      !(i.range.endContainer === pos.startContainer && i.range.endOffset === pos.startOffset) &&
+      [...i.range.getClientRects()].some(r => x >= r.left - 2 && x <= r.right + 2 && y >= r.top - 2 && y <= r.bottom + 2));
+    const order = ['doubled', 'typo', 'comma', 'simpler', 'passive', 'adverb', 'filler', 'echo', 'starts', 'veryhard', 'hard'];
+    return hits.sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat)).slice(0, 2);
+  }
+  let tipRaf = 0, lastKey = '';
+  editor.addEventListener('mousemove', e => {
+    if (!S.revise || !revResult || tipRaf) return;
+    tipRaf = requestAnimationFrame(() => {
+      tipRaf = 0;
+      const hits = issuesAt(e.clientX, e.clientY);
+      if (!hits.length) { if (!tip.matches(':hover')) { clearTimeout(cardHideTimer); cardHideTimer = setTimeout(() => { if (!tip.matches(':hover')) { hideTip(); lastKey = ''; } }, 250); } return; }
+      clearTimeout(cardHideTimer);
+      const key = hits.map(h => h.key).join('&');
+      if (key === lastKey && !tip.classList.contains('hidden')) return;
+      lastKey = key;
+      const rects = [...hits[0].range.getClientRects()];
+      const rect = rects.find(r => e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2) || rects[0];
+      showCard(hits, rect);
+    });
+  });
+  // touchscreens (iPad, iPhone): tap a highlight to see why and fix it
+  editor.addEventListener('pointerup', e => {
+    if (e.pointerType === 'mouse' || !S.revise || !revResult) return;
+    const hits = issuesAt(e.clientX, e.clientY);
+    if (!hits.length) { hideTip(); lastKey = ''; return; }
+    lastKey = hits.map(h => h.key).join('&');
+    const rects = [...hits[0].range.getClientRects()];
+    showCard(hits, rects.find(r => e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2) || rects[0]);
+  });
+  document.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse' && !tip.contains(e.target) && !editor.contains(e.target)) { hideTip(); lastKey = ''; } });
+  editor.addEventListener('mouseleave', () => { clearTimeout(cardHideTimer); cardHideTimer = setTimeout(() => { if (!tip.matches(':hover')) { hideTip(); lastKey = ''; } }, 300); });
+  tip.addEventListener('mouseleave', () => { clearTimeout(cardHideTimer); cardHideTimer = setTimeout(() => { hideTip(); lastKey = ''; }, 250); });
+  tip.addEventListener('mouseenter', () => clearTimeout(cardHideTimer));
+  tip.addEventListener('mousedown', e => e.preventDefault());
+  tip.addEventListener('click', e => {
+    const b = e.target.closest('.rc-btn'); if (!b) return;
+    const is = cardIssues[+b.dataset.i]; if (!is) return;
+    if (b.dataset.fix !== undefined) applyFix(is.fixes[+b.dataset.fix]);
+    else if (b.dataset.act === 'prev') {
+      const r = is.prev.getBoundingClientRect(), w = editorWrap.getBoundingClientRect();
+      editorWrap.scrollTop += r.top - w.top - w.height * 0.35;
+      if (hasHighlights) { CSS.highlights.set('rv-focus', new Highlight(is.prev)); clearTimeout(jumpTo.t); jumpTo.t = setTimeout(() => CSS.highlights.delete('rv-focus'), 1800); }
+      hideTip(); return;
+    }
+    else if (b.dataset.act === 'ignore' || b.dataset.act === 'ignoreall') {
+      const list = S.project.reviseIgnored = S.project.reviseIgnored || [];
+      const key = b.dataset.act === 'ignore' ? is.key : `${is.cat}|${is.word.toLowerCase()}|*`;
+      if (!list.includes(key)) list.push(key);
+      while (list.length > 3000) list.shift();
+      scheduleMeta();
+      toastAction(b.dataset.act === 'ignore' ? 'Ignored.' : `“${esc(is.word)}” won’t be flagged as ${esc(CAT_LABEL[is.cat].toLowerCase())} in this project.`, 'Undo', () => {
+        const i = S.project.reviseIgnored.indexOf(key); if (i >= 0) S.project.reviseIgnored.splice(i, 1); scheduleMeta(); runRevise();
+      }, 6000);
+    }
+    hideTip(); lastKey = '';
+    runRevise();
+  });
+  function applyFix(f) {
+    if (!f || !editor.contains(f.range.startContainer)) return;
+    editor.focus();
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(f.range);
+    S.programmatic = true;
+    try {
+      if (f.text) document.execCommand('insertText', false, f.text);
+      else document.execCommand('delete');
+    } finally { S.programmatic = false; }
+    resyncWords();
+    scheduleSave(); updateCountsSoon();
+  }
+  editorWrap.addEventListener('scroll', () => { if (!tip.classList.contains('hidden') && !tip.matches(':hover')) hideTip(); });
+
+  // ================================================================== NAME AUTOCOMPLETE
+  const Names = window.FolioNames;
+  const acPop = $('#ac-pop');
+  let ac = null;  // { items, index, node, start, end }
+  let namesTimer = null;
+  function acPrefs() {
+    let p = {}; try { p = JSON.parse(localStorage.getItem('folio-ac') || '{}'); } catch {}
+    return { on: p.on !== false, min: p.min || 3 };
+  }
+  function scheduleNames(delay = 800) {
+    clearTimeout(namesTimer);
+    namesTimer = setTimeout(async () => {
+      if (!S.slug) return;
+      const slug = S.slug;
+      await Names.rebuild(S.project, id => id === S.docId ? Promise.resolve(editor.innerHTML) : api.loadDoc(slug, id));
+      api.addSpellWords(Names.allWords()).catch(() => {});
+      if (S.revise) scheduleRevise();
+    }, delay);
+  }
+  function hideAutocomplete() { ac = null; acPop.classList.add('hidden'); }
+  function checkAutocomplete() {
+    const prefs = acPrefs();
+    if (!prefs.on || !Names.entries.length || S.programmatic) { hideAutocomplete(); return; }
+    const sel = getSelection();
+    if (!sel.rangeCount || !sel.isCollapsed) { hideAutocomplete(); return; }
+    const node = sel.anchorNode, off = sel.anchorOffset;
+    if (!node || node.nodeType !== 3) { hideAutocomplete(); return; }
+    const before = node.nodeValue.slice(0, off);
+    const m = before.match(/(?:^|[^\p{L}\p{N}'’\-])([\p{L}][\p{L}'’\-]*)$/u);
+    if (!m || m[1].length < prefs.min) { hideAutocomplete(); return; }
+    const prefix = m[1];
+    const items = Names.suggest(prefix);
+    if (!items.length) { hideAutocomplete(); return; }
+    ac = { items, index: 0, node, start: off - prefix.length, end: off, prefix };
+    renderAutocomplete();
+  }
+  function renderAutocomplete() {
+    acPop.innerHTML = ac.items.map((e, i) => `<div class="ac-item ${i === ac.index ? 'on' : ''}" data-i="${i}">
+        <span class="ac-text">${esc(e.text)}</span>${e.primary ? `<span class="ac-of">${esc(e.primary)}</span>` : ''}<span class="ac-kind">${e.kind}</span></div>`).join('') +
+      '<div class="ac-hint">Tab or Enter to insert · Esc to dismiss</div>';
+    acPop.classList.remove('hidden');
+    const r = document.createRange();
+    try { r.setStart(ac.node, ac.start); r.setEnd(ac.node, ac.end); } catch { hideAutocomplete(); return; }
+    const rect = r.getBoundingClientRect();
+    const h = acPop.offsetHeight, w = acPop.offsetWidth;
+    acPop.style.left = Math.min(rect.left, innerWidth - w - 8) + 'px';
+    acPop.style.top = (rect.bottom + 6 + h > innerHeight - 30 ? rect.top - h - 6 : rect.bottom + 6) + 'px';
+  }
+  function acceptAutocomplete(i) {
+    if (!ac) return;
+    const e = ac.items[i ?? ac.index];
+    const r = document.createRange();
+    try { r.setStart(ac.node, ac.start); r.setEnd(ac.node, Math.min(ac.end, ac.node.nodeValue.length)); } catch { hideAutocomplete(); return; }
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    const prefix = ac.prefix;
+    hideAutocomplete();
+    // typing "Gat" for "the Gatewarden" mid-sentence inserts just "Gatewarden" (you've already typed "the")
+    let text = e.text;
+    const art = text.match(/^(the|a|an)\s+(.+)$/i);
+    if (art && !art[0].toLowerCase().startsWith(prefix.toLowerCase()) && art[2].toLowerCase().startsWith(prefix.toLowerCase())) text = art[2];
+    document.execCommand('insertText', false, text);
+    Names.used(e.text);
+  }
+  editor.addEventListener('keydown', e => {
+    if (!ac) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); ac.index = (ac.index + 1) % ac.items.length; renderAutocomplete(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); ac.index = (ac.index - 1 + ac.items.length) % ac.items.length; renderAutocomplete(); }
+    else if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); acceptAutocomplete(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); hideAutocomplete(); }
+  }, true);
+  acPop.addEventListener('mousedown', e => { e.preventDefault(); const it = e.target.closest('.ac-item'); if (it) acceptAutocomplete(+it.dataset.i); });
+  editor.addEventListener('blur', () => setTimeout(hideAutocomplete, 100));
+  editor.addEventListener('mousedown', hideAutocomplete);
+  editorWrap.addEventListener('scroll', () => { if (ac) renderAutocomplete(); });
+
+  // ================================================================== SPRINTS
+  function renderSprint() {
+    const b = $('#btn-sprint'), lbl = $('#sprint-label'), bar = $('#sprint-progress'), fl = $('#sprint-float');
+    if (!S.sprint) {
+      lbl.textContent = 'Sprint'; b.classList.remove('running'); bar.style.width = '0';
+      b.title = 'Start a timed writing sprint';
+      document.body.classList.remove('sprinting'); fl.classList.add('hidden'); return;
+    }
+    const left = Math.max(0, S.sprint.end - Date.now());
+    const mm = Math.floor(left / 60000), ss = Math.floor(left / 1000) % 60;
+    const words = Math.max(0, S.sessionTyped - S.sprint.startTyped);
+    const time = `${mm}:${String(ss).padStart(2, '0')}`;
+    lbl.textContent = `${time} · ${fmt(words)}${S.sprint.goal ? '/' + fmt(S.sprint.goal) : ''} words`;
+    bar.style.width = (100 - left / (S.sprint.minutes * 60000) * 100) + '%';
+    b.classList.add('running'); b.title = 'Sprint running. Click to stop early.';
+    document.body.classList.add('sprinting');
+    fl.innerHTML = `${I.bolt}<span>${time}</span><b>${fmt(words)}</b>${S.sprint.goal ? `<span>/ ${fmt(S.sprint.goal)}</span>` : '<span>words</span>'}`;
+    fl.classList.toggle('hidden', !document.body.classList.contains('writer'));
+  }
+  async function startSprintDialog() {
+    if (S.sprint) {
+      if (await confirmBox('Stop sprint?', 'End this sprint now and see your result?', 'End sprint')) endSprint(true);
+      return;
+    }
+    const last = S.project.stats.sprints.slice(-1)[0];
+    let minutes = (last && last.minutes) || 15;
+    const body = document.createElement('div');
+    body.innerHTML = `<p>Write as much as you can before the timer runs out. Only words you type count.</p>
+      <div class="field"><label>Length</label><div class="chip-row" id="sp-len">${[5, 10, 15, 20, 25, 30, 45, 60].map(m => `<button type="button" class="chip ${m === minutes ? 'on' : ''}" data-m="${m}">${m} min</button>`).join('')}</div></div>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="field"><label>Custom minutes</label><input type="number" id="sp-custom" min="1" max="240" placeholder="${minutes}"></div>
+        <div class="field"><label>Word goal (optional)</label><input type="number" id="sp-goal" min="0" step="50" value="${(last && last.goal) || ''}" placeholder="e.g. 500"></div>
+      </div>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="sp-writer"> Switch to writer mode for the sprint</label>`;
+    $$('#sp-len .chip', body).forEach(c => c.onclick = () => { $$('#sp-len .chip', body).forEach(x => x.classList.remove('on')); c.classList.add('on'); minutes = +c.dataset.m; $('#sp-custom', body).value = ''; });
+    const ok = await modal({ title: 'Word sprint', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Start sprint', value: true, kind: 'primary' }] });
+    if (!ok) return;
+    const custom = +$('#sp-custom', body).value;
+    if (custom > 0) minutes = Math.min(240, custom);
+    const goal = Math.max(0, +$('#sp-goal', body).value || 0);
+    beginSprint(minutes, goal, { writer: $('#sp-writer', body).checked });
+  }
+  // opts: { writer, mini (gentle: cheer at the goal and keep going), message }
+  function beginSprint(minutes, goal, opts = {}) {
+    if (S.sprint) return;
+    S.sprint = { start: Date.now(), end: Date.now() + minutes * 60000, minutes, goal, startTyped: S.sessionTyped, mini: !!opts.mini };
+    S.sprint.timer = setInterval(() => {
+      const sp = S.sprint; if (!sp) return;
+      renderSprint();
+      if (sp.mini && sp.goal && !sp.cheered && S.sessionTyped - sp.startTyped >= sp.goal) { sp.cheered = true; quoteToast(`${fmt(sp.goal)} words. That was the hard part. Keep going if it's flowing — the timer's still running.`); }
+      if (Date.now() >= sp.end) endSprint(true);
+    }, 500);
+    renderSprint();
+    if (opts.writer) setWriter(true); else quoteToast(opts.message || `Sprint started: ${minutes} minutes. Go!`);
+    editor.focus();
+  }
+  async function endSprint(showResult) {
+    const sp = S.sprint; if (!sp) return;
+    clearInterval(sp.timer); S.sprint = null; renderSprint();
+    const mins = Math.max(0.1, Math.min(sp.minutes, (Date.now() - sp.start) / 60000));
+    const words = Math.max(0, S.sessionTyped - sp.startTyped);
+    const wpm = Math.round(words / mins * 10) / 10;
+    const rec = { date: new Date().toISOString(), minutes: Math.round(mins * 10) / 10, words, wpm, goal: sp.goal };
+    const prevBest = S.project.stats.sprints.reduce((a, x) => Math.max(a, x.wpm || 0), 0);
+    S.project.stats.sprints.push(rec);
+    scheduleMeta();
+    if (!showResult) return;
+    if (document.body.classList.contains('writer')) await setWriter(false);
+    const goalLine = sp.goal ? (words >= sp.goal ? `Goal of ${fmt(sp.goal)} words reached!` : `${fmt(sp.goal - words)} words short of your ${fmt(sp.goal)} goal.`) : '';
+    const best = wpm > prevBest && S.project.stats.sprints.length > 1 ? 'New personal best speed!' : `Best so far: ${prevBest || wpm} wpm`;
+    await modal({
+      title: 'Sprint finished',
+      body: `<div class="sprint-result"><div class="big">${wpm}</div><div class="lbl">words per minute</div>
+        <div class="sprint-grid"><div><b>${fmt(words)}</b><span>words</span></div><div><b>${rec.minutes}</b><span>minutes</span></div><div><b>${S.project.stats.sprints.length}</b><span>sprints in this project</span></div></div>
+        <p style="margin-top:14px">${[goalLine, best].filter(Boolean).join(' ')}</p>
+        ${quotesOn() ? (q => `<div class="sprint-quote">${quoteHTML(q)}</div>`)(Quotes.random()) : ''}</div>`,
+      buttons: [{ label: 'Done', value: true, kind: 'primary' }]
+    });
+    editor.focus();
+  }
+  $('#btn-sprint').onclick = startSprintDialog;
+  $('#btn-sprint').addEventListener('mousedown', e => e.preventDefault());
+
+  // ================================================================== GOALS, DIALS & HISTORY
+  // words typed on a given day, across every project
+  function writtenOn(day, allDays) {
+    const sets = allDays || [...(S.allDays || []), (S.project && S.project.stats.days) || {}];
+    return sets.reduce((a, d) => a + Math.max(0, d[day] || 0), 0);
+  }
+  function dayKey(offset) { const d = new Date(); d.setDate(d.getDate() - offset); return d.toLocaleDateString('en-CA'); }
+  function streaks(allDays) {
+    const wrote = k => writtenOn(k, allDays) > 0;
+    let cur = 0, i = wrote(dayKey(0)) ? 0 : 1;            // today not written yet doesn't break the streak
+    while (wrote(dayKey(i)) && i < 3650) { cur++; i++; }
+    // best streak over the last two years
+    let best = 0, run = 0;
+    for (let j = 730; j >= 0; j--) { if (wrote(dayKey(j))) { run++; best = Math.max(best, run); } else run = 0; }
+    return { current: cur, best: Math.max(best, cur) };
+  }
+  // ring dial: pct 0..1+, big centre text, small label
+  function dial({ pct, big, small, label, color, size = 132, track = 11 }) {
+    const r = (size - track) / 2, c = 2 * Math.PI * r;
+    const p = Math.max(0, Math.min(1, pct || 0));
+    const done = (pct || 0) >= 1;
+    return `<div class="dial ${done ? 'done' : ''}" style="--dial-size:${size}px">
+      <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--dial-track)" stroke-width="${track}"/>
+        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${done ? 'var(--good)' : (color || 'var(--accent)')}" stroke-width="${track}" stroke-linecap="round"
+          stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - p)}" transform="rotate(-90 ${size / 2} ${size / 2})" class="dial-arc"/>
+      </svg>
+      <div class="dial-centre"><b>${big}</b><span>${small || ''}</span></div>
+      ${label ? `<div class="dial-label">${label}</div>` : ''}
+    </div>`;
+  }
+  function historyChart(allDays, daily, days = 14) {
+    const list = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const key = dayKey(i), d = new Date(key + 'T12:00:00');
+      list.push({ key, label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), date: d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), words: writtenOn(key, allDays) });
+    }
+    const max = Math.max(1, daily * 1.15 || 0, ...list.map(x => x.words));
+    return `<div class="chart">
+      ${daily ? `<div class="chart-goal" style="bottom:${daily / max * 100}%"><span>goal ${fmt(daily)}</span></div>` : ''}
+      ${list.map((x, i) => `<div class="chart-bar ${daily && x.words >= daily ? 'met' : ''} ${i === list.length - 1 ? 'today' : ''}" title="${x.date}: ${fmt(x.words)} words">
+        <i style="height:${Math.max(x.words ? 3 : 0, x.words / max * 100)}%">${x.words ? `<em>${x.words >= 1000 ? (x.words / 1000).toFixed(1) + 'k' : x.words}</em>` : ''}</i><span>${x.label}</span></div>`).join('')}
+    </div>`;
+  }
+  function paceText(goals, total) {
+    if (!goals.total) return '';
+    const left = Math.max(0, goals.total - total);
+    if (!left) return 'Manuscript goal reached!';
+    if (!goals.deadline) return `${fmt(left)} words to go`;
+    const daysLeft = Math.ceil((new Date(goals.deadline + 'T23:59:59') - new Date()) / 86400000);
+    if (daysLeft <= 0) return `Deadline passed · ${fmt(left)} to go`;
+    return `${fmt(Math.ceil(left / daysLeft))} words/day for ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
+  }
+
+  async function goalsDialog() {
+    const g = S.project.goals;
+    const daily = S.settings.dailyGoal || 0;
+    const total = manuscriptWords();
+    const todayW = writtenOn(today());
+    let week = 0; for (let i = 0; i < 7; i++) week += writtenOn(dayKey(i));
+    const st = streaks();
+    const sprints = S.project.stats.sprints || [];
+    const bestWpm = sprints.reduce((a, x) => Math.max(a, x.wpm || 0), 0);
+    const avgWpm = sprints.length ? Math.round(sprints.reduce((a, x) => a + (x.wpm || 0), 0) / sprints.length * 10) / 10 : 0;
+    const body = document.createElement('div');
+    body.innerHTML = `
+      <div class="dial-row">
+        ${dial({ pct: daily ? todayW / daily : 0, big: fmt(todayW), small: daily ? `of ${fmt(daily)}` : 'words', label: 'Today' })}
+        ${dial({ pct: daily ? week / (daily * 7) : 0, big: fmt(week), small: daily ? `of ${fmt(daily * 7)}` : 'words', label: 'This week', color: '#7a5cc7' })}
+        ${dial({ pct: g.total ? total / g.total : 0, big: g.total ? Math.floor(total / g.total * 100) + '%' : fmt(total), small: g.total ? `${fmt(total)} / ${fmt(g.total)}` : 'words', label: 'Manuscript', color: '#c27a2c' })}
+        <div class="stat-stack">
+          <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>day streak<br><small>best ${st.best}</small></span></div>
+          <div class="stat-card bolt"><span class="ic">${I.bolt}</span><b>${bestWpm || '–'}</b><span>best sprint wpm<br><small>${sprints.length} sprints${avgWpm ? ` · avg ${avgWpm}` : ''}</small></span></div>
+        </div>
+      </div>
+      ${paceText(g, total) ? `<div class="pace">${paceText(g, total)}</div>` : ''}
+      <div class="chart-wrap"><div class="chart-cap"><span>Words written, last 14 days (all projects)</span><span>${fmt(week)} this week</span></div>${historyChart(null, daily)}</div>
+      <div class="form-grid" style="margin-top:16px">
+        <div class="field"><label>Daily goal (all projects)</label><input type="number" id="g-daily" min="0" step="50" value="${daily || ''}" placeholder="e.g. 1000"></div>
+        <div class="field"><label>Manuscript goal for this project</label><input type="number" id="g-total" min="0" step="1000" value="${g.total || ''}" placeholder="e.g. 90000"></div>
+        <div class="field"><label>Deadline (optional)</label><input type="date" id="g-deadline" value="${g.deadline || ''}" class="date-input"></div>
+      </div>
+      <p style="margin-top:10px">Only words you type count towards daily goals and streaks. Pasting and big deletions are left out so the numbers stay honest.</p>`;
+    const ok = await modal({ title: 'Goals & progress', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }, { label: 'Save goals', value: true, kind: 'primary' }] });
+    if (!ok) return;
+    g.total = Math.max(0, +$('#g-total', body).value || 0);
+    g.deadline = $('#g-deadline', body).value || '';
+    S.settings = await api.setSettings({ dailyGoal: Math.max(0, +$('#g-daily', body).value || 0) });
+    scheduleMeta(); updateStatus();
+  }
+
+  // ---- front page dashboard
+  function renderDashboard(list) {
+    const allDays = list.map(p => p.days || {});
+    const daily = (S.settings || {}).dailyGoal || 0;
+    const todayW = writtenOn(today(), allDays);
+    let week = 0; for (let i = 0; i < 7; i++) week += writtenOn(dayKey(i), allDays);
+    const st = streaks(allDays);
+    const totalWords = list.reduce((a, p) => a + (p.words || 0), 0);
+    const dash = $('#dash');
+    if (!list.length) { dash.innerHTML = ''; return; }
+    const lp = (S.settings || {}).lastPlace;
+    const lpOk = lp && list.some(p => p.slug === lp.slug);
+    const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} day${Math.round(m / 1440) === 1 ? '' : 's'} ago`; };
+    dash.innerHTML = (lpOk ? `<button class="continue-card" id="btn-continue" title="Open where you last wrote, with the cursor where you left it">
+        <span class="cc-go">Continue ›</span>
+        <span class="cc-where"><b>${esc(lp.doc || 'Untitled')}</b> · ${esc((list.find(p => p.slug === lp.slug) || {}).title || lp.project || '')} <small>${ago(lp.at)}</small></span>
+        ${lp.snippet ? `<span class="cc-snip">…${esc(lp.snippet.slice(-80))}<i class="cc-caret"></i></span>` : ''}
+      </button>` : '') + `
+      <div class="dash-card dials">
+        ${dial({ pct: daily ? todayW / daily : 0, big: fmt(todayW), small: daily ? `of ${fmt(daily)}` : 'words', label: 'Today', size: 120 })}
+        ${dial({ pct: daily ? week / (daily * 7) : 0, big: fmt(week), small: daily ? `of ${fmt(daily * 7)}` : 'words', label: 'This week', color: '#7a5cc7', size: 120 })}
+        <div class="stat-stack">
+          <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>day streak<br><small>best ${st.best}</small></span></div>
+          <div class="stat-card"><span class="ic">${I.book}</span><b>${fmt(totalWords)}</b><span>words in your manuscripts<br><small>≈ ${fmt(Math.round(totalWords / 280))} paperback pages</small></span></div>
+        </div>
+        ${daily ? '' : `<button class="btn ghost small dash-setgoal" id="dash-setgoal">Set a daily goal</button>`}
+      </div>
+      <div class="dash-card chart-card"><div class="chart-cap"><span>Last 14 days</span><span>${daily && todayW >= daily ? 'Goal met today!' : daily ? `${fmt(Math.max(0, daily - todayW))} to go today` : ''}</span></div>${historyChart(allDays, daily)}</div>`;
+    const sg = $('#dash-setgoal'); if (sg) sg.onclick = openSettings;
+    const cb = $('#btn-continue'); if (cb) cb.onclick = () => continueWriting(lp);
+  }
+
+  const goalsHere = () => { if (!document.documentElement.classList.contains('m-phone')) goalsDialog(); };
+  $('#st-session').onclick = goalsHere;
+  $('#st-today').onclick = goalsHere;
+
+  // ================================================================== SEARCH & WORD ANALYSIS
+  const Ana = window.FolioAnalysis;
+  const htmlText = html => { const d = document.createElement('div'); d.innerHTML = html; return [...d.querySelectorAll('p,h1,h2,h3,blockquote,li')].filter(e => !e.querySelector('p,h1,h2,h3')).map(e => e.textContent).join('\n') || d.textContent; };
+  function docsIn(kinds) {
+    const out = [];
+    for (const r of S.project.binder) {
+      if (!kinds.includes(r.kind)) continue;
+      walkTree(r.children || [], n => { if (n.type === 'doc' && !n.map) out.push(n); });
+    }
+    return out;
+  }
+  async function loadTexts(kinds) {
+    await flushSave();
+    const docs = docsIn(kinds);
+    const out = [];
+    for (const d of docs) {
+      const html = d.id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, d.id);
+      out.push({ id: d.id, title: d.title, html, text: htmlText(html) });
+    }
+    return out;
+  }
+  function searchRegex(q, { matchCase, wholeWord }) {
+    const src = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/['’]/g, "['’]").replace(/["“”]/g, '["“”]');
+    return new RegExp(wholeWord ? `(?<![\\p{L}\\p{N}])${src}(?![\\p{L}\\p{N}])` : src, 'gu' + (matchCase ? '' : 'i'));
+  }
+  // select the n-th match of a regex in the open editor
+  function selectMatch(re, n) {
+    const tw = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    const nodes = []; let text = '', t;
+    while ((t = tw.nextNode())) { nodes.push({ node: t, start: text.length }); text += t.nodeValue; }
+    re.lastIndex = 0; let m, i = 0;
+    while ((m = re.exec(text))) { if (i++ === n) break; if (m.index === re.lastIndex) re.lastIndex++; }
+    if (!m) return false;
+    const at = idx => { for (let k = nodes.length - 1; k >= 0; k--) if (idx >= nodes[k].start) return [nodes[k].node, idx - nodes[k].start]; return [nodes[0].node, 0]; };
+    const r = document.createRange(); const [a, ao] = at(m.index); const [b, bo] = at(m.index + m[0].length);
+    r.setStart(a, ao); r.setEnd(b, bo);
+    editor.focus(); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    const rect = r.getBoundingClientRect(), w = editorWrap.getBoundingClientRect();
+    editorWrap.scrollTop += rect.top - w.top - w.height * 0.35;
+    if (hasHighlights) { CSS.highlights.set('rv-focus', new Highlight(r)); clearTimeout(jumpTo.t); jumpTo.t = setTimeout(() => CSS.highlights.delete('rv-focus'), 1800); }
+    return true;
+  }
+  async function goToMatch(docId, q, opts, n) {
+    if (S.view !== 'write') setView('write');
+    if (S.docId !== docId) await openDoc(docId);
+    setTimeout(() => selectMatch(searchRegex(q, opts), n), 30);
+  }
+
+  async function openSearch(tab = 'search', preset = '') {
+    const body = document.createElement('div');
+    body.className = 'srch';
+    body.innerHTML = `
+      <div class="srch-tabs">
+        <button data-t="search">Find &amp; replace</button><button data-t="freq">Word frequency</button><button data-t="phrases">Repeated phrases</button><button data-t="names">Name check</button>
+        <select id="sr-scope" title="Where to look"><option value="ms">Manuscript</option><option value="all">Everything (incl. notes &amp; sheets)</option></select>
+      </div>
+      <div class="srch-pane" data-p="search">
+        <div class="srch-row"><input type="text" id="sr-q" placeholder="Find in the whole project…" value="${esc(preset)}"><label class="check"><input type="checkbox" id="sr-case"> Match case</label><label class="check"><input type="checkbox" id="sr-word" checked> Whole words</label></div>
+        <div class="srch-row"><input type="text" id="sr-r" placeholder="Replace with…"><button class="btn" id="sr-replace">Replace all</button></div>
+        <div class="srch-results" id="sr-results"><p class="srch-empty">Type to search every chapter at once.</p></div>
+      </div>
+      <div class="srch-pane" data-p="freq"><div class="srch-row"><label class="check"><input type="checkbox" id="fq-common"> Include common words (the, and, was…)</label></div><div class="srch-results" id="fq-results"></div></div>
+      <div class="srch-pane" data-p="phrases"><div class="srch-results" id="ph-results"></div></div>
+      <div class="srch-pane" data-p="names"><div class="srch-results" id="nm-results"></div></div>`;
+    let texts = [];
+    const opts = () => ({ matchCase: $('#sr-case', body).checked, wholeWord: $('#sr-word', body).checked });
+    const kinds = () => $('#sr-scope', body).value === 'all' ? ['manuscript', 'characters', 'places', 'items', 'notes', 'research', ...S.project.binder.filter(r => r.custom).map(r => r.kind)] : ['manuscript'];
+    async function reload() { texts = await loadTexts(kinds()); renderAll(); }
+    let closeModal;
+    function renderSearch() {
+      const q = $('#sr-q', body).value;
+      const res = $('#sr-results', body);
+      if (!q.trim()) { res.innerHTML = '<p class="srch-empty">Type to search every chapter at once.</p>'; return; }
+      const re = searchRegex(q, opts());
+      let total = 0, html = '';
+      for (const t of texts) {
+        const hits = []; let m; re.lastIndex = 0;
+        while ((m = re.exec(t.text))) { hits.push(m.index); if (m.index === re.lastIndex) re.lastIndex++; if (hits.length > 500) break; }
+        if (!hits.length) continue;
+        total += hits.length;
+        html += `<div class="sr-doc"><div class="sr-doc-title">${esc(t.title)} <span>${hits.length}</span></div>` +
+          hits.slice(0, 8).map((ix, i) => {
+            const a = Math.max(0, ix - 50), b = Math.min(t.text.length, ix + q.length + 60);
+            const before = t.text.slice(a, ix), hit = t.text.slice(ix, ix + q.length), after = t.text.slice(ix + q.length, b);
+            return `<button class="sr-hit" data-id="${t.id}" data-n="${i}">${a > 0 ? '…' : ''}${esc(before.replace(/\n/g, ' ¶ '))}<mark>${esc(hit)}</mark>${esc(after.replace(/\n/g, ' ¶ '))}…</button>`;
+          }).join('') + (hits.length > 8 ? `<div class="sr-more">+ ${hits.length - 8} more in this document</div>` : '') + '</div>';
+      }
+      res.innerHTML = total ? `<div class="sr-total">${fmt(total)} match${total === 1 ? '' : 'es'} in ${texts.filter(t => { re.lastIndex = 0; return re.test(t.text); }).length} document(s)</div>` + html : '<p class="srch-empty">No matches.</p>';
+      $$('.sr-hit', res).forEach(b => b.onclick = () => { closeModal(); goToMatch(b.dataset.id, q, opts(), +b.dataset.n); });
+    }
+    function renderFreq() {
+      const names = new Set(window.FolioNames.allWords().map(w => w.toLowerCase()));
+      const { total, list } = Ana.frequency(texts, { includeCommon: $('#fq-common', body).checked, names });
+      const max = list.length ? list[0].count : 1;
+      $('#fq-results', body).innerHTML = `<div class="sr-total">${fmt(total)} words. Your most-used words (names are marked). Click one to see every use.</div>` +
+        `<div class="fq-list">${list.map(x => `<button class="fq-row" data-w="${esc(x.word)}"><span class="fq-word">${esc(x.word)}${x.name ? ' <em>name</em>' : ''}</span><span class="fq-bar"><i style="width:${x.count / max * 100}%"></i></span><span class="fq-n">${fmt(x.count)}</span><span class="fq-r">${x.per10k}/10k</span></button>`).join('')}</div>`;
+      $$('.fq-row', body).forEach(b => b.onclick = () => { $('#sr-q', body).value = b.dataset.w; $('#sr-word', body).checked = true; setTab('search'); });
+    }
+    function renderPhrases() {
+      const list = Ana.phrases(texts);
+      $('#ph-results', body).innerHTML = list.length ? `<div class="sr-total">Phrases you've used 3 or more times. Some repetition is voice; a lot can read as a habit.</div>` +
+        `<div class="fq-list">${list.map(x => `<button class="fq-row" data-w="${esc(x.phrase)}"><span class="fq-word">“${esc(x.phrase)}”</span><span class="fq-n">${x.count}×</span></button>`).join('')}</div>` : '<p class="srch-empty">No phrase is repeated 3 or more times. Nice.</p>';
+      $$('#ph-results .fq-row', body).forEach(b => b.onclick = () => { $('#sr-q', body).value = b.dataset.w; $('#sr-word', body).checked = true; setTab('search'); });
+    }
+    function renderNames() {
+      const ents = window.FolioNames.entries;
+      if (!ents.length) { $('#nm-results', body).innerHTML = '<p class="srch-empty">Add characters, places or items (with a name and aliases) and Unwip will check their spelling across the book.</p>'; return; }
+      const { names, suspects } = Ana.nameCheck(texts, ents);
+      $('#nm-results', body).innerHTML = (suspects.length
+        ? `<div class="sr-total warn">Possible misspellings of your names:</div>` + suspects.map(s => `<div class="nm-row"><span><b>${esc(s.found)}</b> ×${s.count} → did you mean <b>${esc(s.suggestion)}</b>?<small>${esc(s.docs.slice(0, 3).join(', '))}${s.docs.length > 3 ? '…' : ''}</small></span><span class="nm-acts"><button class="rc-btn" data-find="${esc(s.found)}">Show</button><button class="rc-btn primary" data-fix="${esc(s.found)}" data-to="${esc(s.suggestion)}">Replace all</button></span></div>`).join('')
+        : `<div class="sr-total ok">✓ No misspelled names found.</div>`) +
+        `<div class="sr-total" style="margin-top:14px">How often each name appears</div><div class="fq-list">${names.map(n => `<button class="fq-row" data-w="${esc(n.name)}"><span class="fq-word">${esc(n.name)}</span><span class="fq-n">${fmt(n.count)}</span></button>`).join('')}</div>`;
+      $$('#nm-results [data-find]', body).forEach(b => b.onclick = () => { $('#sr-q', body).value = b.dataset.find; $('#sr-case', body).checked = true; setTab('search'); });
+      $$('#nm-results [data-fix]', body).forEach(b => b.onclick = async () => { $('#sr-q', body).value = b.dataset.fix; $('#sr-r', body).value = b.dataset.to; $('#sr-case', body).checked = true; $('#sr-word', body).checked = true; setTab('search'); });
+      $$('#nm-results .fq-row', body).forEach(b => b.onclick = () => { $('#sr-q', body).value = b.dataset.w; setTab('search'); });
+    }
+    let cur = tab;
+    function renderAll() { ({ search: renderSearch, freq: renderFreq, phrases: renderPhrases, names: renderNames })[cur](); }
+    function setTab(t) {
+      cur = t;
+      $$('.srch-tabs [data-t]', body).forEach(b => b.classList.toggle('on', b.dataset.t === t));
+      $$('.srch-pane', body).forEach(p => p.classList.toggle('hidden', p.dataset.p !== t));
+      renderAll();
+      if (t === 'search') $('#sr-q', body).focus();
+    }
+    $$('.srch-tabs [data-t]', body).forEach(b => b.onclick = () => setTab(b.dataset.t));
+    let qt; $('#sr-q', body).oninput = () => { clearTimeout(qt); qt = setTimeout(renderSearch, 150); };
+    $('#sr-case', body).onchange = renderSearch; $('#sr-word', body).onchange = renderSearch;
+    $('#fq-common', body).onchange = renderFreq;
+    $('#sr-scope', body).onchange = reload;
+    $('#sr-q', body).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const h = $('.sr-hit', body); if (h) h.click(); } });
+    $('#sr-replace', body).onclick = async () => {
+      const q = $('#sr-q', body).value, r = $('#sr-r', body).value;
+      if (!q) return;
+      const n = await replaceAll(q, r, opts(), kinds());
+      if (n != null) { await reload(); }
+    };
+    const p = modal({ title: 'Search & word analysis', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'ghost' }], onOpen: back => { back.querySelector('.modal').classList.add('xwide'); closeModal = () => back.querySelector('.m-foot .btn').click(); } });
+    await reload(); setTab(tab);
+    await p;
+  }
+
+  // Replace across documents, text only (formatting is kept). Takes a snapshot of every changed document first.
+  async function replaceAll(q, rep, opts, kinds) {
+    await flushSave();
+    const re = searchRegex(q, opts);
+    const changed = [];
+    let count = 0;
+    for (const d of docsIn(kinds)) {
+      const html = d.id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, d.id);
+      const div = document.createElement('div'); div.innerHTML = html;
+      let n = 0;
+      const tw = document.createTreeWalker(div, NodeFilter.SHOW_TEXT); let t; const nodes = [];
+      while ((t = tw.nextNode())) nodes.push(t);
+      for (const node of nodes) {
+        re.lastIndex = 0;
+        const v = node.nodeValue.replace(re, m => { n++; return /^\p{Lu}/u.test(m) && !opts.matchCase && rep ? rep[0].toUpperCase() + rep.slice(1) : rep; });
+        if (n && v !== node.nodeValue) node.nodeValue = v;
+      }
+      if (n) { changed.push({ d, before: html, after: div.innerHTML }); count += n; }
+    }
+    if (!count) { toast('Nothing to replace.'); return 0; }
+    if (!(await confirmBox('Replace all?', `Replace <b>${fmt(count)}</b> use${count === 1 ? '' : 's'} of “${esc(q)}” with “${esc(rep)}” in ${changed.length} document${changed.length === 1 ? '' : 's'}?<br><br>Unwip saves a snapshot of each document first, so you can undo this.`, 'Replace all'))) return null;
+    for (const c of changed) {
+      await api.snapSave(S.slug, c.d.id, c.before, `Before replacing “${q}” with “${rep}”`, true);
+      await api.saveDoc(S.slug, c.d.id, c.after);
+      c.d.words = countWords(htmlText(c.after));
+      if (c.d.id === S.docId) { editor.innerHTML = c.after; resyncWords(); markScenes(editor); }
+    }
+    scheduleMeta(); renderBinder(); updateStatus(); refreshSnapCount();
+    toastAction(`Replaced ${fmt(count)} in ${changed.length} document${changed.length === 1 ? '' : 's'}.`, 'Undo', async () => {
+      for (const c of changed) { await api.saveDoc(S.slug, c.d.id, c.before); c.d.words = countWords(htmlText(c.before)); if (c.d.id === S.docId) { editor.innerHTML = c.before; resyncWords(); } }
+      scheduleMeta(); renderBinder(); updateStatus(); toast('Replace undone.');
+    }, 15000);
+    return count;
+  }
+  $('#btn-search').innerHTML = I.search;
+  $('#btn-search').onclick = () => openSearch('search');
+  $('#rp-analysis').onclick = () => openSearch('freq');
+
+  // ================================================================== SNAPSHOTS
+  $('#snap-ic').innerHTML = I.history;
+  async function refreshSnapCount() {
+    if (!S.docId) return;
+    const list = await api.snapList(S.slug, S.docId).catch(() => []);
+    $('#snap-count').textContent = list.length ? list.length : '';
+  }
+  async function takeSnapshot(label) {
+    if (!S.docId) return;
+    await flushSave();
+    await api.snapSave(S.slug, S.docId, editor.innerHTML, label || '', false);
+    refreshSnapCount();
+    toast(`Snapshot saved${label ? `: “${esc(label)}”` : ''}.`);
+  }
+  // first change to a document each day keeps a copy of how it was before
+  async function autoSnapshotIfNeeded(id, previousHTML) {
+    S.autoSnapDone = S.autoSnapDone || {};
+    const key = id + '|' + today();
+    if (S.autoSnapDone[key] || !previousHTML || !htmlText(previousHTML).trim()) return;
+    S.autoSnapDone[key] = true;
+    const list = await api.snapList(S.slug, id).catch(() => []);
+    if (list.some(s => new Date(s.ts).toLocaleDateString('en-CA') === today())) return;
+    await api.snapSave(S.slug, id, previousHTML, 'Automatic: start of ' + new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' }), true);
+    refreshSnapCount();
+  }
+  async function snapshotsDialog(openTs) {
+    if (!S.docId) return;
+    await flushSave();
+    const id = S.docId, title = findNode(id).node.title;
+    const body = document.createElement('div');
+    body.className = 'snaps';
+    const paras = html => { const d = document.createElement('div'); d.innerHTML = html; return [...d.children].map(e => e.textContent); };
+    let list = [];
+    async function render(selectedTs) {
+      list = await api.snapList(S.slug, id);
+      const curWords = countWords(editor.innerText);
+      body.innerHTML = `
+        <div class="snap-side">
+          <div class="snap-take"><input type="text" id="sn-label" placeholder="Name this version (optional)"><button class="btn primary" id="sn-take">Take snapshot</button></div>
+          <div class="snap-list">${list.length ? list.map(s => `<button class="snap-item ${s.ts === selectedTs ? 'on' : ''}" data-ts="${s.ts}">
+            <b>${esc(s.label || 'Snapshot')}</b><span>${new Date(s.ts).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}${s.auto ? ' · automatic' : ''}</span></button>`).join('') : '<p class="srch-empty">No snapshots yet. Take one before a big rewrite.</p>'}</div>
+        </div>
+        <div class="snap-main" id="sn-main"><p class="srch-empty">Pick a snapshot to compare it with the current text.<br><br>Unwip also keeps one automatically the first time you change a chapter each day, and before any “Replace all”.</p></div>`;
+      $('#sn-take', body).onclick = async () => { await takeSnapshot($('#sn-label', body).value.trim()); render(); };
+      $('#sn-label', body).onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#sn-take', body).click(); } };
+      $$('.snap-item', body).forEach(b => b.onclick = () => { $$('.snap-item', body).forEach(x => x.classList.remove('on')); b.classList.add('on'); show(+b.dataset.ts, curWords); });
+      if (selectedTs) show(selectedTs, curWords);
+    }
+    async function show(ts, curWords) {
+      const html = await api.snapLoad(S.slug, id, ts);
+      if (html == null) return;
+      const d = Ana.diff(paras(html), paras(editor.innerHTML));
+      const s = list.find(x => x.ts === ts);
+      const words = countWords(htmlText(html));
+      $('#sn-main', body).innerHTML = `
+        <div class="snap-head"><div><b>${esc(s.label || 'Snapshot')}</b><span>${fmt(words)} words then → ${fmt(curWords)} now · <ins>+${fmt(d.added)}</ins> <del>−${fmt(d.removed)}</del> · ${d.changed} paragraph${d.changed === 1 ? '' : 's'} edited</span></div>
+          <div class="snap-acts"><button class="rc-btn" id="sn-rename">Rename</button><button class="rc-btn" id="sn-del">Delete</button><button class="rc-btn primary" id="sn-restore">Restore this version</button></div></div>
+        <div class="snap-legend"><del>Removed since then</del> <ins>Added since then</ins></div>
+        <div class="snap-diff">${d.html || '<p class="srch-empty">No differences.</p>'}</div>`;
+      $('#sn-restore', body).onclick = async () => {
+        if (!(await confirmBox('Restore this version?', 'Your current text will be saved as a snapshot first, so nothing is lost.', 'Restore'))) return;
+        await api.snapSave(S.slug, id, editor.innerHTML, 'Before restoring an older version', true);
+        editor.innerHTML = html; resyncWords(); markScenes(editor); S.dirty = true; await flushSave(); updateStatus(); renderBinder();
+        toast('Restored.'); render();
+      };
+      $('#sn-del', body).onclick = async () => { if (await confirmBox('Delete snapshot?', 'This saved version will be removed.', 'Delete', true)) { await api.snapDelete(S.slug, id, ts); render(); } };
+      $('#sn-rename', body).onclick = async () => { const l = await promptText('Rename snapshot', 'Name', s.label || ''); if (l != null) { await api.snapRename(S.slug, id, ts, l); render(ts); } };
+    }
+    await render(typeof openTs === 'number' ? openTs : undefined);
+    await modal({ title: `Snapshots · ${title}`, body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'ghost' }], onOpen: back => back.querySelector('.modal').classList.add('xwide') });
+    refreshSnapCount();
+  }
+  $('#btn-snap').onclick = snapshotsDialog;
+
+  // ================================================================== IMPORT
+  async function importDocxInto(parentId) {
+    let file;
+    try { file = await api.importDocx(); } catch (e) { toast('Could not open that file.'); return; }
+    if (!file) return;
+    let html;
+    try { html = await window.FolioImport.docxToHTML(file.bytes); } catch (e) { toast(esc(e.message || 'Could not read that Word file.'), 'warn', 6000); return; }
+    const chapters = window.FolioImport.splitChapters(html);
+    const split = chapters.length > 1 && await confirmBox('Split into chapters?', `This file looks like it has <b>${chapters.length} chapters</b>. Import each as its own document?`, 'Split into chapters');
+    const parent = findNode(parentId || 'root-manuscript').node;
+    const items = split ? chapters : [{ title: file.name, html }];
+    for (const c of items) {
+      const node = { id: uid(), type: 'doc', title: c.title, words: 0 };
+      const clean = Clip.dropBlankLines(Clip.cleanPaste(c.html, {})).html;
+      await api.saveDoc(S.slug, node.id, clean);
+      node.words = countWords(htmlText(clean));
+      parent.children.push(node);
+    }
+    parent.open = true;
+    scheduleMeta(); renderBinder(); updateStatus();
+    toast(`Imported ${items.length} document${items.length === 1 ? '' : 's'} from ${esc(file.name)}.`);
+  }
+  async function importScrivener() {
+    let data;
+    try { data = await api.importScrivener(); } catch (e) { toast(esc((e.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '') || 'Could not open that project.'), 'warn', 7000); return; }
+    if (!data) return;
+    let res;
+    try { res = window.FolioImport.scrivener(data, uid); } catch (e) { toast(esc(e.message), 'warn', 7000); return; }
+    const tpl = newProjectTemplate();
+    for (const r of tpl.binder) { r.children = res.roots[r.kind] || []; r.open = r.kind === 'manuscript'; }
+    tpl.importedFrom = 'Scrivener';
+    if (res.statusList && res.statusList.length) tpl.statuses = res.statusList;
+    if (res.docFont || res.docSize) tpl.style = { ...(tpl.style || {}), ...(res.docFont ? { font: res.docFont } : {}), ...(res.docSize ? { size: res.docSize } : {}) };
+    const slug = await api.createProject(data.name, tpl);
+    // documents: body text; notes go into the document's notes field
+    const project = await api.openProject(slug);
+    const ids = Object.keys(res.docs);
+    // big pictures from Scrivener are shrunk to a sensible size before saving
+    if (window.UnwipImages) for (const id of ids) {
+      if (!/<img [^>]*src="data:image/.test(res.docs[id]) || res.docs[id].length < 600000) continue;
+      const box = document.createElement('div'); box.innerHTML = res.docs[id];
+      for (const img of box.querySelectorAll('img.doc-img')) { try { const p = await window.UnwipImages.shrinkDataURL(img.src); img.src = p.src; img.dataset.w = p.w; img.dataset.h = p.h; } catch {} }
+      res.docs[id] = box.innerHTML;
+    }
+    for (const id of ids) res.docs[id] = Clip.dropBlankLines(res.docs[id]).html;      // empty lines used as spacing
+    for (const id of ids) await api.saveDoc(slug, id, res.docs[id]);
+    // word counts
+    walkTree(project.binder, n => { if (n.type === 'doc' && res.docs[n.id]) n.words = countWords(htmlText(res.docs[n.id])); });
+    project.totalWords = 0;
+    await api.saveProjectMeta(slug, project);
+    await openProject(slug);
+    S.project.totalWords = manuscriptWords(); scheduleMeta();
+    const r = res.report;
+    await modal({
+      title: 'Scrivener import finished',
+      body: `<div class="import-report">
+        <p><b>${fmt(r.documents)}</b> documents and <b>${fmt(r.folders)}</b> folders imported into a new project, “${esc(data.name)}”.</p>
+        <ul>
+          <li>Your Draft folder is now the Manuscript. Research, Trash and character or place folders went to the matching sections; other folders went to Notes.</li>
+          ${res.docFont ? `<li>Your main font, ${esc(res.docFont)}${res.docSize ? ` ${res.docSize}pt` : ''}, is now this project’s manuscript style.</li>` : ''}
+          <li>Synopses, icons and your own status labels came across (switch to Detailed mode to see the statuses)${r.withNotes ? `. Notes from ${r.withNotes} documents are in Notes › Document notes from Scrivener` : ''}.</li>
+          ${r.images ? `<li>${r.images} picture${r.images > 1 ? 's' : ''} came across as documents showing the picture.</li>` : ''}
+          ${r.empty ? `<li>${r.empty} documents were empty in Scrivener and came across empty.</li>` : ''}
+          ${r.skipped.length ? `<li>Not imported (Unwip doesn't hold these yet): ${esc(r.skipped.slice(0, 8).join(', '))}${r.skipped.length > 8 ? ` and ${r.skipped.length - 8} more` : ''}.</li>` : ''}
+          <li>Not carried over: compile settings, snapshots, and Scrivener-only styles. Your original Scrivener project is untouched.</li>
+        </ul></div>`,
+      buttons: [{ label: 'Start writing', value: true, kind: 'primary' }]
+    });
+  }
+  $('#btn-import').onclick = e => {
+    const r = e.target.getBoundingClientRect();
+    showMenu(r.left, r.bottom + 4, [
+      ...(window.UnwipBookImport ? window.UnwipBookImport.menuItems() : []), { sep: true },
+      { label: 'Scrivener project (.scriv)…', action: importScrivener },
+      { label: 'Restore from a backup file (.unwip)…', action: async () => { try { const slug = await api.backupImportFile(); if (slug) { toast('Backup restored as a new project.'); showLibrary(); } } catch (e) { toast(esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 7000); } } }
+    ]);
+  };
+  async function importWordProject() {
+    const title = await promptText('New project from a Word file', 'Project title', '');
+    if (!title) return;
+    const slug = await api.createProject(title, (() => { const t = newProjectTemplate(); t.binder[0].children = []; return t; })());
+    await openProject(slug); await importDocxInto('root-manuscript');
+  }
+
+  // ================================================================== FOCUSED / DETAILED MODE & OUTLINE
+  // Status labels are per project and fully editable (name + colour), like Scrivener's labels.
+  const DEFAULT_STATUSES = [{ id: 'todo', name: 'To do', color: '#9b968d' }, { id: 'draft', name: 'First draft', color: '#d39b2a' }, { id: 'revised', name: 'Revised', color: '#4a7fd0' }, { id: 'final', name: 'Final', color: '#3f9a5a' }];
+  function statusList() { if (!S.project.statuses) S.project.statuses = JSON.parse(JSON.stringify(DEFAULT_STATUSES)); return S.project.statuses; }
+  function statusOf(id) { return id ? statusList().find(x => x.id === id) : null; }
+  const statusColor = id => (statusOf(id) || {}).color || 'var(--line)';
+  const statusName = id => (statusOf(id) || {}).name || 'No status';
+  const statusOptions = () => [['', 'No status'], ...statusList().map(x => [x.id, x.name])];
+  async function editStatuses() {
+    const list = JSON.parse(JSON.stringify(statusList()));
+    const PRESETS = ['#9b968d', '#d39b2a', '#4a7fd0', '#3f9a5a', '#c0392b', '#7a5cc7', '#13a1a1', '#c2577a', '#e67e22', '#2c3e50'];
+    const body = document.createElement('div');
+    const render = () => {
+      body.innerHTML = `<p>Name your stages however you like (e.g. Outline, Drafted, With beta readers, Done) and pick a colour for each. They show in the binder, outline and corkboard.</p>
+        <div class="stat-edit">${list.map((x, i) => `<div class="se-row" data-i="${i}">
+          <label class="se-swatch" style="background:${x.color}"><input type="color" value="${x.color}"></label>
+          <input type="text" class="se-name" value="${esc(x.name)}">
+          <div class="se-presets">${PRESETS.map(c => `<button type="button" class="se-p" data-c="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
+          <button type="button" class="icon-btn small se-up" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" class="icon-btn small se-down" title="Move down" ${i === list.length - 1 ? 'disabled' : ''}>↓</button>
+          <button type="button" class="icon-btn small se-del" title="Remove">${I.x}</button>
+        </div>`).join('')}</div>
+        <button type="button" class="btn small" id="se-add" style="margin-top:10px">+ Add status</button>
+        <button type="button" class="btn small ghost" id="se-reset" style="margin-top:10px">Reset to defaults</button>`;
+      $$('.se-row', body).forEach(row => {
+        const x = list[+row.dataset.i];
+        $('input[type=color]', row).oninput = e => { x.color = e.target.value; $('.se-swatch', row).style.background = x.color; };
+        $('.se-name', row).oninput = e => { x.name = e.target.value; };
+        $$('.se-p', row).forEach(b => b.onclick = () => { x.color = b.dataset.c; render(); });
+        $('.se-up', row).onclick = () => { const i = +row.dataset.i; [list[i - 1], list[i]] = [list[i], list[i - 1]]; render(); };
+        $('.se-down', row).onclick = () => { const i = +row.dataset.i; [list[i + 1], list[i]] = [list[i], list[i + 1]]; render(); };
+        $('.se-del', row).onclick = () => { list.splice(+row.dataset.i, 1); render(); };
+      });
+      $('#se-add', body).onclick = () => { list.push({ id: 's' + uid(), name: 'New status', color: PRESETS[list.length % PRESETS.length] }); render(); const n = $$('.se-name', body).pop(); n.focus(); n.select(); };
+      $('#se-reset', body).onclick = () => { list.splice(0, list.length, ...JSON.parse(JSON.stringify(DEFAULT_STATUSES))); render(); };
+    };
+    render();
+    const ok = await modal({ title: 'Status labels', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
+    if (!ok) return;
+    S.project.statuses = list.map(x => ({ ...x, name: x.name.trim() || 'Untitled status' }));
+    const ids = new Set(S.project.statuses.map(x => x.id));
+    walkTree(S.project.binder, n => { if (n.status && !ids.has(n.status)) delete n.status; });
+    scheduleMeta(); renderBinder(); refreshPlanView();
+  }
+  function setMode(m) {
+    S.mode = m;
+    try { localStorage.setItem('folio-mode', m); } catch {}
+    document.body.classList.toggle('detailed', m === 'detailed');
+    $$('#mode-switch button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    if (!S.project) return;
+    if (S.revise && !revisePrefs().level) runRevise();      // Revise follows Focused/Detailed until set separately
+    if (m !== 'detailed' && S.view !== 'write') setView('write');
+    renderBinder(); fitSynopsis();
+  }
+  $$('#mode-switch button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+  function setView(v) {
+    S.view = v;
+    setTimeout(() => emit('view', v), 0);
+    $$('#plan-nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+    const views = { outline: '#outline-view', cork: '#cork-view', mood: '#mood-view', timeline: '#timeline-view' };
+    for (const [k, sel] of Object.entries(views)) $(sel).classList.toggle('hidden', v !== k);
+    $('#page').classList.toggle('hidden', v !== 'write' || !S.docId);
+    $('#empty-state').classList.toggle('hidden', v !== 'write' || !!S.docId);
+    document.body.classList.toggle('in-outline', v !== 'write');
+    document.body.classList.toggle('in-mood', v === 'mood');
+    if (v !== 'write' && S.revise) setRevise(false);
+    if (v === 'outline') renderOutline();
+    if (v === 'cork') renderCork();
+    if (v === 'mood') renderMood();
+    if (v === 'timeline') renderTimeline();
+  }
+  $$('#plan-nav button').forEach(b => b.onclick = () => setView(b.dataset.v));
+
+  // synopsis under the title (detailed mode)
+  const synopsis = $('#doc-synopsis');
+  function fitSynopsis() { synopsis.style.height = 'auto'; synopsis.style.height = synopsis.scrollHeight + 'px'; }
+  synopsis.addEventListener('input', () => { const f = findNode(S.docId); if (!f) return; f.node.synopsis = synopsis.value; fitSynopsis(); scheduleMeta(); });
+  synopsis.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); editor.focus(); } });
+
+  function renderOutline() {
+    const ov = $('#outline-view');
+    const ms = findNode('root-manuscript').node;
+    const rows = [];
+    let chapterNo = 0;
+    const walk = (list, depth) => list.forEach(n => {
+      if (depth === 0) chapterNo++;
+      rows.push({ n, depth, no: depth === 0 ? chapterNo : '' });
+      if (n.type === 'folder') walk(n.children || [], depth + 1);
+    });
+    walk(ms.children || [], 0);
+    const total = folderWords(ms);
+    const goal = (S.project.goals || {}).total || 0;
+    const counts = Object.fromEntries(statusList().map(x => [x.id, 0]));
+    rows.forEach(r => { if (r.n.type === 'doc' && statusOf(r.n.status)) counts[r.n.status]++; });
+    const docsN = rows.filter(r => r.n.type === 'doc').length;
+    ov.innerHTML = `
+      <div class="ol-head">
+        <div><h2>Outline</h2><span>${docsN} documents · ${fmt(total)} words${goal ? ` of ${fmt(goal)}` : ''}</span></div>
+        <div class="ol-status-wrap"><div class="ol-status-bar" title="Progress by status">${statusList().slice().reverse().map(x => counts[x.id] ? `<i style="--st:${x.color};flex:${counts[x.id]}" title="${esc(x.name)}: ${counts[x.id]}"></i>` : '').join('')}${docsN - Object.values(counts).reduce((a, b) => a + b, 0) ? `<i style="--st:var(--line);flex:${docsN - Object.values(counts).reduce((a, b) => a + b, 0)}"></i>` : ''}</div><button class="btn small ghost" id="ol-edit-status">Edit status labels…</button></div>
+      </div>
+      <div class="ol-table">
+        <div class="ol-row ol-th"><span>#</span><span>Title</span><span>Synopsis</span><span>POV</span><span>Status</span><span class="num">Words</span></div>
+        ${rows.map(({ n, depth, no }) => `
+          <div class="ol-row ${n.type}" data-id="${n.id}">
+            <span class="ol-no">${no}</span>
+            <span class="ol-title" style="padding-left:${depth * 18}px">${n.icon ? iconHTML(n, '') : n.type === 'folder' ? I.folder : ''}<button class="ol-open" title="Open">${esc(n.title || 'Untitled')}</button></span>
+            <span><textarea class="ol-syn" rows="1" placeholder="${n.type === 'folder' ? 'What this part covers…' : 'What happens…'}">${esc(n.synopsis || '')}</textarea></span>
+            <span><input class="ol-pov" value="${esc(n.pov || '')}" placeholder="–" list="ol-pov-list"></span>
+            <span>${n.type === 'doc' ? `<select class="ol-status" style="--st:${statusColor(n.status)}">${statusOptions().map(([v, l]) => `<option value="${v}" ${v === (n.status || '') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}</span>
+            <span class="num">${fmt(folderWords(n))}</span>
+          </div>`).join('')}
+      </div>
+      <datalist id="ol-pov-list">${[...new Set(window.FolioNames.entries.filter(e => e.kind === 'Character' && !e.primary).map(e => e.text))].map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+      <p class="ol-tip">Drag documents in the binder to reorder. Click a title to open it. Synopses also show under the title while you write in Detailed mode.</p>`;
+    $$('.ol-syn', ov).forEach(t => { const fit = () => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }; requestAnimationFrame(fit); t.oninput = () => { findNode(t.closest('.ol-row').dataset.id).node.synopsis = t.value; fit(); scheduleMeta(); }; });
+    $$('.ol-pov', ov).forEach(t => t.oninput = () => { findNode(t.closest('.ol-row').dataset.id).node.pov = t.value; scheduleMeta(); });
+    $$('.ol-status', ov).forEach(sel => sel.onchange = () => { findNode(sel.closest('.ol-row').dataset.id).node.status = sel.value; scheduleMeta(); renderBinder(); renderOutline(); });
+    $('#ol-edit-status', ov).onclick = editStatuses;
+    $$('.ol-open', ov).forEach(b => b.onclick = () => { const n = findNode(b.closest('.ol-row').dataset.id).node; if (n.type === 'doc') { setView('write'); openDoc(n.id); } else { n.open = true; S.selectedId = n.id; renderBinder(); } });
+  }
+
+  // ================================================================== CORKBOARD
+  function corkContainer() {
+    S.corkPath = (S.corkPath && S.corkPath.length && S.corkPath.every(id => findNode(id))) ? S.corkPath : ['root-manuscript'];
+    return findNode(S.corkPath[S.corkPath.length - 1]).node;
+  }
+  function renderCork() {
+    const cv = $('#cork-view');
+    const box = corkContainer();
+    const size = (() => { try { return localStorage.getItem('folio-cork-size') || 'm'; } catch { return 'm'; } })();
+    const crumbs = S.corkPath.map((id, i) => { const n = findNode(id).node; return `<button class="ck-crumb" data-i="${i}" data-id="${id}">${esc(n.title)}</button>`; }).join('<span class="ck-sep">›</span>');
+    const roots = S.project.binder.filter(r => r.root && r.kind !== 'trash');
+    const kids = box.children || [];
+    cv.innerHTML = `
+      <div class="ck-head">
+        <div class="ck-crumbs"><select class="ck-root" title="Which section to show">${roots.map(r => `<option value="${r.id}" ${r.id === S.corkPath[0] ? 'selected' : ''}>${esc(r.title)}</option>`).join('')}</select>${S.corkPath.length > 1 ? '<span class="ck-sep">›</span>' + crumbs.split('<span class="ck-sep">›</span>').slice(1).join('<span class="ck-sep">›</span>') : ''}</div>
+        <div class="ck-tools">
+          <div class="seg" title="Card size">${['s', 'm', 'l'].map(k => `<button data-size="${k}" class="${k === size ? 'on' : ''}">${k.toUpperCase()}</button>`).join('')}</div>
+          <button class="btn small" id="ck-add-folder">+ Folder card</button>
+          <button class="btn small primary" id="ck-add">+ Card</button>
+        </div>
+      </div>
+      <div class="ck-grid size-${size}" id="ck-grid">
+        ${kids.map((n, i) => {
+          const words = folderWords(n);
+          const isF = n.type === 'folder';
+          const count = isF ? (n.children || []).length : 0;
+          return `<div class="ck-card ${isF ? 'folder' : ''}" style="--st:${isF ? 'var(--line)' : statusColor(n.status)}" draggable="true" data-id="${n.id}">
+            <i class="ck-pin"></i>
+            <div class="ck-top"><span class="ck-num">${i + 1}</span>${n.icon ? `<span class="ck-icon">${iconHTML(n, '')}</span>` : ''}<input class="ck-title" value="${esc(n.title || '')}" placeholder="Untitled" spellcheck="false"></div>
+            <textarea class="ck-syn" placeholder="${isF ? 'What this part covers…' : 'What happens…'}">${esc(n.synopsis || '')}</textarea>
+            <div class="ck-foot">
+              ${isF ? `<span class="ck-chip">${count} item${count === 1 ? '' : 's'}</span>` : `<button class="ck-chip ck-status" title="Click to change status (right-click to edit labels)">${esc(statusName(n.status))}</button>`}
+              ${n.pov ? `<span class="ck-chip pov">${esc(n.pov)}</span>` : ''}
+              <span class="ck-words">${fmt(words)}</span>
+              <button class="ck-open" title="${isF ? 'Open this folder' : 'Open in the editor'}">${isF ? 'Open ›' : 'Write ›'}</button>
+            </div>
+          </div>`;
+        }).join('')}
+        <button class="ck-new" id="ck-new" tabindex="-1">${I.plus}<span>New card</span></button>
+      </div>
+      <p class="ol-tip">Drag cards to reorder (the binder and outline follow). Double-click a card to open it. Cards edit the same synopsis and status you see in the outline.</p>`;
+    const sizeBtns = $$('.seg [data-size]', cv);
+    sizeBtns.forEach(b => b.onclick = () => { try { localStorage.setItem('folio-cork-size', b.dataset.size); } catch {} renderCork(); });
+    $('.ck-root', cv).onchange = e => { S.corkPath = [e.target.value]; renderCork(); };
+    $$('.ck-crumb', cv).forEach(b => b.onclick = () => { S.corkPath = S.corkPath.slice(0, +b.dataset.i + 1); renderCork(); });
+    const addCard = async type => {
+      const root = rootOf(box.id) || box;
+      const node = type === 'folder' ? { id: uid(), type: 'folder', title: root.kind === 'manuscript' ? 'New part' : 'New folder', open: true, children: [] } : { id: uid(), type: 'doc', title: root.kind === 'manuscript' ? (S.corkPath.length > 1 ? 'New scene' : 'New chapter') : newTitleFor(root), words: 0 };
+      box.children = box.children || []; box.children.push(node);
+      if (type === 'doc' && sheetFor(root)) await api.saveDoc(S.slug, node.id, sheetTemplate(root));
+      scheduleMeta(); renderBinder(); renderCork();
+      const t = $(`.ck-card[data-id="${node.id}"] .ck-title`, cv); if (t) { t.focus(); t.select(); }
+    };
+    $('#ck-add', cv).onclick = () => addCard('doc');
+    $('#ck-new', cv).onclick = () => addCard('doc');
+    $('#ck-add-folder', cv).onclick = () => addCard('folder');
+    const grid = $('#ck-grid', cv);
+    $$('.ck-card', cv).forEach(card => {
+      const n = findNode(card.dataset.id).node;
+      const title = $('.ck-title', card), syn = $('.ck-syn', card);
+      title.oninput = () => { n.title = title.value; scheduleMeta(); renderBinder(); };
+      title.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); syn.focus(); } };
+      syn.oninput = () => { n.synopsis = syn.value; scheduleMeta(); };
+      const open = () => { if (n.type === 'folder') { S.corkPath.push(n.id); renderCork(); } else { setView('write'); openDoc(n.id); } };
+      $('.ck-open', card).onclick = open;
+      card.ondblclick = e => { if (!e.target.closest('input, textarea')) open(); };
+      const st = $('.ck-status', card);
+      if (st) st.oncontextmenu = e => { e.preventDefault(); editStatuses(); };
+      if (st) st.onclick = () => {
+        const order = statusOptions().map(x => x[0]); n.status = order[(order.indexOf(n.status || '') + 1) % order.length];
+        scheduleMeta(); renderBinder(); renderCork();
+      };
+      // only drag from the card itself, not while selecting text inside it
+      card.addEventListener('mousedown', e => {
+        card.draggable = !e.target.closest('input, textarea');
+        if (!e.target.closest('input, textarea, button')) {
+          $$('.ck-card.sel', cv).forEach(c => c.classList.remove('sel')); card.classList.add('sel');
+          S.ckSelected = n.id; S.binderActive = false;
+          if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+        }
+      });
+      card.addEventListener('dragstart', e => { S.ckDrag = n.id; card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/x-folio-card', n.id); });
+      card.addEventListener('dragend', () => { S.ckDrag = null; card.classList.remove('dragging'); $$('.ck-before, .ck-after', cv).forEach(c => c.classList.remove('ck-before', 'ck-after')); });
+      card.addEventListener('dragover', e => {
+        if (!S.ckDrag || S.ckDrag === n.id) return;
+        e.preventDefault();
+        const r = card.getBoundingClientRect(); const after = e.clientX > r.left + r.width / 2;
+        $$('.ck-before, .ck-after', cv).forEach(c => c.classList.remove('ck-before', 'ck-after'));
+        card.classList.add(after ? 'ck-after' : 'ck-before');
+      });
+      card.addEventListener('drop', e => {
+        if (!S.ckDrag || S.ckDrag === n.id) return;
+        e.preventDefault();
+        const after = card.classList.contains('ck-after');
+        const src = findNode(S.ckDrag); if (!src) return;
+        if (isInside(n.id, src.node)) return;
+        src.list.splice(src.index, 1);
+        const tgt = findNode(n.id);
+        tgt.list.splice(tgt.index + (after ? 1 : 0), 0, src.node);
+        S.ckDrag = null; scheduleMeta(); renderBinder(); renderCork();
+      });
+    });
+    // drop on a breadcrumb: move the card up to that level
+    $$('.ck-crumb, .ck-root', cv).forEach(c => {
+      c.addEventListener('dragover', e => { if (S.ckDrag) { e.preventDefault(); c.classList.add('drop'); } });
+      c.addEventListener('dragleave', () => c.classList.remove('drop'));
+      c.addEventListener('drop', e => {
+        if (!S.ckDrag) return; e.preventDefault();
+        const target = c.dataset.id || c.value; const src = findNode(S.ckDrag);
+        if (!src || target === box.id) return;
+        src.list.splice(src.index, 1); findNode(target).node.children.push(src.node);
+        S.ckDrag = null; scheduleMeta(); renderBinder(); renderCork(); toast(`Moved to “${esc(findNode(target).node.title)}”.`);
+      });
+    });
+  }
+
+  // ================================================================== MOODBOARD
+  S.mediaCache = {};
+  function boards() {
+    S.project.boards = S.project.boards || [];
+    if (!S.project.boards.length) S.project.boards.push({ id: uid(), title: 'Inspiration', items: [] });
+    if (!S.moodBoard || !S.project.boards.find(b => b.id === S.moodBoard)) S.moodBoard = S.project.boards[0].id;
+    return S.project.boards;
+  }
+  const curBoard = () => boards().find(b => b.id === S.moodBoard);
+  async function mediaURL(file) {
+    if (!S.mediaCache[file]) S.mediaCache[file] = await api.mediaGet(S.slug, file);
+    return S.mediaCache[file];
+  }
+  const NOTE_COLOURS = ['#fff3a3', '#ffd6c9', '#d3ecff', '#d9f2d0', '#eadcff'];
+  function renderMood() {
+    const mv = $('#mood-view');
+    const list = boards(), b = curBoard();
+    const zoom = S.moodZoom || 1;
+    mv.innerHTML = `
+      <div class="mb-head">
+        <select id="mb-board" title="Board">${list.map(x => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${esc(x.title)}</option>`).join('')}</select>
+        <button class="icon-btn small" id="mb-more" title="Board options">${I.dots}</button>
+        <span class="mb-sep"></span>
+        <button class="btn small" id="mb-img">${I.image}<span>Images</span></button>
+        <button class="btn small" id="mb-note">${I.sticky}<span>Note</span></button>
+        <button class="btn small" id="mb-colour">${I.palette}<span>Colour</span></button>
+        <span class="mb-hint">Drag images in from your folders, or paste them (Ctrl+V)</span>
+        <span class="mb-zoom"><input type="range" id="mb-zoom" min="0.3" max="1.5" step="0.05" value="${zoom}"><span>${Math.round(zoom * 100)}%</span></span>
+      </div>
+      <div class="mb-wrap" id="mb-wrap"><div class="mb-canvas" id="mb-canvas" style="transform:scale(${zoom})"></div>
+        ${b.items.length ? '' : '<div class="mb-empty"><b>Empty board</b><span>Add pictures of places, faces, clothes, weapons, colours, anything that sets the mood. Drag images straight in from File Explorer or a browser, or paste them.</span></div>'}
+      </div>`;
+    const canvas = $('#mb-canvas', mv), wrap = $('#mb-wrap', mv);
+    for (const it of b.items) canvas.appendChild(moodItem(it));
+    $('#mb-board', mv).onchange = e => { S.moodBoard = e.target.value; renderMood(); };
+    $('#mb-more', mv).onclick = e => showMenu(e.clientX, e.clientY, [
+      { label: 'New board…', action: async () => { const t = await promptText('New board', 'Board name (e.g. Mara, The Moor, Costumes)', ''); if (!t) return; const nb = { id: uid(), title: t, items: [] }; S.project.boards.push(nb); S.moodBoard = nb.id; scheduleMeta(); renderMood(); } },
+      { label: 'Rename board…', action: async () => { const t = await promptText('Rename board', 'Board name', b.title); if (!t) return; b.title = t; scheduleMeta(); renderMood(); } },
+      { sep: true },
+      { label: 'Delete board…', danger: true, disabled: list.length < 2, action: async () => { if (await confirmBox('Delete board?', `“${esc(b.title)}” and everything on it will be removed.`, 'Delete', true)) { S.project.boards.splice(S.project.boards.indexOf(b), 1); S.moodBoard = null; scheduleMeta(); renderMood(); } } }
+    ]);
+    // place new things in the middle of what you can see
+    const viewCentre = () => ({ x: (wrap.scrollLeft + wrap.clientWidth / 2) / zoom, y: (wrap.scrollTop + wrap.clientHeight / 2) / zoom });
+    const addItem = it => { b.items.push(it); scheduleMeta(); renderMood(); };
+    $('#mb-img', mv).onclick = async () => {
+      const files = await api.mediaPick(S.slug); const c = viewCentre();
+      files.forEach((f, i) => b.items.push({ id: uid(), type: 'image', file: f.file, x: c.x - 160 + i * 30, y: c.y - 120 + i * 30, w: 320, h: 240 }));
+      if (files.length) { scheduleMeta(); renderMood(); }
+    };
+    $('#mb-note', mv).onclick = () => { const c = viewCentre(); addItem({ id: uid(), type: 'note', text: '', color: NOTE_COLOURS[b.items.filter(i => i.type === 'note').length % NOTE_COLOURS.length], x: c.x - 110, y: c.y - 90, w: 220, h: 180, focus: true }); };
+    $('#mb-colour', mv).onclick = () => { const c = viewCentre(); addItem({ id: uid(), type: 'colour', color: '#6a4c93', label: '', x: c.x - 70, y: c.y - 80, w: 140, h: 160 }); };
+    $('#mb-zoom', mv).oninput = e => { S.moodZoom = +e.target.value; canvas.style.transform = `scale(${S.moodZoom})`; e.target.nextElementSibling.textContent = Math.round(S.moodZoom * 100) + '%'; };
+    $('#mb-zoom', mv).onchange = () => renderMood();
+    // drop image files from Explorer or a browser
+    wrap.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); wrap.classList.add('drop'); } });
+    wrap.addEventListener('dragleave', () => wrap.classList.remove('drop'));
+    wrap.addEventListener('drop', async e => {
+      wrap.classList.remove('drop');
+      const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+      if (!files.length) return;
+      e.preventDefault();
+      const r = wrap.getBoundingClientRect();
+      const x = (e.clientX - r.left + wrap.scrollLeft) / zoom, y = (e.clientY - r.top + wrap.scrollTop) / zoom;
+      await addImageFiles(files, x, y);
+    });
+  }
+  async function addImageFiles(files, x, y) {
+    const b = curBoard();
+    for (const [i, f] of files.entries()) {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+      const file = await api.mediaAdd(S.slug, bytes, ext);
+      // keep the picture's shape
+      let w = 320, h = 240;
+      try { const bmp = await createImageBitmap(f); const ratio = bmp.height / bmp.width; w = Math.min(380, bmp.width); h = Math.round(w * ratio); } catch {}
+      b.items.push({ id: uid(), type: 'image', file, x: x - w / 2 + i * 30, y: y - h / 2 + i * 30, w, h });
+    }
+    scheduleMeta(); renderMood();
+  }
+  document.addEventListener('paste', async e => {
+    if (S.view !== 'mood' || e.target.closest('.mb-note-text, input, textarea')) return;
+    const imgs = [...e.clipboardData.items].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean);
+    const wrap = $('#mb-wrap'); if (!wrap) return;
+    const z = S.moodZoom || 1, c = { x: (wrap.scrollLeft + wrap.clientWidth / 2) / z, y: (wrap.scrollTop + wrap.clientHeight / 2) / z };
+    if (imgs.length) { e.preventDefault(); await addImageFiles(imgs, c.x, c.y); return; }
+    const text = e.clipboardData.getData('text/plain');
+    if (text) { e.preventDefault(); curBoard().items.push({ id: uid(), type: 'note', text, color: NOTE_COLOURS[0], x: c.x - 110, y: c.y - 90, w: 240, h: 180 }); scheduleMeta(); renderMood(); }
+  });
+  function moodItem(it) {
+    const el = document.createElement('div');
+    el.className = 'mb-item mb-' + it.type;
+    el.style.cssText = `left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;`;
+    if (it.type === 'image') {
+      el.innerHTML = '<div class="mb-img-loading"></div>';
+      mediaURL(it.file).then(url => { if (url) el.innerHTML = `<img src="${url}" draggable="false" alt="">`; else el.innerHTML = '<div class="mb-missing">Image missing</div>'; addHandles(); });
+    } else if (it.type === 'note') {
+      el.style.background = it.color;
+      el.innerHTML = `<div class="mb-note-text" contenteditable="true" spellcheck="true" data-placeholder="Write a note…"></div>`;
+      const t = el.firstChild; t.innerText = it.text || '';
+      t.oninput = () => { it.text = t.innerText; scheduleMeta(); };
+      if (it.focus) { delete it.focus; setTimeout(() => t.focus(), 30); }
+    } else if (it.type === 'colour') {
+      el.innerHTML = `<label class="mb-swatch" style="background:${esc(it.color)}"><input type="color" value="${esc(it.color)}"></label><input class="mb-colour-label" value="${esc(it.label || '')}" placeholder="${esc(it.color)}">`;
+      const ci = $('input[type=color]', el), sw = $('.mb-swatch', el), lab = $('.mb-colour-label', el);
+      ci.oninput = () => { it.color = ci.value; sw.style.background = ci.value; lab.placeholder = ci.value; scheduleMeta(); };
+      lab.oninput = () => { it.label = lab.value; scheduleMeta(); };
+    }
+    function addHandles() {
+      if ($('.mb-del', el)) return;
+      const del = document.createElement('button'); del.className = 'mb-del'; del.title = 'Remove'; del.innerHTML = I.x;
+      const rs = document.createElement('i'); rs.className = 'mb-resize'; rs.title = 'Drag to resize';
+      el.append(del, rs);
+      del.onclick = e => { e.stopPropagation(); const b = curBoard(); b.items.splice(b.items.indexOf(it), 1); scheduleMeta(); renderMood(); toastAction('Removed from the board.', 'Undo', () => { b.items.push(it); scheduleMeta(); renderMood(); }, 6000); };
+      rs.onmousedown = e => drag(e, 'resize');
+    }
+    if (it.type !== 'image') addHandles();
+    el.addEventListener('mousedown', e => {
+      if (e.button !== 0 || e.target.closest('.mb-del, .mb-resize, input, [contenteditable]:focus')) return;
+      if (e.target.closest('[contenteditable]') && e.detail > 1) return;   // double-click to edit a note
+      drag(e, 'move');
+    });
+    function drag(e, mode) {
+      e.preventDefault();
+      const b = curBoard();
+      b.items.push(...b.items.splice(b.items.indexOf(it), 1)); el.parentNode.appendChild(el);   // bring to front
+      const z = S.moodZoom || 1, sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y, ow = it.w, oh = it.h, ratio = oh / ow;
+      el.classList.add('active');
+      const mm = ev => {
+        const dx = (ev.clientX - sx) / z, dy = (ev.clientY - sy) / z;
+        if (mode === 'move') { it.x = Math.max(0, Math.round(ox + dx)); it.y = Math.max(0, Math.round(oy + dy)); el.style.left = it.x + 'px'; el.style.top = it.y + 'px'; }
+        else {
+          it.w = Math.max(80, Math.round(ow + dx));
+          it.h = it.type === 'image' && !ev.shiftKey ? Math.round(it.w * ratio) : Math.max(60, Math.round(oh + dy));
+          el.style.width = it.w + 'px'; el.style.height = it.h + 'px';
+        }
+      };
+      const mu = () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); el.classList.remove('active'); scheduleMeta(); };
+      document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu);
+    }
+    return el;
+  }
+
+  // ================================================================== TIMELINE
+  // Events sit on "story days" (Day 1, Day 2…) or real calendar dates. Each can be linked to a chapter and to characters.
+  const EV_COLOURS = ['#4a7fd0', '#c0392b', '#3f9a5a', '#d39b2a', '#7a5cc7', '#13a1a1', '#c2577a', '#6b6b6b'];
+  function tl() {
+    S.project.timeline = S.project.timeline || { mode: 'days', lanes: 'single', events: [], zoom: 70, filter: '' };
+    return S.project.timeline;
+  }
+  const dayNum = d => Math.round(new Date(d + 'T12:00:00').getTime() / 86400000);
+  const numDay = n => new Date(n * 86400000).toISOString().slice(0, 10);
+  function evStart(e, T) { return T.mode === 'dates' ? (e.date ? dayNum(e.date) : null) : (e.day ?? null); }
+  function evEnd(e, T) { return T.mode === 'dates' ? (e.endDate ? dayNum(e.endDate) : evStart(e, T)) : (e.endDay ?? evStart(e, T)); }
+  function characterNames() {
+    const set = new Set(window.FolioNames.entries.filter(e => e.kind === 'Character' && !e.primary).map(e => e.text));
+    for (const e of tl().events) (e.chars || []).forEach(c => set.add(c));
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }
+  function chapterList() {
+    const out = []; walkTree(findNode('root-manuscript').node.children || [], n => { if (n.type === 'doc') out.push(n); }); return out;
+  }
+
+  function renderTimeline() {
+    const T = tl();
+    const tv = $('#timeline-view');
+    const placed = T.events.filter(e => evStart(e, T) != null);
+    const unplaced = T.events.filter(e => evStart(e, T) == null);
+    const shown = placed.filter(e => !T.filter || (e.chars || []).includes(T.filter));
+    const starts = placed.map(e => evStart(e, T)), ends = placed.map(e => evEnd(e, T));
+    let min = starts.length ? Math.min(...starts) : (T.mode === 'dates' ? dayNum(today()) : 1);
+    let max = ends.length ? Math.max(...ends) : min + 10;
+    if (T.mode === 'dates') min -= 1; else min = Math.min(min, 1);
+    max = Math.max(max + 3, min + 12);
+    const px = T.zoom || 70;
+    const width = (max - min + 1) * px;
+    // lanes
+    let lanes;
+    if (T.lanes === 'chars') {
+      const names = [...new Set(shown.flatMap(e => (e.chars && e.chars.length) ? e.chars : ['—']))].sort((a, b) => a === '—' ? 1 : b === '—' ? -1 : a.localeCompare(b));
+      lanes = names.map(n => ({ label: n === '—' ? 'No character' : n, events: shown.filter(e => n === '—' ? !(e.chars && e.chars.length) : e.chars.includes(n)) }));
+    } else lanes = [{ label: '', events: shown }];
+    // stack overlapping events into rows inside each lane
+    const ROW = 64;
+    for (const ln of lanes) {
+      const rows = [];
+      ln.items = ln.events.slice().sort((a, b) => evStart(a, T) - evStart(b, T)).map(e => {
+        const s = evStart(e, T), en = evEnd(e, T);
+        const minW = Math.max(150, (en - s + 1) * px - 8);
+        const x = (s - min) * px + 4;
+        let r = rows.findIndex(endX => endX <= x);
+        if (r < 0) { r = rows.length; rows.push(0); }
+        rows[r] = x + minW + 8;
+        return { e, x, w: minW, row: r, span: en > s };
+      });
+      ln.height = Math.max(1, rows.length) * ROW + 16;
+    }
+    const tick = d => T.mode === 'dates'
+      ? new Date(numDay(d) + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(px < 40 ? {} : { year: '2-digit' }) })
+      : `Day ${d}`;
+    const step = px >= 60 ? 1 : px >= 30 ? 2 : px >= 15 ? 5 : 10;
+    const ticks = []; for (let d = min; d <= max; d++) if ((d - min) % step === 0) ticks.push(d);
+    const names = characterNames();
+    tv.innerHTML = `
+      <div class="tl-head">
+        <div class="seg" title="How time is measured">${[['days', 'Story days'], ['dates', 'Calendar dates']].map(([k, l]) => `<button data-mode="${k}" class="${T.mode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <div class="seg" title="Layout">${[['single', 'One line'], ['chars', 'By character']].map(([k, l]) => `<button data-lanes="${k}" class="${T.lanes === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <select id="tl-filter" title="Follow one character"><option value="">All characters</option>${names.map(n => `<option ${n === T.filter ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+        <span class="mb-zoom"><input type="range" id="tl-zoom" min="10" max="160" step="5" value="${px}"></span>
+        <span style="flex:1"></span>
+        ${chapterList().length ? '<button class="btn small" id="tl-fromch">Add events from chapters</button>' : ''}
+        <button class="btn small primary" id="tl-add">+ Event</button>
+      </div>
+      <div class="tl-scroll" id="tl-scroll">
+        <div class="tl-inner" style="width:${width + 160}px">
+          <div class="tl-axis" style="margin-left:${T.lanes === 'chars' ? 140 : 0}px;width:${width}px">${ticks.map(d => `<span style="left:${(d - min) * px}px">${tick(d)}</span>`).join('')}</div>
+          ${lanes.map(ln => `
+            <div class="tl-lane" style="height:${ln.height}px">
+              ${T.lanes === 'chars' ? `<div class="tl-lane-label">${esc(ln.label)}</div>` : ''}
+              <div class="tl-track" style="margin-left:${T.lanes === 'chars' ? 140 : 0}px;width:${width}px;background-size:${px * step}px 100%">
+                ${ln.items.map(it => {
+                  const ch = it.e.chapterId && findNode(it.e.chapterId);
+                  return `<div class="tl-ev ${it.span ? 'span' : ''}" data-id="${it.e.id}" style="left:${it.x}px;top:${it.row * ROW + 10}px;width:${it.w}px;--ev:${it.e.color || EV_COLOURS[0]}">
+                    <b>${esc(it.e.title || 'Untitled event')}</b>
+                    <span>${ch ? '§ ' + esc(ch.node.title) : ''}${(it.e.chars || []).length && T.lanes !== 'chars' ? (ch ? ' · ' : '') + esc(it.e.chars.join(', ')) : ''}</span>
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>`).join('')}
+          ${!shown.length ? `<div class="tl-empty">${T.events.length ? 'No events for this character yet.' : '<b>No events yet</b>Add the key moments of your story: battles, births, journeys, betrayals. Link each to a chapter and the characters involved, then follow one character’s path with the filter above.'}</div>` : ''}
+        </div>
+      </div>
+      ${unplaced.length ? `<div class="tl-unplaced"><b>Not on the ${T.mode === 'dates' ? 'calendar' : 'timeline'} yet:</b> ${unplaced.map(e => `<button class="tl-chip" data-id="${e.id}">${esc(e.title || 'Untitled')}</button>`).join('')}<span class="hint">Click one to give it a ${T.mode === 'dates' ? 'date' : 'day'}.</span></div>` : ''}
+      <p class="ol-tip">Drag an event left or right to move it. Click to edit, link a chapter or add characters. Events that last longer stretch across days.</p>`;
+    $$('[data-mode]', tv).forEach(b => b.onclick = () => {
+      if (b.dataset.mode === 'dates' && !T.events.some(e => e.date) && T.events.length) toast('Give your events dates to see them on the calendar. Story days and dates are kept separately, so you can use both.', '', 7000);
+      T.mode = b.dataset.mode; scheduleMeta(); renderTimeline();
+    });
+    $$('[data-lanes]', tv).forEach(b => b.onclick = () => { T.lanes = b.dataset.lanes; scheduleMeta(); renderTimeline(); });
+    $('#tl-filter', tv).onchange = e => { T.filter = e.target.value; scheduleMeta(); renderTimeline(); };
+    $('#tl-zoom', tv).onchange = e => { T.zoom = +e.target.value; scheduleMeta(); renderTimeline(); };
+    $('#tl-add', tv).onclick = () => editEvent(null);
+    const fromCh = $('#tl-fromch', tv); if (fromCh) fromCh.onclick = addEventsFromChapters;
+    $$('.tl-chip', tv).forEach(c => c.onclick = () => editEvent(T.events.find(e => e.id === c.dataset.id)));
+    // drag to move along the line (snaps to whole days)
+    $$('.tl-ev', tv).forEach(el => {
+      const ev = T.events.find(e => e.id === el.dataset.id);
+      el.addEventListener('mousedown', down => {
+        if (down.button !== 0) return;
+        down.preventDefault();
+        const sx = down.clientX, ox = parseFloat(el.style.left); let moved = 0;
+        const mm = m => { const dx = m.clientX - sx; if (Math.abs(dx) > 3) moved = dx; el.style.left = ox + dx + 'px'; el.classList.add('dragging'); };
+        const mu = () => {
+          document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu);
+          if (!moved) { editEvent(ev); return; }
+          const shift = Math.round(moved / px);
+          if (shift) {
+            if (T.mode === 'dates') { ev.date = numDay(dayNum(ev.date) + shift); if (ev.endDate) ev.endDate = numDay(dayNum(ev.endDate) + shift); }
+            else { ev.day = ev.day + shift; if (ev.endDay != null) ev.endDay += shift; }
+            scheduleMeta();
+          }
+          renderTimeline();
+        };
+        document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu);
+      });
+    });
+  }
+
+  async function editEvent(ev) {
+    const T = tl();
+    const isNew = !ev;
+    const lastDay = T.events.reduce((a, e) => Math.max(a, e.endDay ?? e.day ?? 0), 0);
+    ev = ev || { id: uid(), title: '', day: lastDay + 1, chars: [], color: EV_COLOURS[T.events.length % EV_COLOURS.length] };
+    const chs = chapterList();
+    const body = document.createElement('div');
+    body.innerHTML = `
+      <div class="form-grid">
+        <div class="field full"><label>What happens</label><input type="text" id="ev-title" value="${esc(ev.title || '')}" placeholder="e.g. The siege of the Moor begins"></div>
+        <div class="field"><label>Story day</label><input type="number" id="ev-day" value="${ev.day ?? ''}" placeholder="e.g. 3"></div>
+        <div class="field"><label>Lasts until day (optional)</label><input type="number" id="ev-endday" value="${ev.endDay ?? ''}" placeholder="same day"></div>
+        <div class="field"><label>Calendar date (optional)</label><input type="date" class="date-input" id="ev-date" value="${ev.date || ''}"></div>
+        <div class="field"><label>Until date (optional)</label><input type="date" class="date-input" id="ev-enddate" value="${ev.endDate || ''}"></div>
+        <div class="field full"><label>Characters involved (comma separated)</label><input type="text" id="ev-chars" list="ev-char-list" value="${esc((ev.chars || []).join(', '))}" placeholder="e.g. Mara, Teo">
+          <datalist id="ev-char-list">${characterNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+        <div class="field"><label>Chapter</label><select id="ev-ch"><option value="">Not linked</option>${chs.map(c => `<option value="${c.id}" ${c.id === ev.chapterId ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select></div>
+        <div class="field"><label>Colour</label><div class="ev-colours">${EV_COLOURS.map(c => `<button type="button" class="ev-c ${c === ev.color ? 'on' : ''}" data-c="${c}" style="background:${c}"></button>`).join('')}</div></div>
+        <div class="field full"><label>Notes</label><textarea id="ev-note" rows="3" class="ev-note">${esc(ev.note || '')}</textarea></div>
+      </div>`;
+    let colour = ev.color;
+    $$('.ev-c', body).forEach(b => b.onclick = () => { $$('.ev-c', body).forEach(x => x.classList.remove('on')); b.classList.add('on'); colour = b.dataset.c; });
+    const buttons = [{ label: 'Cancel', value: null, kind: 'ghost' }];
+    if (!isNew) buttons.unshift({ label: 'Delete', value: 'delete', kind: 'ghost danger-text' });
+    if (ev.chapterId && findNode(ev.chapterId)) buttons.splice(buttons.length, 0, { label: 'Open chapter', value: 'open' });
+    buttons.push({ label: isNew ? 'Add event' : 'Save', value: 'save', kind: 'primary' });
+    const res = await modal({ title: isNew ? 'New event' : 'Edit event', body, wide: true, buttons });
+    if (!res) return;
+    if (res === 'delete') { T.events.splice(T.events.indexOf(ev), 1); scheduleMeta(); renderTimeline(); toastAction('Event deleted.', 'Undo', () => { T.events.push(ev); scheduleMeta(); renderTimeline(); }, 6000); return; }
+    const v = id => $('#' + id, body).value;
+    ev.title = v('ev-title').trim() || 'Untitled event';
+    ev.day = v('ev-day') === '' ? null : +v('ev-day');
+    ev.endDay = v('ev-endday') === '' || +v('ev-endday') <= (ev.day ?? -1e9) ? null : +v('ev-endday');
+    ev.date = v('ev-date') || null;
+    ev.endDate = v('ev-enddate') && ev.date && v('ev-enddate') > ev.date ? v('ev-enddate') : null;
+    ev.chars = v('ev-chars').split(',').map(x => x.trim()).filter(Boolean);
+    ev.chapterId = v('ev-ch') || null;
+    ev.note = v('ev-note');
+    ev.color = colour;
+    if (isNew) T.events.push(ev);
+    scheduleMeta(); renderTimeline();
+    if (res === 'open' && ev.chapterId) { setView('write'); openDoc(ev.chapterId); }
+  }
+  async function addEventsFromChapters() {
+    const T = tl();
+    const linked = new Set(T.events.map(e => e.chapterId).filter(Boolean));
+    const chs = chapterList().filter(c => !linked.has(c.id));
+    if (!chs.length) { toast('Every chapter already has an event.'); return; }
+    if (!(await confirmBox('Add events from chapters?', `Adds an event for each of ${chs.length} chapter${chs.length === 1 ? '' : 's'} (using its synopsis and point-of-view character), one day apart. You can drag them to the right days afterwards.`, 'Add events'))) return;
+    let day = T.events.reduce((a, e) => Math.max(a, e.endDay ?? e.day ?? 0), 0);
+    chs.forEach((c, i) => T.events.push({ id: uid(), title: c.synopsis ? (c.synopsis.length > 60 ? c.synopsis.slice(0, 57) + '…' : c.synopsis) : c.title, day: ++day, chars: c.pov ? [c.pov] : [], chapterId: c.id, color: EV_COLOURS[(T.events.length + i) % EV_COLOURS.length] }));
+    scheduleMeta(); renderTimeline();
+  }
+
+  // ================================================================== SPLIT VIEW
+  const spEd = $('#sp-editor');
+  $('#btn-split').innerHTML = I.columns;
+  $('#sp-open').innerHTML = I.export;
+  let spTimer = null;
+  function splitOptions() {
+    const groups = [];
+    for (const r of S.project.binder) {
+      if (r.kind === 'trash') continue;
+      const docs = []; const walk = (l, d) => l.forEach(n => { if (n.type === 'doc') docs.push({ n, d }); if (n.children) walk(n.children, d + 1); });
+      if (r.root) walk(r.children || [], 0); else if (r.type === 'doc') docs.push({ n: r, d: 0 });
+      if (docs.length) groups.push(`<optgroup label="${esc(r.root ? r.title : 'Unsorted')}">${docs.map(({ n, d }) => `<option value="${n.id}" ${n.id === S.splitId ? 'selected' : ''}>${'  '.repeat(d)}${esc(n.title || 'Untitled')}</option>`).join('')}</optgroup>`);
+    }
+    return groups.join('');
+  }
+  async function openSplit(id) {
+    await flushSplit();
+    if (!id) {   // pick something useful: first character sheet, else first note, else next chapter
+      const pick = k => { const r = S.project.binder.find(x => x.kind === k); let f = null; if (r) walkTree(r.children || [], n => { if (n.type === 'doc' && n.id !== S.docId) { f = n.id; return false; } }); return f; };
+      id = S.splitId && findNode(S.splitId) ? S.splitId : (pick('characters') || pick('notes') || pick('places') || pick('manuscript'));
+      if (!id) { toast('Add a character sheet or a note first, then open it beside your chapter.'); return; }
+    }
+    if (id === S.docId) { toast('That document is already open on the left.'); return; }
+    S.splitId = id; S.project.splitId = id; scheduleMeta();
+    $('#split-pane').classList.remove('hidden');
+    $('#btn-split').classList.add('on');
+    $('#sp-doc').innerHTML = splitOptions();
+    spEd.innerHTML = (await api.loadDoc(S.slug, id)) || '<p><br></p>';
+    spEd.classList.toggle('sheet-like', rootOf(id).kind !== 'manuscript');
+    spFoot();
+  }
+  function spFoot() { const n = findNode(S.splitId); $('#sp-foot').textContent = n ? `${fmt(countWords(spEd.innerText))} words · ${rootOf(S.splitId).title || ''}` : ''; }
+  async function flushSplit() {
+    clearTimeout(spTimer);
+    if (!S.splitDirty || !S.splitId || !S.slug) return;
+    S.splitDirty = false;
+    const html = spEd.innerHTML;
+    await api.saveDoc(S.slug, S.splitId, html);
+    const f = findNode(S.splitId); if (f) f.node.words = countWords(spEd.innerText);
+    if (f && ['characters', 'places', 'items'].includes(rootOf(S.splitId).kind)) scheduleNames();
+    scheduleMeta();
+  }
+  async function closeSplit() {
+    await flushSplit();
+    S.splitId = null; S.project && (S.project.splitId = null); scheduleMeta();
+    $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on');
+  }
+  spEd.addEventListener('input', () => { S.splitDirty = true; clearTimeout(spTimer); spTimer = setTimeout(flushSplit, 700); spFoot(); });
+  spEd.addEventListener('paste', e => {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html'), text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertHTML', false, html ? Clip.cleanPaste(html, { docFont: S.project.style.font, docSize: S.project.style.size }) : Clip.textToHTML(text));
+  });
+  $('#sp-doc').onchange = e => openSplit(e.target.value);
+  $('#sp-close').onclick = closeSplit;
+  $('#sp-open').onclick = async () => { const id = S.splitId; await closeSplit(); openDoc(id); };
+  $('#btn-split').onclick = () => S.splitId ? closeSplit() : openSplit(null);
+
+  // ================================================================== QUOTES
+  const Quotes = window.UnwipQuotes;
+  const quotesOn = () => (S.settings || {}).quotes !== false;
+  const quoteHTML = q => `<blockquote class="q-text">“${esc(q[0])}”</blockquote><cite>${esc(q[1])}</cite>`;
+  function renderQuoteCard(q) {
+    const el = $('#quote-card');
+    if (!quotesOn()) { el.classList.add('hidden'); return; }
+    q = q || Quotes.today();
+    el.classList.remove('hidden');
+    el.innerHTML = `${quoteHTML(q)}<button class="icon-btn small q-next" title="Another quote">${I.refresh}</button>`;
+    $('.q-next', el).onclick = () => renderQuoteCard(Quotes.random(q));
+  }
+  function writerQuote() {
+    if (!quotesOn()) return;
+    const el = $('#writer-quote');
+    el.innerHTML = quoteHTML(Quotes.random());
+    el.classList.remove('hidden', 'out');
+    clearTimeout(writerQuote.t); clearTimeout(writerQuote.t2);
+    writerQuote.t = setTimeout(() => el.classList.add('out'), 6000);
+    writerQuote.t2 = setTimeout(() => el.classList.add('hidden'), 7200);
+  }
+  function quoteToast(prefix) {
+    if (!quotesOn()) { if (prefix) toast(prefix); return; }
+    const q = Quotes.random();
+    toast(`${prefix ? `<b>${prefix}</b><br>` : ''}<i>“${esc(q[0])}”</i><br><span style="opacity:.7">— ${esc(q[1])}</span>`, 'quote', 9000);
+  }
+
+  // ================================================================== SHORTCUTS
+  document.addEventListener('keydown', e => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (!S.slug) return;
+    if (e.key === 'F1') { e.preventDefault(); window.UnwipHelp && window.UnwipHelp.open(); }
+    else if (e.key === 'F7') { e.preventDefault(); setRevise(!S.revise); }
+    else if (e.key === 'F5') { e.preventDefault(); if (S.revise) $('#rp-refresh').click(); }
+    else if (ctrl && e.key === '\\') { e.preventDefault(); $('#btn-split').click(); }
+    else if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); const id = S.binderActive && S.selectedId ? S.selectedId : S.docId; if (id) toggleFav(id); }
+    else if (e.key === 'F11') { e.preventDefault(); setWriter(!document.body.classList.contains('writer')); }
+    else if (e.key === 'Escape' && document.body.classList.contains('writer') && !document.querySelector('.modal-back')) { setWriter(false); }
+    else if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); openFind(); }
+    else if (ctrl && !e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); S.dirty = true; flushSave().then(() => toast('Saved')); }
+    else if (ctrl && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); copyDocForDocs(); }
+    else if (ctrl && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); openSearch('search', getSelection().toString().trim().slice(0, 60)); }
+    else if (ctrl && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); takeSnapshot(''); }
+    else if (ctrl && e.shiftKey && e.key.toLowerCase() === 'k' && document.activeElement === editor) { e.preventDefault(); splitAtCursor(); }
+    else if (e.key === 'Delete' && !ctrl && !e.altKey && !document.querySelector('.modal-back, .pv-back')) {
+      const a = document.activeElement;
+      const typing = a && (a === editor || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable);
+      const inBinder = S.binderActive && S.view !== 'mood';
+      const inCork = S.view === 'cork' && S.ckSelected;
+      if (!typing && (inBinder || inCork) && deleteSelected()) e.preventDefault();
+    }
+    else if (e.key === 'Enter' && S.binderActive && S.view === 'write' && S.docId && document.activeElement === document.body) { e.preventDefault(); editor.focus(); }
+    else if (ctrl && e.key.toLowerCase() === 'n' && !e.shiftKey) { e.preventDefault(); addNode('doc', S.selectedId); }
+  });
+
+  // ================================================================== START
+  (async function start() {
+    try { S.settings = await api.getSettings(); } catch { S.settings = {}; }
+    S.view = 'write';
+    let m = 'focused'; try { m = localStorage.getItem('folio-mode') || 'focused'; } catch {}
+    S.mode = m; document.body.classList.toggle('detailed', m === 'detailed'); $$('#mode-switch button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    buildSizeSelect();
+    try { await Fonts.loadImported(await api.importedFonts()); } catch {}
+    buildFontSelect();
+    await showLibrary();
+    const list = await api.listProjects();
+    // the add-on scripts (setup, maps, sync…) load after this one: wait for them
+    if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
+    // first time ever: the welcome setup instead of an empty library
+    if (!S.settings.onboarded && window.UnwipIntro) {
+      if (!list.length) { window.UnwipIntro.start(); return; }
+      api.setSettings({ onboarded: true }).then(st => { S.settings = st; });
+      setTimeout(() => toastAction('New: a welcome setup and a guided tour of Unwip.', 'Take the tour', () => window.UnwipIntro.start()), 4000);
+    }
+    // open the most recent project straight away
+    if (list.length && !new URLSearchParams(location.search).has('library')) openProject(list[0].slug);
+  })();
+
+  // test hooks (used by the automated checks, harmless otherwise)
+  window.__folio = { S, openProject, openDoc, copyDocForDocs, compileManuscript, flushSave, addNode, setWriter, insertCleanHTML };
+  window.__unwip = {
+    S, api, I, $, $$, esc, fmt, countWords, today, editor, editorWrap, on, emit,
+    modal, toast, toastAction, confirmBox, promptText, showMenu, quoteToast,
+    findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave,
+    renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
+    beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,
+    reloadProjectMeta, showLibrary, openProject, leaveProject: () => leaveProject(), importScrivener: () => importScrivener(), DEFAULT_STYLE, setMode, setView: v => setView(v), importWordProject: () => importWordProject(), newProjectTemplate: () => newProjectTemplate(), ROOTS,
+    tidyBlankLines, sectionDialog, templateGallery, continueWriting, noteLastPlace, caretOffset,
+    openPreview, snapshotsDialog, openSettings, goalsDialog, openFind, openSearch, splitAtCursor, setMode, restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
+  };
+})();

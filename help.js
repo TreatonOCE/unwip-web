@@ -1,0 +1,117 @@
+// Unwip - Help: what every part of Unwip does, in plain words, plus every keyboard shortcut. Searchable. F1 opens it.
+window.UnwipHelp = (function () {
+  'use strict';
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // [section, title, text, where to find it]
+  const TOPICS = [
+    ['Getting started', 'Find anything (Ctrl+K)', 'Press Ctrl+K, or click the magnifying glass, and type what you want: “snapshot”, “epub”, “map”, “goal”, or part of a chapter name. Actions, chapters and help all show up, and Enter runs it.', 'Ctrl+K, or the magnifying glass in the top bar'],
+    ['Getting started', 'The side panel', 'Revise, Comments, Snapshots and Manuscript style share one panel on the right, with a tab for each. The panel button at the top right opens the one you used last.', 'Top right, the panel button'],
+    ['Getting started', 'Exporting', 'Copy for Docs copies a chapter ready to paste. The arrow beside it has the print-ready PDF, EPUB e-book, Word file and page counts.', 'Top right, the arrow beside Copy for Docs'],
+    ['Getting started', 'On a phone', 'On a phone Unwip keeps to the essentials: your chapters, the page, Outline, Revise (the five big checks), comments, snapshots, Manuscript style, Spark and Copy for Docs. Corkboard, Moodboard, Timeline, sprints, writing goals, split view and exporting stay on the iPad and computer, where there is room for them. Nothing is lost: it is all still there when you open the book on a bigger screen.', 'Phones'],
+    ['Getting started', 'Projects', 'Each book is a project. The main screen lists them with word counts and your writing streak. Click one to open it, or use New project.', 'Main screen'],
+    ['Getting started', 'Welcome setup and tour', 'The setup asks what you wrote with before (Scrivener, Word, Google Docs…) and sets Unwip up to feel familiar. The tour points at each button and says what it does.', 'Settings › Help'],
+    ['Getting started', 'Focused and Detailed', 'Focused is a clean page with your chapter list. Detailed adds the Outline, Corkboard, Moodboard and Timeline, and status labels on each document.', 'Top left of the binder'],
+    ['Getting started', 'Where your writing is saved', 'Documents\\Unwip on your computer, one folder per project. It saves every few seconds and keeps automatic backups. You can move it to Dropbox or OneDrive to use two computers.', 'Settings › Where your projects live'],
+
+    ['The binder', 'The binder', 'The list on the left. Manuscript holds the book itself (only this part is exported). Characters, Places, Items, Notes and Research are for everything else. Drag to reorder, right-click for more.', 'Left side'],
+    ['The binder', '+ New', 'Adds a document, folder or map, a template section, or chapters from Word and other files. Select a folder first to add inside it.', 'Bottom of the binder'],
+    ['The binder', 'Template sections', 'Sections like Factions, Magic systems, Monsters, Classes & skills or Quests. Every new entry starts from the same sheet of headings, so you fill in blanks instead of starting from nothing. Pick one from the gallery or make your own.', '+ New › New template section'],
+    ['The binder', 'Character, place and item sheets', 'New entries in Characters, Places and Items start as a sheet with name, aliases and headings. Names you add here are suggested as you type in your chapters.', 'Binder'],
+    ['The binder', 'Status labels', 'Mark documents To do, First draft, Revised or Final (or your own labels). Shown as coloured dots in Detailed mode and on the corkboard.', 'Right-click a document › Status'],
+    ['The binder', 'Favourites', 'Star documents you go back to often. They appear at the top of the binder.', 'Right-click › Add to favourites, or Ctrl+D'],
+    ['The binder', 'Trash', 'Deleted things go to the Trash first, so nothing is lost by accident. The Manuscript itself can’t be deleted.', 'Bottom of the binder'],
+
+    ['Writing', 'The page', 'Just write. Paste from Google Docs or Word and the formatting is cleaned up. Ctrl+Shift+V pastes as plain text matching your manuscript.', ''],
+    ['Writing', 'Manuscript style', 'One place to set the font, size, line spacing, indents and heading styles for the whole book. Changes show on your page as you make them, and “Put it back how it was” undoes them.', 'Side panel › Style'],
+    ['Writing', 'Comments and footnotes', 'Select some words and a small bar appears: Comment or Footnote. Footnotes go into exports properly. The Comments tab in the side panel lists them all.', 'Select text, or Side panel › Comments'],
+    ['Writing', 'Selection bar', 'Select some words and a small bar appears above them with strikethrough, alignment, clear formatting, comment and footnote. The top bar keeps only what you use all the time.', 'Select text'],
+    ['Writing', 'Pictures', 'Paste, drop or insert a picture into a chapter. Click it to resize or align it.', 'Toolbar › picture button'],
+    ['Writing', 'Scene breaks', 'Inserts a centred * * * between scenes. Exports turn it into your book design’s ornament.', 'Toolbar'],
+    ['Writing', 'Split view', 'A second document beside the one you’re writing, such as a character sheet or your outline.', 'Top right, or Ctrl+\\'],
+    ['Writing', 'Split and merge', 'Split a long chapter where your cursor is, or merge a folder of scenes into one document.', 'Ctrl+Shift+K to split; right-click a folder to merge'],
+    ['Writing', 'Find and search', 'Ctrl+F finds in this document. Ctrl+Shift+F searches the whole project, with replace and a word analysis (most-used words, repeated phrases).', ''],
+    ['Writing', 'Snapshots', 'Saves a copy of a chapter before a big rewrite, so you can compare or go back.', 'Ctrl+Shift+S, or Side panel › Snapshots'],
+    ['Writing', 'Small toolbar', 'On a narrow window, tools that don’t fit move into the ⋯ menu at the end of the toolbar.', 'Toolbar'],
+
+    ['Planning', 'Outline', 'Your book as a table: titles, synopses, status and word counts. Edit them right there.', 'Detailed mode'],
+    ['Planning', 'Corkboard', 'Index cards for your chapters and scenes. Drag to rearrange; double-click to open.', 'Detailed mode'],
+    ['Planning', 'Moodboard', 'Pictures and notes for the look and feel of your book.', 'Detailed mode'],
+    ['Planning', 'Timeline', 'Key events in story days or calendar dates, linked to chapters and characters. Filter to follow one character.', 'Detailed mode'],
+    ['Planning', 'Maps', 'Generate an island, continent or island chain, or paint your own. Add mountains, forests, towns, roads, borders, labels and pins linked to place sheets. One map can hold several sections (world, region, city).', '+ New › New map'],
+    ['Planning', 'Map tools', 'Paint land 🟫 and water 🌊 (also for rivers and lakes). Forest, mountain and hill brushes scatter as you drag. The brush slider sets the size. ✋ moves things; double-click a label or pin to edit it. Clear empties the section; Ctrl+Z undoes.', 'In a map'],
+
+    ['Getting words down', 'Writer mode', 'Full screen, just the page. Typewriter scrolling keeps your line in the middle.', 'F11'],
+    ['Getting words down', 'Sprints', 'A timed burst of writing with a word target. Counts words you type, not paste.', 'Top bar › Sprint'],
+    ['Getting words down', 'Goals and streaks', 'A daily word goal, a project target and deadline, and a streak on the main screen.', 'Settings, and the main screen'],
+    ['Getting words down', 'Spark (blank page, slow days)', 'Five small tools for hard days: Just 50 words, Why am I stuck?, Messy draft (no backspace), Make it smaller, and Your patterns.', 'Top bar › Spark'],
+    ['Getting words down', 'Play', 'A practice space that doesn’t touch your books: daily prompts, exercises, story dice, warm-ups, style mimic and a journal.', 'Main screen › Play tab'],
+    ['Getting words down', 'Themes and typing feel', 'Colour themes, page colour, typewriter scrolling, focus dimming, caret style, letter animations and typing sounds.', 'Settings › Themes / Typewriter'],
+
+    ['Revising', 'Revise', 'Highlights things to look at: hard sentences, adverbs, passive voice, filler, repeated words, grammar, commonly confused words (its/it’s, their/there…) and UK/US spelling mixes. Hover a highlight for a one-click fix. Focused shows the five big things (very hard and hard sentences, adverbs, passive voice, simpler wording), like Hemingway; Detailed shows every check, including grammar. It never changes anything by itself, and there’s no AI.', 'Top bar › Revise, or F7'],
+    ['Revising', 'Grammar checks', 'Two layers. Unwip’s own grammar and confused-word checks are built to almost never be wrong, and they leave characters’ dialogue alone (people talk how they talk). “More suggestions” adds extra usage and phrase checks from Harper, a free open-source grammar engine that also runs on your computer. Those are usually right but worth a read first. Untick a group in the Revise panel to hide it.', 'Revise panel'],
+    ['Bringing work in', 'Empty lines', 'Pasting or importing removes empty lines used as spacing, so the gap between paragraphs comes only from Manuscript style. Two or more empty lines in a row become a scene break (* * *). For chapters already in Unwip, right-click a document or folder › Remove empty lines (a snapshot is kept first).', 'Right-click in the binder'],
+    ['Revising', 'Credits', 'More suggestions use Harper by Automattic (github.com/Automattic/harper), Apache License 2.0. Book fonts are under the SIL Open Font License. Everything runs offline.', ''],
+    ['Revising', 'Ignoring a highlight', 'Hover it and choose Ignore (or Ignore everywhere). Settings for each kind of highlight are in the Revise panel.', 'Revise panel'],
+    ['Revising', 'Changes from another computer', 'If a chapter was edited on your other computer, the changed words show in green when you open it.', ''],
+
+    ['Bringing work in', 'Import', 'Scrivener projects, Word, LibreOffice, RTF, text and Markdown files (one, several or a whole folder), or paste a whole book from Google Docs. Chapters are found automatically, with a preview before anything is added.', 'Main screen › Import, or + New › Bring in chapters'],
+
+    ['Getting work out', 'Preview and export', 'See your book as a paperback, an e-book or a Word / Google Docs manuscript, with page counts.', 'Top right, the eye button'],
+    ['Getting work out', 'Book designs', 'Six designs for print (Classic, Fantasy, Literary, Romance, Thriller, Modern) with chapter openings, drop caps, running heads and proper margins. The print PDF matches the preview page for page.', 'Preview › Paperback'],
+    ['Getting work out', 'Title page, copyright & more', 'Half-title, title page, copyright, dedication, epigraph, contents with page numbers, acknowledgements, about the author and also by.', 'Preview › Paperback'],
+    ['Getting work out', 'Agent submission format', 'Standard manuscript format in one click: Times New Roman 12, double-spaced, name / title / page in the header.', 'Preview › Google Docs / Word'],
+    ['Getting work out', 'Copy for Google Docs', 'Copies the chapter or whole book ready to paste into Google Docs or Word with the formatting right.', 'Top bar, or Ctrl+Shift+C'],
+
+    ['Safety and sync', 'Backups', 'Automatic backups of every project, full-project backup files you can keep anywhere, and an extra backup folder of your choice.', 'Settings › Backups'],
+    ['Safety and sync', 'Two computers', 'Put your projects in Dropbox or OneDrive. Opening a project on one computer closes it safely on the other, and the main screen shows what was recently updated where.', 'Settings › Where your projects live'],
+    ['Safety and sync', 'Updates', 'Unwip updates itself and shows what’s new.', 'Settings › Updates']
+  ];
+  const KEYS = [
+    ['Writing', [['Ctrl+B / I / U', 'Bold, italic, underline'], ['Ctrl+Shift+V', 'Paste as plain text in your manuscript style'], ['Ctrl+Alt+M', 'Comment on the selected words'], ['Ctrl+Alt+F', 'Insert a footnote'], ['Ctrl+Shift+K', 'Split the chapter at the cursor'], ['Ctrl+S', 'Save now (it saves by itself anyway)'], ['Ctrl+Shift+S', 'Take a snapshot of this chapter']]],
+    ['Finding', [['Ctrl+K', 'Find anything: actions, chapters and help'], ['Ctrl+F', 'Find in this document'], ['Ctrl+Shift+F', 'Search the whole project']]],
+    ['Binder', [['Ctrl+N', 'New document'], ['Ctrl+D', 'Add or remove from favourites'], ['Alt+↑ / ↓', 'Move the selected item up or down'], ['Alt+← / →', 'Move it out of or into a folder'], ['Delete', 'Move to the Trash'], ['Double-click', 'Rename']]],
+    ['Views', [['F11', 'Writer mode (Esc to leave)'], ['Ctrl+\\', 'Split view'], ['F7', 'Revise on or off'], ['F5', 'Re-check in Revise'], ['F1', 'This help']]],
+    ['Export', [['Ctrl+Shift+C', 'Copy for Google Docs or Word']]],
+    ['Maps', [['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Delete', 'Remove the selected thing'], ['Scroll', 'Zoom'], ['Drag empty space', 'Move around'], ['Esc', 'Deselect, or close the map']]]
+  ];
+
+  function open(query = '') {
+    document.querySelectorAll('.help-back').forEach(x => x.remove());
+    const back = document.createElement('div'); back.className = 'help-back';
+    const cats = [...new Set(TOPICS.map(t => t[0]))];
+    back.innerHTML = `<div class="help">
+      <header class="help-head"><h2>Help</h2><input id="help-q" type="search" placeholder="Search help, e.g. “backup”, “map”, “chapter titles”" value="${esc(query)}"><button class="icon-btn" id="help-x" title="Close (Esc)">✕</button></header>
+      <div class="help-body">
+        <nav class="help-nav">${cats.map(c => `<a href="#" data-c="${esc(c)}">${esc(c)}</a>`).join('')}<a href="#" data-c="__keys">Keyboard shortcuts</a>
+          <div class="help-acts"><button class="btn small" id="help-tour">Take the tour</button><button class="btn small ghost" id="help-setup">Run the setup again</button></div></nav>
+        <div class="help-main" id="help-main"></div>
+      </div></div>`;
+    document.body.appendChild(back);
+    const main = back.querySelector('#help-main'), q = back.querySelector('#help-q');
+    function render() {
+      const term = q.value.trim().toLowerCase();
+      const hit = t => !term || (t[1] + ' ' + t[2] + ' ' + t[3]).toLowerCase().includes(term);
+      let h = '';
+      for (const c of cats) {
+        const ts = TOPICS.filter(t => t[0] === c && hit(t)); if (!ts.length) continue;
+        h += `<section data-c="${esc(c)}"><h3>${esc(c)}</h3>${ts.map(t => `<div class="help-item"><b>${esc(t[1])}</b><p>${esc(t[2])}</p>${t[3] ? `<span class="help-where">${esc(t[3])}</span>` : ''}</div>`).join('')}</section>`;
+      }
+      const keyRows = KEYS.map(([g, rows]) => [g, rows.filter(r => !term || (r[0] + ' ' + r[1]).toLowerCase().includes(term))]).filter(([, r]) => r.length);
+      if (keyRows.length) h += `<section data-c="__keys"><h3>Keyboard shortcuts</h3><div class="help-keys">${keyRows.map(([g, rows]) => `<div class="hk-group"><h4>${esc(g)}</h4>${rows.map(([k, d]) => `<div class="hk"><span>${k.split(' / ').map(x => `<kbd>${esc(x)}</kbd>`).join(' / ')}</span><span>${esc(d)}</span></div>`).join('')}</div>`).join('')}</div></section>`;
+      main.innerHTML = h || `<p class="help-none">Nothing matches “${esc(q.value)}”. Try a shorter word.</p>`;
+    }
+    render();
+    q.oninput = render;
+    const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); };
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    document.addEventListener('keydown', onKey, true);
+    back.addEventListener('mousedown', e => { if (e.target === back) close(); });
+    back.querySelector('#help-x').onclick = close;
+    back.querySelectorAll('.help-nav a').forEach(a => a.onclick = e => { e.preventDefault(); q.value = ''; render(); const sec = main.querySelector(`section[data-c="${CSS.escape(a.dataset.c)}"]`); if (sec) main.scrollTop += sec.getBoundingClientRect().top - main.getBoundingClientRect().top - 8; });   // jump straight there (scrolling by hand stays smooth)
+    back.querySelector('#help-tour').onclick = () => { close(); window.UnwipIntro && window.UnwipIntro.tour(); };
+    back.querySelector('#help-setup').onclick = () => { close(); window.UnwipIntro && window.UnwipIntro.start(); };
+    setTimeout(() => q.focus(), 50);
+  }
+  return { open, TOPICS, KEYS };
+})();
