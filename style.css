@@ -1494,7 +1494,8 @@ html.web .statusbar { padding-bottom: env(safe-area-inset-bottom); height: calc(
   html.m-panel-open .writer-quote, body:not(.writer) .writer-quote { display: none; }
   .m-shade { display: block; position: fixed; inset: 0; z-index: 85; background: rgba(20, 16, 10, .32); opacity: 0; pointer-events: none; transition: opacity .2s; }
   html.m-panel-open .m-shade { opacity: 1; pointer-events: auto; }
-  .findbar { top: calc(env(safe-area-inset-top) + 56px) !important; }
+  .findbar { top: calc(env(safe-area-inset-top) + 56px) !important; left: 8px; right: 8px; }
+  .findbar input { flex: 1; min-width: 0; width: auto; font-size: 16px; }
 
   /* writer mode: just the words (the floating ✕ leaves it) */
   body.writer .m-phead, body.writer .m-pfoot, body.writer .writer-exit { display: none !important; }
@@ -1686,3 +1687,18 @@ body.detailed span.tb-detailed { display: inline-block; }
 html.m-phone #plan-nav button[data-v="cork"], html.m-phone #plan-nav button[data-v="mood"], html.m-phone #plan-nav button[data-v="timeline"],
 html.m-phone #rp-level, html.m-phone #btn-sprint, html.m-phone #btn-split { display: none !important; }
 html.m-phone #st-session, html.m-phone #st-today { pointer-events: none; }
+
+/* find in chapter (web and phone): every match softly, the current one strongly */
+::highlight(unwip-find) { background-color: rgba(250, 204, 21, .32); }
+::highlight(unwip-find-cur) { background-color: rgba(249, 115, 22, .65); color: inherit; }
+
+/* phone keyboard row: scrolls sideways, with a soft fade showing there's more */
+@media (max-width: 720px) {
+  .m-fbar { touch-action: pan-x; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .m-fbar::-webkit-scrollbar { display: none; }
+  .m-fbar.more-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+  .m-fbar.more-l.more-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 36px), transparent); }
+  .m-fbar.more-l:not(.more-r) { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+  /* writer mode on a phone: no quote (there isn't room above the chapter title) */
+  html.m-phone .writer-quote { display: none !important; }
+}

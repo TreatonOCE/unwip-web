@@ -109,7 +109,13 @@ window.UnwipMobile = (function () {
     else if (b.dataset.x === 'comment') click('#btn-comment');
     else if (b.dataset.x === 'hide') $('#m-done').click();
   };
-  fbar.addEventListener('touchstart', e => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); act(b); }, { passive: false });
+  // the row scrolls sideways (like Scrivener's), so a tap only counts if your finger didn't slide
+  let tx = 0, moved = false;
+  fbar.addEventListener('touchstart', e => { tx = e.touches[0].clientX; moved = false; }, { passive: true });
+  fbar.addEventListener('touchmove', e => { if (Math.abs(e.touches[0].clientX - tx) > 8) moved = true; }, { passive: true });
+  fbar.addEventListener('touchend', e => { const b = e.target.closest('button'); e.preventDefault(); if (b && !moved) act(b); }, { passive: false });
+  const fadeEdges = () => { const max = fbar.scrollWidth - fbar.clientWidth; fbar.classList.toggle('more-r', fbar.scrollLeft < max - 4); fbar.classList.toggle('more-l', fbar.scrollLeft > 4); };
+  fbar.addEventListener('scroll', fadeEdges, { passive: true }); addEventListener('resize', fadeEdges); setTimeout(fadeEdges, 300);
   fbar.addEventListener('mousedown', e => { e.preventDefault(); const b = e.target.closest('button'); if (b) act(b); });
   function fmtState() {
     for (const b of $$('[data-c]', fbar)) { let on = false; try { on = document.queryCommandState(b.dataset.c); } catch {} b.classList.toggle('on', on); }
@@ -130,7 +136,7 @@ window.UnwipMobile = (function () {
   // typing mode only when you tap into the page (or type on a keyboard), not when Unwip moves the cursor itself
   let tappedAt = 0;
   document.addEventListener('pointerdown', e => { tappedAt = editor.contains(e.target) ? Date.now() : 0; }, true);
-  const startEditing = () => { if (!phone.matches || root.classList.contains('m-editing')) return; mark('m-editing', true); placeBar(); fmtState(); refreshHead(); };
+  const startEditing = () => { if (!phone.matches || root.classList.contains('m-editing')) return; mark('m-editing', true); placeBar(); fmtState(); refreshHead(); setTimeout(fadeEdges, 50); };
   editor.addEventListener('focus', () => { if (Date.now() - tappedAt < 1500) startEditing(); });
   editor.addEventListener('pointerup', () => { if (document.activeElement === editor) startEditing(); });
   editor.addEventListener('keydown', startEditing);

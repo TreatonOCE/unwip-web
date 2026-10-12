@@ -200,14 +200,32 @@
   }
 
   // ------------------------------------------------------------------ find in page
-  let findCb = null;
+  // Safari has no window.find, so Unwip finds words itself and highlights them (all matches soft, the current one strong)
+  let findCb = null, findState = { text: '', idx: -1 };
+  function findRanges(text) {
+    const ed = document.getElementById('editor'); if (!ed || !text) return [];
+    const needle = text.toLowerCase(), out = [];
+    const tw = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const hay = n.data.toLowerCase(); let i = hay.indexOf(needle);
+      while (i >= 0) { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + text.length); out.push(r); i = hay.indexOf(needle, i + needle.length); }
+    }
+    return out;
+  }
+  function clearFind() { try { CSS.highlights.delete('unwip-find'); CSS.highlights.delete('unwip-find-cur'); } catch {} findState = { text: '', idx: -1 }; }
   function find(text, o = {}) {
-    if (!text) return;
-    const ed = document.getElementById('editor');
-    const all = ed ? ed.textContent.toLowerCase().split(text.toLowerCase()).length - 1 : 0;
-    let ok = false;
-    try { ok = window.find(text, false, o.forward === false, true, false, false, false); } catch {}
-    if (findCb) findCb({ matches: all, activeMatchOrdinal: ok ? 1 : 0, finalUpdate: true });
+    if (!text) { clearFind(); return; }
+    const rs = findRanges(text);
+    if (!rs.length) { clearFind(); if (findCb) findCb({ matches: 0, activeMatchOrdinal: 0, finalUpdate: true }); return; }
+    let idx = findState.text === text && o.findNext ? findState.idx + (o.forward === false ? -1 : 1) : 0;
+    idx = (idx + rs.length) % rs.length;
+    findState = { text, idx };
+    try {
+      if (window.Highlight && CSS.highlights) { CSS.highlights.set('unwip-find', new Highlight(...rs)); CSS.highlights.set('unwip-find-cur', new Highlight(rs[idx])); }
+    } catch {}
+    const el = rs[idx].startContainer.parentElement;
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (findCb) findCb({ matches: rs.length, activeMatchOrdinal: idx + 1, finalUpdate: true });
   }
 
   const noop = () => {};
@@ -301,7 +319,7 @@
     playSavePiece: async (id, html) => { await FS.write(`${LIB}/_Play/pieces/${safeId(id)}.html`, html); return true; },
     playDeletePiece: async id => { await FS.remove(`${LIB}/_Play/pieces/${safeId(id)}.html`); return true; },
     onNoteCmd: on('note'), onPastePlain: on('pastePlain'), onSplit: on('split'),
-    find: async (t, o) => find(t, o), stopFind: async () => { try { getSelection().collapseToEnd(); } catch {} },
+    find: async (t, o) => find(t, o), stopFind: async () => { clearFind(); },
     onFindResult: cb => { findCb = cb; },
     // spelling: the browser's own spellcheck does the work
     addSpellWords: async () => true,

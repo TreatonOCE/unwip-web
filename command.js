@@ -25,7 +25,7 @@ window.UnwipCommand = (function () {
     ['Insert a scene break', 'divider asterisks * * *', '', click('#btn-scene'), needDoc],
     ['Clear formatting', 'remove styles plain', '', click('#btn-clear'), needDoc],
     ['Start a writing sprint', 'timer timed session pomodoro', '', click('#btn-sprint'), desk(inProject)],
-    ['Spark: ideas to get going', 'stuck writers block blank procrastinating prompts help, '', click('#btn-stuck'), inProject],
+    ['Spark: ideas to get going', 'stuck writers block blank procrastinating prompts help', '', click('#btn-stuck'), inProject],
     ['Copy for Docs', 'clipboard google docs word paste', 'Ctrl+Shift+C', click('#btn-copy-docs'), needDoc],
     ['Preview & page counts', 'pages paperback kindle', '', () => U.openPreview(), desk(inProject)],
     ['Export a print-ready PDF', 'paperback print kdp interior', '', () => U.openPreview('paperback'), desk(inProject)],
@@ -93,6 +93,17 @@ window.UnwipCommand = (function () {
       docs.sort((a, b) => b.s - a.s);
       if (docs.length) groups.push(['Chapters & sheets', docs.slice(0, 5)]);
     }
+    // typing a word also offers to look for it in your writing
+    const raw = String(qRaw || '').trim();
+    if (raw.length >= 2 && S.project) {
+      const txt = [];
+      if (S.docId) {
+        const ed = U.editor, n = ed ? ed.textContent.toLowerCase().split(raw.toLowerCase()).length - 1 : 0;
+        txt.push({ label: `Find “${raw}” in this chapter`, sub: n ? `${n} match${n === 1 ? '' : 'es'}` : 'No matches in this chapter', run: () => { U.openFind(); const fi = document.getElementById('find-input'); if (fi) { fi.value = raw; fi.dispatchEvent(new Event('input', { bubbles: true })); } }, ic: 'find' });
+      }
+      txt.push({ label: `Search the whole book for “${raw}”`, sub: 'Every chapter, with find and replace', run: () => U.openSearch('search', raw), ic: 'find' });
+      groups.push(['Your writing', txt]);
+    }
     if (q && window.UnwipHelp) {
       const help = window.UnwipHelp.TOPICS.map(t => ({ s: score(q, t[1], `${t[0]} ${t[2]}`), label: t[1], sub: t[2].length > 70 ? t[2].slice(0, 68) + '…' : t[2], run: () => window.UnwipHelp.open(t[1]), ic: 'help' })).filter(x => x.s > 0);
       help.sort((a, b) => b.s - a.s);
@@ -106,6 +117,7 @@ window.UnwipCommand = (function () {
     act: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg>',
     doc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>',
     map: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>',
+    find: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
     help: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .6-1.5 1.2-1.5 2.5M12 17h.01"/></svg>'
   };
   let back = null, items = [], pick = 0;
