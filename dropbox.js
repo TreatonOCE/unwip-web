@@ -65,12 +65,12 @@ window.UnwipDropbox = (function () {
     return r;
   }
   const rpc = (path, body) => call(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  async function listAll(path, recursive) {
+  async function listAll(path, recursive, onPage) {
     let r = await rpc('/files/list_folder', { path, recursive, include_deleted: false, limit: 2000 });
     if (r.status === 409) return [];                         // the folder isn't there yet
     if (!r.ok) throw new Error('Dropbox list failed (' + r.status + ')');
-    let j = await r.json(); const out = [...j.entries];
-    while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) throw new Error('Dropbox list failed'); j = await r.json(); out.push(...j.entries); }
+    let j = await r.json(); const out = [...j.entries]; onPage && onPage(out.length);
+    while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) throw new Error('Dropbox list failed'); j = await r.json(); out.push(...j.entries); onPage && onPage(out.length); }
     return out;
   }
   async function download(pathLower) {
@@ -97,7 +97,19 @@ window.UnwipDropbox = (function () {
   const asBytes = v => v == null ? null : typeof v === 'string' ? new TextEncoder().encode(v) : v instanceof Uint8Array ? v : new Uint8Array(v);
 
   // ---------------------------------------------------------------- the sync itself
-  let running = null, lastError = '', progress = null;
+  let running = null, lastError = '', progress = null, renderT = 0;
+  // the pill and Settings card follow along, at most a few times a second
+  const renderSoon = () => { if (!renderT) renderT = setTimeout(() => { renderT = 0; render(); }, 250); };
+  // what the sync is doing right now, in words
+  function progressText(short) {
+    const p = progress; if (!p) return 'Syncing…';
+    if (p.phase === 'move') return short ? `Moving… ${p.moved || 0}` : `Moving books in Dropbox… ${p.moved || 0} moved`;
+    if (p.phase === 'list') return short ? `Checking… ${(p.found || 0).toLocaleString()}` : `Checking Dropbox… ${(p.found || 0).toLocaleString()} files`;
+    const left = Math.max(0, p.todo - p.done);
+    if (short) return left ? `Syncing… ${left.toLocaleString()} left` : 'Syncing…';
+    const xfer = (p.down || p.up) ? ` (↓${p.down || 0} ↑${p.up || 0})` : '';
+    return left ? `Syncing… ${left.toLocaleString()} file${left === 1 ? '' : 's'} left${xfer}` : 'Syncing… finishing';
+  }
   function sync(opts = {}) {
     if (!connected() || !KEY) return Promise.resolve(false);
     if (running) { running.again = true; return running.p; }
@@ -113,13 +125,14 @@ window.UnwipDropbox = (function () {
   async function flatten() {
     const top = await listAll(OLD, false);
     if (!top.length || top.some(e => e.name.toLowerCase() === 'project.json')) return;   // nothing to move (or it's a book called Unwip)
+    progress = { phase: 'move', moved: 0 }; renderSoon();
     const there = new Set((await listAll('', false)).map(e => e.name.toLowerCase()));
     const move = (from, to, autorename) => rpc('/files/move_v2', { from_path: from, to_path: to, autorename: !!autorename, allow_ownership_transfer: false });
     for (const e of top) {
       if (e.name.toLowerCase() === 'unwip') continue;
       if (!there.has(e.name.toLowerCase())) {
         const r = await move(e.path_lower, '/' + e.name); if (!r.ok && r.status !== 409) throw new Error('Dropbox move failed (' + r.status + ')');
-        if (r.ok) continue;
+        if (r.ok) { progress.moved++; renderSoon(); continue; }
       }
       // already there (e.g. written by an older version after the move): bring over what's missing, keep clashes aside
       for (const f of await listAll(e.path_lower, true)) {
@@ -135,10 +148,11 @@ window.UnwipDropbox = (function () {
   async function syncOnce(opts) {
     await load();
     await flatten();
+    progress = { phase: 'list', found: 0 }; renderSoon();
     const changedNow = new Set(dirty); dirty.clear();
     // what's in Dropbox
     const remote = {};
-    for (const e of await listAll(REMOTE, true)) {
+    for (const e of await listAll(REMOTE, true, n => { progress.found = n; renderSoon(); })) {
       if (e['.tag'] !== 'file') continue;
       const rel = e.path_display.slice(REMOTE.length + 1), k = e.path_lower.slice(REMOTE.length + 1);
       if (tracked(rel)) remote[k] = { rel, rev: e.rev, hash: e.content_hash, lower: e.path_lower };
@@ -158,11 +172,11 @@ window.UnwipDropbox = (function () {
     const local = {};
     for (const p of await FS.keys(LOCAL)) { const rel = p.slice(LOCAL.length); if (tracked(rel)) local[rel.toLowerCase()] = { rel }; }
     const keys = [...new Set([...Object.keys(remote), ...Object.keys(local), ...Object.keys(st.records)])];
-    const todo = keys.length; let done = 0; progress = { done, todo };
+    const todo = keys.length; let done = 0; progress = { phase: 'files', done, todo, down: 0, up: 0 }; renderSoon();
     const touched = new Set();
     for (const k of keys) {
       const R = remote[k], L = local[k], rec = st.records[k];
-      progress.done = ++done; if (done % 25 === 0) render();
+      progress.done = ++done; renderSoon();
       let lb = null, lh = null;
       if (L) {
         if (rec && rec.hash && !changedNow.has(k) && R && rec.rev === R.rev) continue;   // nothing happened on either side
@@ -187,11 +201,13 @@ window.UnwipDropbox = (function () {
     if (touched.size) tell(touched);
   }
   async function push(k, rel, bytes, hash, rev) {
+    if (progress) progress.up++;
     const res = await upload(rel, bytes, rev);
     if (res.conflict) { st.records[k] = { rev: 'conflict', hash: '' }; running && (running.again = true); dirty.add(k); return; }
     st.records[k] = { rev: res.rev, hash: res.content_hash || hash };
   }
   async function pull(k, R, touched) {
+    if (progress) progress.down++;
     const b = await download(R.lower);
     const localRel = R.rel;   // Dropbox's spelling of the name
     await rawWrite(LOCAL + localRel, isText(localRel) ? new TextDecoder().decode(b) : b);
@@ -321,7 +337,7 @@ window.UnwipDropbox = (function () {
     const bar = document.createElement('div');
     bar.innerHTML = `<div class="dbx-first"><span class="sy-spin"></span><div><b>Bringing your books from Dropbox…</b><span id="dbx-prog">Starting</span></div></div>`;
     const p = U.modal({ title: 'Connected to Dropbox', body: bar, buttons: [{ label: 'Carry on in the background', value: true, kind: 'ghost' }] });
-    const tick = setInterval(() => { const el = bar.querySelector('#dbx-prog'); if (el && progress) el.textContent = `${progress.done} of ${progress.todo} files checked`; }, 300);
+    const tick = setInterval(() => { const el = bar.querySelector('#dbx-prog'); if (el && progress) el.textContent = progressText(); }, 300);
     const ok = await sync();
     clearInterval(tick);
     document.querySelectorAll('.modal-back').forEach(m => { if (m.contains(bar)) { const b = m.querySelector('.btn'); if (b) b.click(); } });
@@ -343,10 +359,10 @@ window.UnwipDropbox = (function () {
 
   // ---------------------------------------------------------------- what you see: a status pill on the main screen and a Settings card
   const ago = t => { if (!t) return 'not yet'; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(t).toLocaleDateString(); };
-  function statusText() {
+  function statusText(short) {
     if (!st || !connected()) return { cls: 'off', text: 'Connect Dropbox' };
     if (st.broken) return { cls: 'warn', text: 'Dropbox: sign in again' };
-    if (running) return { cls: 'busy', text: progress ? `Syncing… ${progress.done}/${progress.todo}` : 'Syncing…' };
+    if (running) return { cls: 'busy', text: progressText(short) };
     if (lastError) return { cls: 'warn', text: navigator.onLine === false ? 'Offline · will sync later' : 'Dropbox: couldn’t sync' };
     return { cls: 'ok', text: `Synced ${ago(st.last)}` };
   }
@@ -355,7 +371,7 @@ window.UnwipDropbox = (function () {
     const head = document.querySelector('.lib-head-right'); if (!head) return;
     let pill = document.getElementById('dbx-pill');
     if (!pill) { pill = document.createElement('button'); pill.id = 'dbx-pill'; pill.className = 'dbx-pill'; head.insertBefore(pill, head.firstChild); pill.onclick = pillClick; }
-    const s = statusText();
+    const s = statusText(true);
     pill.className = 'dbx-pill ' + s.cls; pill.innerHTML = CLOUD + `<span>${esc(s.text)}</span>`;
     pill.title = connected() ? `Dropbox${st.email ? ' · ' + st.email : ''}. Tap to sync now.` : 'Keep your books in step with your PC through Dropbox';
     const card = document.getElementById('dbx-card'); if (card) fillCard(card);
