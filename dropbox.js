@@ -57,11 +57,22 @@ window.UnwipDropbox = (function () {
     const j = await r.json(); st.access = j.access_token; st.exp = Date.now() + (j.expires_in || 14400) * 1000; st.broken = false; await persist();
     return st.access;
   }
-  async function call(url, opts, retry = true) {
+  // Dropbox asks apps to slow down when lots of files move at once (429) and sometimes has a moment (5xx);
+  // a phone connection can also drop. Wait as asked and try again, rather than giving up on the whole sync.
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+  async function call(url, opts, attempt = 0) {
     const t = await token();
-    const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + t } });
-    if (r.status === 401 && retry) { st.exp = 0; return call(url, opts, false); }
-    if (r.status === 429 && retry) { await new Promise(res => setTimeout(res, 1500)); return call(url, opts, false); }
+    let r;
+    try { r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + t } }); }
+    catch (e) { if (attempt < 4) { await sleep(1000 * 2 ** attempt); return call(url, opts, attempt + 1); } throw new Error('No connection to Dropbox'); }
+    if (r.status === 401 && attempt === 0) { st.exp = 0; return call(url, opts, 1); }
+    if ((r.status === 429 || r.status >= 500) && attempt < 8) {
+      const after = +(r.headers.get('Retry-After') || 0);
+      if (progress) { progress.waiting = true; renderSoon(); }
+      await sleep(Math.min(60000, after ? after * 1000 : 1500 * 2 ** Math.min(attempt, 5)));
+      if (progress) progress.waiting = false;
+      return call(url, opts, attempt + 1);
+    }
     return r;
   }
   const rpc = (path, body) => call(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -106,6 +117,7 @@ window.UnwipDropbox = (function () {
     if (p.phase === 'move') return short ? `Moving… ${p.moved || 0}` : `Moving books in Dropbox… ${p.moved || 0} moved`;
     if (p.phase === 'list') return short ? `Checking… ${(p.found || 0).toLocaleString()}` : `Checking Dropbox… ${(p.found || 0).toLocaleString()} files`;
     const left = Math.max(0, p.todo - p.done);
+    if (p.waiting) return short ? 'Dropbox busy, waiting…' : 'Dropbox asked Unwip to slow down for a moment, carrying on shortly…';
     if (short) return left ? `Syncing… ${left.toLocaleString()} left` : 'Syncing…';
     const xfer = (p.down || p.up) ? ` (↓${p.down || 0} ↑${p.up || 0})` : '';
     return left ? `Syncing… ${left.toLocaleString()} file${left === 1 ? '' : 's'} left${xfer}` : 'Syncing… finishing';
@@ -131,14 +143,17 @@ window.UnwipDropbox = (function () {
     for (const e of top) {
       if (e.name.toLowerCase() === 'unwip') continue;
       if (!there.has(e.name.toLowerCase())) {
-        const r = await move(e.path_lower, '/' + e.name); if (!r.ok && r.status !== 409) throw new Error('Dropbox move failed (' + r.status + ')');
+        const r = await move(e.path_lower, '/' + e.name);
         if (r.ok) { progress.moved++; renderSoon(); continue; }
+        if (r.status !== 409) throw new Error('Dropbox move failed (' + r.status + ')');
+        // 409 is either "already there" or "too many files to move in one go": both are handled file by file below
       }
       // already there (e.g. written by an older version after the move): bring over what's missing, keep clashes aside
       for (const f of await listAll(e.path_lower, true)) {
         if (f['.tag'] !== 'file') continue;
         const rel = f.path_display.slice(OLD.length + 1);
         const r = await move(f.path_lower, '/' + rel);
+        if (r.ok) { progress.moved++; renderSoon(); }
         if (r.status === 409) await move(f.path_lower, `/${rel.split('/')[0]}/backups/sync-conflicts/${Date.now()} ${rel.split('/').pop()}`, true);
       }
     }
@@ -171,12 +186,14 @@ window.UnwipDropbox = (function () {
     // what's here
     const local = {};
     for (const p of await FS.keys(LOCAL)) { const rel = p.slice(LOCAL.length); if (tracked(rel)) local[rel.toLowerCase()] = { rel }; }
-    const keys = [...new Set([...Object.keys(remote), ...Object.keys(local), ...Object.keys(st.records)])];
+    const keys = [...new Set([...Object.keys(remote), ...Object.keys(local), ...Object.keys(st.records)])]
+      .sort((a, b) => (/^[^/]+\/project\.json$/.test(b) ? 1 : 0) - (/^[^/]+\/project\.json$/.test(a) ? 1 : 0) || (/\/docs\//.test(b) ? 1 : 0) - (/\/docs\//.test(a) ? 1 : 0));
     const todo = keys.length; let done = 0; progress = { phase: 'files', done, todo, down: 0, up: 0 }; renderSoon();
     const touched = new Set();
     for (const k of keys) {
       const R = remote[k], L = local[k], rec = st.records[k];
       progress.done = ++done; renderSoon();
+      if (done % 40 === 0) { await persist(); if (touched.size) { tell(touched); touched.clear(); } }   // a closed app or lost signal picks up from here
       let lb = null, lh = null;
       if (L) {
         if (rec && rec.hash && !changedNow.has(k) && R && rec.rev === R.rev) continue;   // nothing happened on either side
