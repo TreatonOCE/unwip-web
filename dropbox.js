@@ -11,7 +11,9 @@ window.UnwipDropbox = (function () {
   const FS = F.__fs, emit = F.__emit, DEVICE = F.__device || 'phone';
   const KEY = window.UNWIP_DROPBOX_KEY || '';
   const API = 'https://api.dropboxapi.com/2', CONTENT = 'https://content.dropboxapi.com/2';
-  const REMOTE = '/Unwip', LOCAL = 'Unwip/', STATE = 'app/dropbox.json';
+  // the books live straight in Unwip's own Dropbox folder (Dropbox/Apps/Unwip). Older versions used a folder
+  // inside it (Apps/Unwip/Unwip); flatten() moves anything there up a level, inside Dropbox, before each sync.
+  const REMOTE = '', OLD = '/Unwip', LOCAL = 'Unwip/', STATE = 'app/dropbox.json';
   const CONFLICT = /\(([^()]*?)(?:['’]s)?\s*conflicted copy[^()]*\)/i;
 
   // which files travel: the project, its chapters, pictures and snapshots (not backups, not deleted projects)
@@ -108,8 +110,31 @@ window.UnwipDropbox = (function () {
     render();
     return running.p;
   }
+  async function flatten() {
+    const top = await listAll(OLD, false);
+    if (!top.length || top.some(e => e.name.toLowerCase() === 'project.json')) return;   // nothing to move (or it's a book called Unwip)
+    const there = new Set((await listAll('', false)).map(e => e.name.toLowerCase()));
+    const move = (from, to, autorename) => rpc('/files/move_v2', { from_path: from, to_path: to, autorename: !!autorename, allow_ownership_transfer: false });
+    for (const e of top) {
+      if (e.name.toLowerCase() === 'unwip') continue;
+      if (!there.has(e.name.toLowerCase())) {
+        const r = await move(e.path_lower, '/' + e.name); if (!r.ok && r.status !== 409) throw new Error('Dropbox move failed (' + r.status + ')');
+        if (r.ok) continue;
+      }
+      // already there (e.g. written by an older version after the move): bring over what's missing, keep clashes aside
+      for (const f of await listAll(e.path_lower, true)) {
+        if (f['.tag'] !== 'file') continue;
+        const rel = f.path_display.slice(OLD.length + 1);
+        const r = await move(f.path_lower, '/' + rel);
+        if (r.status === 409) await move(f.path_lower, `/${rel.split('/')[0]}/backups/sync-conflicts/${Date.now()} ${rel.split('/').pop()}`, true);
+      }
+    }
+    if (!(await listAll(OLD, true)).some(x => x['.tag'] === 'file')) await rpc('/files/delete_v2', { path: OLD });
+    else throw new Error('Some files could not be moved out of the old Unwip folder yet');
+  }
   async function syncOnce(opts) {
     await load();
+    await flatten();
     const changedNow = new Set(dirty); dirty.clear();
     // what's in Dropbox
     const remote = {};
