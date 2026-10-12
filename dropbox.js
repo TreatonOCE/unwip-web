@@ -239,7 +239,7 @@ window.UnwipDropbox = (function () {
 
   // ---------------------------------------------------------------- connecting
   const standalone = () => !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
-  const redirectUri = () => location.origin + location.pathname;
+  const redirectUri = () => location.origin + location.pathname.replace(/index\.html$/, '');
   async function pkce() {
     const v = b64url(crypto.getRandomValues(new Uint8Array(48)));
     const c = b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v))));
@@ -342,7 +342,7 @@ window.UnwipDropbox = (function () {
          ${st.localOnly.length ? `<p class="sy-note">Kept on this ${esc(DEVICE)} only: ${st.localOnly.map(esc).join(', ')}</p>` : ''}
          ${st.removedHere.length ? `<p class="sy-note">Deleted on this ${esc(DEVICE)} but still in Dropbox: ${st.removedHere.map(esc).join(', ')}. <button class="link-btn" type="button" data-dbx="restore">Bring back</button></p>` : ''}
          <div class="sy-moves"><button class="btn primary" type="button" data-dbx="${st.broken ? 'connect' : 'sync'}">${st.broken ? 'Sign in to Dropbox again' : 'Sync now'}</button><button class="btn ghost" type="button" data-dbx="off">Disconnect</button></div>
-         <p class="sy-note">Chapters, the binder, pictures and snapshots sync with Dropbox/Unwip, the same folder your PC uses. If a chapter is changed on both at once, nothing is lost: the other version goes into Snapshots.</p>`
+         <p class="sy-note">Chapters, the binder, pictures and snapshots sync with the Unwip folder in your Dropbox, the same one your PC uses (on the PC: Settings › Where your projects live › Sync with Dropbox). If a chapter is changed on both at once, nothing is lost: the other version goes into Snapshots.</p>`
       : `<div class="sy-cur"><span class="sy-ic">📱</span><div><b>On this ${esc(DEVICE)} only</b><span class="sy-path">Saved inside this app. Connect Dropbox to work on the same books as your PC.</span></div></div>
          <div class="sy-moves"><button class="btn primary" type="button" data-dbx="connect">Connect Dropbox</button></div>`;
     const restore = async () => { st.removedHere = []; await persist(); sync(); };
