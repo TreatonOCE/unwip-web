@@ -37,7 +37,12 @@ window.UnwipSelBar = (function () {
   ($('#editor-wrap') || window).addEventListener('scroll', () => { if (!bar.classList.contains('hidden')) place(); }, { passive: true });
 
   function hide() { bar.classList.add('hidden'); }
+  // a window opening on top (Spark, Find anything, settings…) or the editor being swapped for a map or view: put the bar away
+  const covered = () => !!document.querySelector('.modal-back, .cmdk-back, .mp-view') || !editor.offsetParent;
+  new MutationObserver(() => { if (!bar.classList.contains('hidden') && covered()) hide(); }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  document.addEventListener('focusin', e => { if (!bar.classList.contains('hidden') && !editor.contains(e.target) && !bar.contains(e.target)) hide(); });
   function place() {
+    if (covered()) { hide(); return; }
     if (document.documentElement.classList.contains('m-phone') || document.body.classList.contains('writer')) { hide(); return; }
     const sel = getSelection();
     if (!sel.rangeCount || sel.isCollapsed || !editor.contains(sel.anchorNode) || !editor.contains(sel.focusNode)) { hide(); return; }

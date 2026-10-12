@@ -83,6 +83,7 @@ window.UnwipRead = (function () {
     try { CSS.highlights.delete('unwip-read'); } catch {}
     if (bar) { bar.remove(); bar = null; }
     sents = [];
+    const lb = document.getElementById('btn-listen'); if (lb) lb.classList.remove('on');
   }
   const jump = d => { idx = Math.max(0, Math.min(sents.length - 1, idx + d)); if (playing) { synth().cancel(); speak(); } else { highlight(sents[idx]); render(); } };
   const toggle = () => bar ? (playing ? pause() : resume()) : start();
@@ -120,6 +121,7 @@ window.UnwipRead = (function () {
   if (window.speechSynthesis) speechSynthesis.addEventListener && speechSynthesis.addEventListener('voiceschanged', fillVoices);
   function render() {
     if (!bar) return;
+    { const lb = document.getElementById('btn-listen'); if (lb) lb.classList.add('on'); }
     const p = $('.ra-play', bar); p.innerHTML = playing ? ICON.pause : ICON.play; p.title = playing ? 'Pause (F8)' : 'Read (F8)';
     $('.ra-pos', bar).textContent = sents.length ? `${idx + 1} / ${sents.length}` : '';
   }

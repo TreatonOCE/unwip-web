@@ -1388,7 +1388,7 @@
     const items = [...tb.children].filter(x => x !== more);
     const order = new Map(items.map((el, i) => [el, i]));
     // first to be tucked away → last
-    const PRIO = ['#btn-image', '#btn-footnote', '#btn-scene', '#btn-clear', '[data-cmd="strikeThrough"]', '[data-cmd="justifyFull"]', '[data-cmd="justifyRight"]',
+    const PRIO = ['#btn-listen', '#btn-image', '#btn-footnote', '#btn-scene', '#btn-clear', '[data-cmd="strikeThrough"]', '[data-cmd="justifyFull"]', '[data-cmd="justifyRight"]',
       '[data-cmd="justifyCenter"]', '[data-cmd="justifyLeft"]', '#sel-block', '[data-cmd="underline"]', '#sel-size', '#btn-comment', '#sel-font'];
     [more, pop].forEach(el => el.addEventListener('mousedown', e => { if (!e.target.closest('select')) e.preventDefault(); }));
     more.onclick = () => {
@@ -1419,6 +1419,10 @@
     new ResizeObserver(() => requestAnimationFrame(fit)).observe(tb);
     window.addEventListener('resize', () => requestAnimationFrame(fit));
     setTimeout(fit, 300);
+    // the toolbar's contents change size too (fonts loading, Focused/Detailed, a project opening): check again then
+    try { document.fonts.ready.then(() => requestAnimationFrame(fit)); } catch {}
+    ['project', 'doc', 'view'].forEach(ev => on(ev, () => setTimeout(fit, 60)));
+    { const mo = new MutationObserver(() => requestAnimationFrame(fit)); mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] }); mo.observe(document.body, { attributes: true, attributeFilter: ['class'] }); }
   })();
 
   // ---- toolbar actions
@@ -3198,6 +3202,8 @@
   $('#btn-search').onclick = () => openSearch('search');
   $('#rp-analysis').onclick = () => openSearch('freq');
   $('#rp-read').onclick = () => window.UnwipRead && window.UnwipRead.start();
+  $('#btn-listen').onclick = () => { const R = window.UnwipRead; if (!R) return; if (document.querySelector('.ra-bar')) R.stop(); else R.start(); };
+  $('#btn-listen').addEventListener('mousedown', e => e.preventDefault());
 
   // ================================================================== SNAPSHOTS
   $('#snap-ic').innerHTML = I.history;

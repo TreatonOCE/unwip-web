@@ -15,13 +15,15 @@ window.UnwipMaps = (function () {
     ink: { name: 'Ink sketch', paper: '#ffffff', sea: '#ffffff', seaLine: '#9a9a9a', land: '#ffffff', coast: '#111111', ink: '#111111', forest: '#ffffff', mountain: '#ffffff', river: '#111111', road: '#111111', border: '#111111', label: '#111111', pin: '#111111' }
   };
   const BORDER_ICON = '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 17 C8 5, 14 21, 21 7" fill="none" stroke="#b0413e" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="1 4.5"/></svg>';
-  const FRAMES = { double: 'Double line', simple: 'Single line', ornate: 'Ornate corners', none: 'No frame' };
+  const FRAMES = { double: 'Double line', simple: 'Single line', thick: 'Thick line', ornate: 'Ornate corners', none: 'No frame' };
+  const FRAME_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3a3a3a"><rect x="3" y="5" width="18" height="14" stroke-width="2"/><rect x="6" y="8" width="12" height="8" stroke-width="1"/></svg>';
   const TOOLS = [
     ['select', '✋', 'Move & select: drag things around, double-click a label or pin to edit it, Delete removes it. Drag empty space to pan; scroll to zoom'],
     ['land', '🟫', 'Paint land'], ['water', '🌊', 'Paint water (rub out land)'],
     ['forest', '🌲', 'Forest: drag to scatter trees'], ['mountain', '⛰️', 'Mountains: drag to place a range'], ['hill', '🏔️', 'Hills: drag to scatter'],
     ['town', '🏠', 'Town: click to place'], ['city', '🏰', 'City or castle: click to place'], ['tower', '🗼', 'Tower: click to place'], ['ruin', '🏚️', 'Ruins: click to place'],
     ['road', '〰️', 'Road or path: drag to draw'], ['border', BORDER_ICON, 'Border: drag to draw a dotted border between lands or kingdoms. (For rivers and lakes, paint with 🌊 water)'],
+    ['frame', FRAME_ICON, 'Frame: drag out a rectangle to draw a border box, for your own map edge, an inset or a title box. Pick its line style (double, single, thick, ornate) in the list at the top. Drag the corner to resize'],
     ['pin', '📍', 'Pin: click to mark a place. You can link it to a Places sheet'], ['label', '🔤', 'Label: click to name a region, sea or place']
   ];
 
@@ -29,7 +31,7 @@ window.UnwipMaps = (function () {
   let mask = null, mctx = null, landCache = null, landDirty = true, saveT = null, view = null, cv = null, ctx = null, drawing = null;
 
   // ================================================================== DATA
-  function blank(style = 'parchment') { return { v: 1, style, land: null, stamps: [], paths: [], labels: [], pins: [], grid: false, compass: true, frame: 'double', seed: 1 }; }
+  function blank(style = 'parchment') { return { v: 1, style, land: null, stamps: [], paths: [], labels: [], pins: [], grid: false, compass: true, frame: 'double', boxes: [], seed: 1 }; }
   // a map document holds one or more sections (the whole world, a region, a city…), each a full map of its own
   let docData = null;
   async function load(id) {
@@ -45,7 +47,7 @@ window.UnwipMaps = (function () {
   }
   async function useSection(i) {
     if (st && mask) st.land = maskData();
-    docData.active = i; st = docData.sections[i];
+    docData.active = i; st = docData.sections[i]; st.boxes = st.boxes || [];
     mctx.clearRect(0, 0, MW, MH);
     if (st.land) { const im = new Image(); im.src = st.land; await im.decode().catch(() => {}); mctx.drawImage(im, 0, 0); }
     landDirty = true; itemsDirty = true; undo = []; redo = []; sel = null;
@@ -231,31 +233,42 @@ window.UnwipMaps = (function () {
     if (p.label) { g.font = '600 17px Georgia, serif'; g.textAlign = 'center'; g.lineWidth = 4; g.strokeStyle = P.land; g.strokeText(p.label, 0, 18); g.fillStyle = P.label; g.fillText(p.label, 0, 18); }
     g.restore();
   }
-  function drawFrame(g, P) {
-    const f = st.frame || 'double';
-    if (f === 'none') return;
-    g.save(); g.strokeStyle = P.ink;
-    if (f === 'simple') { g.lineWidth = 3; g.strokeRect(16, 16, W - 32, H - 32); }
-    else { g.lineWidth = 3; g.strokeRect(14, 14, W - 28, H - 28); g.lineWidth = 1; g.strokeRect(22, 22, W - 44, H - 44); }
+  // a border box at x,y,w,h in the given style; used for the map edge and for frames you draw yourself
+  function drawRectFrame(g, P, x, y, w, h, f) {
+    if (!f || f === 'none' || w < 2 || h < 2) return;
+    g.save(); g.strokeStyle = P.ink; g.setLineDash([]);
+    const gap = Math.min(8, w / 6, h / 6);
+    if (f === 'simple') { g.lineWidth = 3; g.strokeRect(x, y, w, h); }
+    else if (f === 'thick') { g.lineWidth = 7; g.strokeRect(x, y, w, h); }
+    else { g.lineWidth = 3; g.strokeRect(x, y, w, h); g.lineWidth = 1; g.strokeRect(x + gap, y + gap, w - gap * 2, h - gap * 2); }
     if (f === 'ornate') {
+      const c = Math.min(1, w / 220, h / 220);      // smaller corners on small frames
       g.fillStyle = P.ink; g.lineWidth = 1.5;
-      for (const [cx, cy, sx, sy] of [[22, 22, 1, 1], [W - 22, 22, -1, 1], [22, H - 22, 1, -1], [W - 22, H - 22, -1, -1]]) {
-        g.save(); g.translate(cx, cy); g.scale(sx, sy);
+      for (const [cx, cy, sx, sy] of [[x + gap, y + gap, 1, 1], [x + w - gap, y + gap, -1, 1], [x + gap, y + h - gap, 1, -1], [x + w - gap, y + h - gap, -1, -1]]) {
+        g.save(); g.translate(cx, cy); g.scale(sx * c, sy * c);
         g.beginPath(); g.moveTo(0, 0); g.lineTo(46, 0); g.moveTo(0, 0); g.lineTo(0, 46); g.stroke();
         g.beginPath(); g.arc(18, 18, 10, 0, 7); g.stroke(); g.beginPath(); g.arc(18, 18, 3.5, 0, 7); g.fill();
         g.beginPath(); g.moveTo(30, 6); g.quadraticCurveTo(44, 10, 52, 4); g.moveTo(6, 30); g.quadraticCurveTo(10, 44, 4, 52); g.stroke();
         g.restore();
       }
-      // a scale bar along the bottom
-      g.lineWidth = 1.5; const x0 = 70, y0 = H - 54; for (let k = 0; k < 4; k++) { g.fillStyle = k % 2 ? P.paper : P.ink; g.fillRect(x0 + k * 40, y0, 40, 7); } g.strokeRect(x0, y0, 160, 7);
-      g.fillStyle = P.ink; g.font = '14px Georgia, serif'; g.textAlign = 'center'; g.fillText('0', x0, y0 - 6); g.fillText('100 leagues', x0 + 160, y0 - 6);
     }
     g.restore();
+  }
+  function drawFrame(g, P) {
+    const f = st.frame || 'double';
+    if (f === 'none') return;
+    drawRectFrame(g, P, 14, 14, W - 28, H - 28, f);
+    if (f === 'ornate') {
+      // a scale bar along the bottom
+      g.save(); g.strokeStyle = P.ink; g.lineWidth = 1.5; const x0 = 70, y0 = H - 54; for (let k = 0; k < 4; k++) { g.fillStyle = k % 2 ? P.paper : P.ink; g.fillRect(x0 + k * 40, y0, 40, 7); } g.strokeRect(x0, y0, 160, 7);
+      g.fillStyle = P.ink; g.font = '14px Georgia, serif'; g.textAlign = 'center'; g.fillText('0', x0, y0 - 6); g.fillText('100 leagues', x0 + 160, y0 - 6); g.restore();
+    }
   }
   // skip: an item being dragged, drawn separately on top
   function renderItems(g, P, skip) {
     st.paths.forEach((p, i) => { if (!(skip && skip.type === 'path' && skip.i === i)) drawPath(g, p, P); });
     st.stamps.map((s, i) => [s, i]).sort((a, b) => a[0].y - b[0].y).forEach(([s, i]) => { if (!(skip && skip.type === 'stamp' && skip.i === i)) stamp(g, s, P); });
+    (st.boxes || []).forEach((b, i) => { if (!(skip && skip.type === 'box' && skip.i === i)) drawRectFrame(g, P, b.x, b.y, b.w, b.h, b.f); });
     st.labels.forEach((l, i) => { if (!(skip && skip.type === 'label' && skip.i === i)) drawLabel(g, l, P); });
     st.pins.forEach((p, i) => { if (!(skip && skip.type === 'pin' && skip.i === i)) drawPin(g, p, P); });
     if (st.compass) { g.save(); g.translate(W - 110, H - 120); g.strokeStyle = P.ink; g.fillStyle = P.ink; g.lineWidth = 1.5; g.beginPath(); g.arc(0, 0, 44, 0, 7); g.stroke(); for (let k = 0; k < 4; k++) { g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, -58); g.lineTo(9, 0); g.lineTo(0, 9); g.lineTo(-9, 0); g.closePath(); k % 2 ? g.stroke() : g.fill(); } g.font = 'bold 18px Georgia, serif'; g.textAlign = 'center'; g.fillText('N', 0, -64); g.restore(); }
@@ -267,6 +280,7 @@ window.UnwipMaps = (function () {
     if (s.type === 'path' && st.paths[s.i]) drawPath(g, st.paths[s.i], P);
     if (s.type === 'label' && st.labels[s.i]) drawLabel(g, st.labels[s.i], P);
     if (s.type === 'pin' && st.pins[s.i]) drawPin(g, st.pins[s.i], P);
+    if (s.type === 'box' && st.boxes[s.i]) { const b = st.boxes[s.i]; drawRectFrame(g, P, b.x, b.y, b.w, b.h, b.f); }
   }
   // for saving a picture
   function renderAll(g, P) { renderBase(g, P); renderItems(g, P); }
@@ -306,7 +320,10 @@ window.UnwipMaps = (function () {
       if (sel.type === 'path' && st.paths[sel.i]) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.globalAlpha = 0.35; ctx.lineWidth = 10; ctx.lineCap = 'round'; smoothPath(ctx, st.paths[sel.i].pts); ctx.stroke(); ctx.restore(); }
       else { const b = bounds(sel); if (b) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.setLineDash([5, 4]); ctx.lineWidth = 2; ctx.strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8); ctx.restore(); } }
     }
+    if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i], hs = 12 / cam.z; ctx.save(); ctx.fillStyle = '#3d7bd9'; ctx.fillRect(b.x + b.w - hs / 2, b.y + b.h - hs / 2, hs, hs); ctx.restore(); }
     if (drawing && drawing.path) drawPath(ctx, drawing.path, P);
+    if (drawing && drawing.box) { const b = norm(drawing.box); drawRectFrame(ctx, P, b.x, b.y, b.w, b.h, b.f); }
+    syncFrameSelect();
     if (BRUSHY.includes(tool) && hover) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 1.5 / cam.z; ctx.beginPath(); ctx.arc(hover.x, hover.y, brush * K / 2, 0, 7); ctx.stroke(); ctx.restore(); }
   }
   let itemsSkip = null, raf = 0;
@@ -318,6 +335,7 @@ window.UnwipMaps = (function () {
   function bounds(s) {
     if (s.type === 'stamp') { const o = st.stamps[s.i]; if (!o) return null; const z = (o.s || 1) * (o.k === 'city' ? 26 : 18); return { x: o.x - z, y: o.y - z * 1.4, w: z * 2, h: z * 1.8 }; }
     if (s.type === 'pin') { const o = st.pins[s.i]; if (!o) return null; return { x: o.x - 12, y: o.y - 30, w: 24, h: 52 }; }
+    if (s.type === 'box') { const o = st.boxes[s.i]; return o ? { x: o.x, y: o.y, w: o.w, h: o.h } : null; }
     if (s.type === 'label') { const o = st.labels[s.i]; if (!o) return null; const sz = o.size || (o.k === 'region' ? 44 : o.k === 'sea' ? 30 : 20); const w = o.text.length * sz * (o.k === 'region' ? 0.85 : 0.55); return { x: o.x - w / 2, y: o.y - sz * 0.6, w, h: sz * 1.2 }; }
     return null;
   }
@@ -327,6 +345,11 @@ window.UnwipMaps = (function () {
     for (let i = st.labels.length - 1; i >= 0; i--) if (inB(bounds({ type: 'label', i }))) return { type: 'label', i };
     for (let i = st.stamps.length - 1; i >= 0; i--) if (inB(bounds({ type: 'stamp', i }))) return { type: 'stamp', i };
     for (let i = st.paths.length - 1; i >= 0; i--) if (st.paths[i].pts.some(p => Math.hypot(p[0] - x, p[1] - y) < 10)) return { type: 'path', i };
+    // frames: grab them by their lines (so clicking inside one still reaches what's in it)
+    const near = 12 / Math.max(0.5, cam.z);
+    for (let i = (st.boxes || []).length - 1; i >= 0; i--) { const b = st.boxes[i];
+      const inX = x > b.x - near && x < b.x + b.w + near, inY = y > b.y - near && y < b.y + b.h + near;
+      if ((inY && (Math.abs(x - b.x) < near || Math.abs(x - b.x - b.w) < near)) || (inX && (Math.abs(y - b.y) < near || Math.abs(y - b.y - b.h) < near))) return { type: 'box', i }; }
     return null;
   }
 
@@ -345,6 +368,8 @@ window.UnwipMaps = (function () {
     const p = world(e);
     if (e.button === 1 || (tool === 'select' && !hit(p.x, p.y)) || e.altKey) { drawing = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; sel = null; redraw(); return; }
     cv.setPointerCapture(e.pointerId);
+    // resize the selected frame by its corner
+    if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i]; if (Math.abs(p.x - b.x - b.w) < 14 / cam.z && Math.abs(p.y - b.y - b.h) < 14 / cam.z) { push(); drawing = { resize: b }; return; } }
     if (tool === 'select') { sel = hit(p.x, p.y); push(); drawing = { move: true, last: p }; itemsDirty = true; redraw(); return; }
     push();
     if (tool === 'land' || tool === 'water') { drawing = { brush: true, on: tool === 'land', last: p }; paint(p.x, p.y, drawing.on); redraw(); return; }
@@ -353,6 +378,16 @@ window.UnwipMaps = (function () {
     if (['road', 'border'].includes(tool)) { drawing = { path: { k: tool, pts: [[p.x, p.y]] } }; return; }
     if (tool === 'pin') { addPin(p); return; }
     if (tool === 'label') { addLabel(p); return; }
+    if (tool === 'frame') { drawing = { box: { x0: p.x, y0: p.y, x1: p.x, y1: p.y, f: boxStyle } }; sel = null; return; }
+  }
+  const norm = d => ({ x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0), f: d.f });
+  let boxStyle = 'double';
+  function syncFrameSelect() {
+    const s = view && $('#mp-frame', view); if (!s) return;
+    const box = sel && sel.type === 'box' && st.boxes[sel.i];
+    const v = box ? box.f : tool === 'frame' ? boxStyle : (st.frame || 'double');
+    if (s.value !== v) s.value = v;
+    s.dataset.tip = box ? 'Line style of the selected frame' : tool === 'frame' ? 'Line style for the frames you draw' : 'The border around the edge of the map';
   }
   function scatter(p) {
     const k = drawing.scatter, n = k === 'tree' ? 3 : 1, spread = brush * 1.8;
@@ -364,10 +399,12 @@ window.UnwipMaps = (function () {
     if (drawing.pan) { cam.x = drawing.cx + e.clientX - drawing.sx; cam.y = drawing.cy + e.clientY - drawing.sy; redraw(); return; }
     if (drawing.move && sel) {
       const dx = p.x - drawing.last.x, dy = p.y - drawing.last.y; drawing.last = p;
-      const o = sel.type === 'path' ? null : st[sel.type === 'stamp' ? 'stamps' : sel.type === 'pin' ? 'pins' : 'labels'][sel.i];
+      const o = sel.type === 'path' ? null : st[{ stamp: 'stamps', pin: 'pins', label: 'labels', box: 'boxes' }[sel.type]][sel.i];
       if (o) { o.x += dx; o.y += dy; } else if (sel.type === 'path') st.paths[sel.i].pts.forEach(q => { q[0] += dx; q[1] += dy; });
       redraw(); return;                      // the dragged item is drawn on its own layer, so nothing else is redrawn
     }
+    if (drawing.box) { drawing.box.x1 = p.x; drawing.box.y1 = p.y; redraw(); return; }
+    if (drawing.resize) { const b = drawing.resize; b.w = Math.max(30, p.x - b.x); b.h = Math.max(30, p.y - b.y); itemsDirty = true; redraw(); return; }
     if (drawing.brush) { paint(p.x, p.y, drawing.on, drawing.last); drawing.last = p; redraw(); return; }
     if (drawing.scatter) { if (Math.hypot(p.x - drawing.last.x, p.y - drawing.last.y) > (drawing.scatter === 'mountain' ? 22 : 10)) { drawing.last = p; scatter(p); changed(); } return; }
     if (drawing.path) { const l = drawing.path.pts[drawing.path.pts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) > 10) { drawing.path.pts.push([p.x, p.y]); redraw(); } }
@@ -377,6 +414,7 @@ window.UnwipMaps = (function () {
     const d = drawing; drawing = null;
     if (d.brush) landDirty = true;
     if (d.path) { if (d.path.pts.length >= 2) st.paths.push(d.path); else undo.pop(); }
+    if (d.box) { const b = norm(d.box); if (b.w > 20 && b.h > 20) { st.boxes = st.boxes || []; st.boxes.push(b); sel = { type: 'box', i: st.boxes.length - 1 }; } else undo.pop(); }
     if (d.move && !sel) undo.pop();
     itemsDirty = true; itemsSkip = null; redraw(); if (!d.pan) schedule();
   }
@@ -420,7 +458,7 @@ window.UnwipMaps = (function () {
   }
   function removeSel() {
     if (!sel) return; push();
-    const list = { stamp: 'stamps', pin: 'pins', label: 'labels', path: 'paths' }[sel.type];
+    const list = { stamp: 'stamps', pin: 'pins', label: 'labels', path: 'paths', box: 'boxes' }[sel.type];
     st[list].splice(sel.i, 1); sel = null; changed(); schedule();
   }
 
@@ -435,7 +473,7 @@ window.UnwipMaps = (function () {
   }
   function fit() { const r = view.querySelector('.mp-stage').getBoundingClientRect(); const z = Math.min(r.width / W, r.height / H) * 0.96; cam = { z, x: (r.width - W * z) / 2, y: (r.height - H * z) / 2 }; }
   function resize() { if (!cv) return; const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; draw(); }
-  function setTool(t) { tool = t; $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('.mp-brush', view).classList.toggle('dim', !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); }
+  function setTool(t) { tool = t; if (t === 'frame' && sel && sel.type === 'box') { sel = null; if (cv) redraw(); } $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('.mp-brush', view).classList.toggle('dim', !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); syncFrameSelect(); }
   async function open(id) {
     await close(true);
     nodeId = id; await load(id);
@@ -472,7 +510,12 @@ window.UnwipMaps = (function () {
     $('#mp-style', view).onchange = e => { push(); st.style = e.target.value; landDirty = true; changed(); schedule(); };
     $('#mp-grid', view).onclick = e => { push(); st.grid = !st.grid; e.currentTarget.classList.toggle('on', st.grid); redraw(); schedule(); };
     $('#mp-compass', view).onclick = e => { push(); st.compass = !st.compass; e.currentTarget.classList.toggle('on', st.compass); changed(); schedule(); };
-    $('#mp-frame', view).onchange = e => { push(); st.frame = e.target.value; changed(); schedule(); };
+    $('#mp-frame', view).onchange = e => {
+      const v = e.target.value, box = sel && sel.type === 'box' && st.boxes[sel.i];
+      if (box) { push(); if (v === 'none') { st.boxes.splice(sel.i, 1); sel = null; } else { box.f = v; boxStyle = v; } }
+      else if (tool === 'frame') { if (v !== 'none') boxStyle = v; return syncFrameSelect(); }
+      else { push(); st.frame = v; }
+      changed(); schedule(); };
     $('#mp-clear', view).onclick = async () => {
       if (!await U.confirmBox('Clear this map?', 'Removes all land, forests, towns, roads, labels and pins from this section. Undo (Ctrl+Z) brings it back.', 'Clear the map')) return;
       push(); const keep = { name: st.name, style: st.style, grid: st.grid, compass: st.compass, frame: st.frame };
