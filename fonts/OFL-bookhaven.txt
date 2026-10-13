@@ -1,3 +1,5 @@
+Bookhaven is a modified version of Libre Baskerville (a static cut of the original, subset to Latin), renamed because "Libre Baskerville" is a Reserved Font Name under the licence below. The original copyright and licence follow unchanged.
+
 Copyright 2012 The Libre Baskerville Project Authors (https://github.com/impallari/Libre-Baskerville) with Reserved Font Name Libre Baskerville.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.

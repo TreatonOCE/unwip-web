@@ -12,7 +12,7 @@ window.UnwipTypeset = (function () {
 
   // ------------------------------------------------------------------ fonts that ship with Unwip (SIL Open Font Licence)
   const FONTS = [
-    ['EB Garamond', 'EBGaramond'], ['Libre Baskerville', 'LibreBaskerville'], ['Crimson Pro', 'CrimsonPro'], ['Lora', 'Lora'],
+    ['EB Garamond', 'EBGaramond'], ['Bookhaven', 'Bookhaven'], ['Crimson Pro', 'CrimsonPro'], ['Larkspur', 'Larkspur'],
     ['Cinzel', 'Cinzel', true], ['Oswald', 'Oswald', true]
   ];
   // static Regular and Bold cuts (not variable fonts), so PDFs embed them as normal TrueType fonts printers accept
@@ -35,10 +35,10 @@ window.UnwipTypeset = (function () {
       body: 'EB Garamond', head: 'Cinzel', size: 11.5, leading: 1.38, number: 'words', label: 'Chapter', numCase: 'upper', numSize: 0.95,
       titleSize: 1.85, titleStyle: 'normal', titleCase: 'normal', orn: '⁂', drop: true, lead: true, scene: '⁂', head1: 'cinzel', folio: 'bottom', sink: 0.3, align: 'center', oldstyle: true },
     literary: { name: 'Literary', blurb: 'Baskerville, quiet small-capital titles, no numbers. Understated and elegant.',
-      body: 'Libre Baskerville', head: 'Libre Baskerville', size: 10.5, leading: 1.45, number: 'none', label: '', numCase: 'smallcaps', numSize: 1,
+      body: 'Bookhaven', head: 'Bookhaven', size: 10.5, leading: 1.45, number: 'none', label: '', numCase: 'smallcaps', numSize: 1,
       titleSize: 1.25, titleStyle: 'smallcaps', titleCase: 'normal', orn: '', drop: false, lead: true, scene: '·  ·  ·', head1: 'smallcaps', folio: 'bottom', sink: 0.33, align: 'center', oldstyle: false },
-    romance: { name: 'Romance', blurb: 'Lora with a flowing italic title, a lowercase chapter line and a drop cap.',
-      body: 'Lora', head: 'Lora', size: 11, leading: 1.4, number: 'words', label: 'chapter', numCase: 'lower', numSize: 1.05,
+    romance: { name: 'Romance', blurb: 'Larkspur with a flowing italic title, a lowercase chapter line and a drop cap.',
+      body: 'Larkspur', head: 'Larkspur', size: 11, leading: 1.4, number: 'words', label: 'chapter', numCase: 'lower', numSize: 1.05,
       titleSize: 1.8, titleStyle: 'italic', titleCase: 'normal', orn: '❧', drop: true, lead: false, scene: '❧', head1: 'italic', folio: 'bottom', sink: 0.3, align: 'center', oldstyle: false },
     thriller: { name: 'Thriller', blurb: 'Tall condensed capitals, a big chapter number, no drop cap. Crime, thriller, sci-fi.',
       body: 'Crimson Pro', head: 'Oswald', size: 11.5, leading: 1.35, number: 'digits', label: '', numCase: 'normal', numSize: 3.6,
@@ -61,8 +61,8 @@ window.UnwipTypeset = (function () {
   }
   function resolved(d) {
     const t = { ...THEMES[d.theme] || THEMES.classic };
-    if (d.bodyFont) t.body = d.bodyFont;
-    if (d.headFont) t.head = d.headFont;
+    if (d.bodyFont) t.body = window.FolioFonts ? window.FolioFonts.alias(d.bodyFont) : d.bodyFont;
+    if (d.headFont) t.head = window.FolioFonts ? window.FolioFonts.alias(d.headFont) : d.headFont;
     if (d.drop !== 'theme') t.drop = !!d.drop;
     if (d.lead !== 'theme') t.lead = !!d.lead;
     if (d.scene !== 'theme') t.scene = d.scene;

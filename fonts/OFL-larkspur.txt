@@ -1,3 +1,5 @@
+Larkspur is a modified version of Lora (a static cut of the original, subset to Latin), renamed because "Lora" is a Reserved Font Name under the licence below. The original copyright and licence follow unchanged.
+
 Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name "Lora".
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.

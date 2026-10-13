@@ -299,7 +299,10 @@
   function mergeStyle(st) {
     const d = JSON.parse(JSON.stringify(DEFAULT_STYLE));
     st = st || {};
-    return { ...d, ...st, headings: { h1: { ...d.headings.h1, ...(st.headings || {}).h1 }, h2: { ...d.headings.h2, ...(st.headings || {}).h2 }, h3: { ...d.headings.h3, ...(st.headings || {}).h3 } } };
+    const out = { ...d, ...st, headings: { h1: { ...d.headings.h1, ...(st.headings || {}).h1 }, h2: { ...d.headings.h2, ...(st.headings || {}).h2 }, h3: { ...d.headings.h3, ...(st.headings || {}).h3 } } };
+    // fonts renamed for licence reasons (Lora → Larkspur, Libre Baskerville → Bookhaven) unless the real one is installed
+    if (window.FolioFonts) { out.font = window.FolioFonts.alias(out.font); for (const h of ['h1', 'h2', 'h3']) out.headings[h].font = window.FolioFonts.alias(out.headings[h].font); }
+    return out;
   }
   async function leaveProject() {
     if (S.lastPlace && S.lastPlace.slug === S.slug) { clearTimeout(S.lastPlaceT); try { S.settings = await api.setSettings({ lastPlace: S.lastPlace }); } catch {} }
@@ -2513,7 +2516,7 @@
     try { return JSON.parse(localStorage.getItem('folio-revise') || '{}'); } catch { return {}; }
   }
   function saveRevisePrefs(p) { try { localStorage.setItem('folio-revise', JSON.stringify(p)); } catch {} }
-  // Focused shows the five big things (like Hemingway); Detailed shows every check. Follows the binder's Focused/Detailed until changed here.
+  // Focused shows the five big things; Detailed shows every check. Follows the binder's Focused/Detailed until changed here.
   function reviseLevel() { if (document.documentElement.classList.contains('m-phone')) return 'focused'; const p = revisePrefs(); return p.level || (S.mode === 'detailed' ? 'detailed' : 'focused'); }
   function catShown(id) { if (id === 'more' && !window.UnwipHarper) return false; return reviseLevel() === 'detailed' || !!Rev.CATS.find(c => c.id === id).focused; }
   function catOn(id) { if (!catShown(id)) return false; const p = revisePrefs(); return p[id] !== undefined ? p[id] : Rev.CATS.find(c => c.id === id).on; }

@@ -86,15 +86,47 @@ window.UnwipAbout = (function () {
       <h4>Made without AI</h4><p>${NO_AI}</p>
       <h4>Your writing stays yours</h4><p>Your books are saved on your device. If you connect Dropbox, they’re copied to <b>your own</b> Dropbox and nowhere else. Unwip has no account, no server of its own and no tracking. Reports you send with “Report a problem” contain no writing.</p>
       <h4>Thank you</h4>
-      <ul class="about-credits">
-        <li><b>Fonts:</b> EB Garamond, Lora, Crimson Pro, Libre Baskerville, Cinzel and Oswald, under the SIL Open Font License (licence files are included with the fonts).</li>
-        <li><b>Harper</b> (grammar checking, the “More suggestions” option) by Automattic, Apache License 2.0.</li>
-        ${api.web ? '' : '<li><b>Electron</b> and <b>Chromium</b>, which run the PC app, MIT and BSD licences.</li>'}
-        <li>Spell checking uses the spell checker built into ${api.web ? 'your browser' : 'the app’s Chromium engine'}.</li>
-      </ul>
-      <div class="sy-moves"><button class="btn" type="button" id="ab-report">Report a problem…</button></div>`;
+      <p>Unwip is built with free and open-source fonts and software, used under their licences: the fonts EB Garamond, Crimson Pro, Cinzel and Oswald, Larkspur (our cut of Lora) and Bookhaven (our cut of Libre Baskerville)${api.web ? '' : ', the Harper grammar checker, and Electron and Chromium, which run the PC app'}. The full licence texts are under Open-source licences.</p>
+      <h4>Trademarks</h4>
+      <p class="about-small">Scrivener, Microsoft Word, Google Docs, Dropbox, OneDrive, Kindle, Apple Books, Kobo and other product names mentioned in Unwip belong to their owners. They’re named only to say what Unwip works with; Unwip isn’t made by, endorsed by or connected to any of them.</p>
+      <div class="sy-moves"><button class="btn" type="button" id="ab-lic">Open-source licences…</button><button class="btn" type="button" id="ab-report">Report a problem…</button></div>`;
+    body.querySelector('#ab-lic').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); licenses(); };
     body.querySelector('#ab-report').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); report(); };
     await U.modal({ title: 'About Unwip', body, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
+  }
+
+  // ---------------------------------------------------------------- open-source licences (the full texts)
+  const FONTS = [
+    ['EB Garamond', 'OFL-EBGaramond.txt'], ['Larkspur', 'OFL-larkspur.txt', 'A modified version of Lora, renamed because “Lora” is a Reserved Font Name.'],
+    ['Bookhaven', 'OFL-bookhaven.txt', 'A modified version of Libre Baskerville, renamed because “Libre Baskerville” is a Reserved Font Name.'],
+    ['Crimson Pro', 'OFL-crimsonpro.txt'], ['Cinzel', 'OFL-cinzel.txt'], ['Oswald', 'OFL-oswald.txt']
+  ];
+  async function readText(rel) {
+    if (api.licenseText) return api.licenseText(rel);
+    try { const r = await fetch(rel); return r.ok ? r.text() : null; } catch { return null; }
+  }
+  async function licenses() {
+    const items = [];
+    for (const [name, file, note] of FONTS) {
+      const t = await readText('fonts/' + file); if (!t) continue;
+      const copy = (t.split('\n').find(l => /^Copyright/i.test(l)) || '').trim();
+      items.push({ name, kind: 'Font · SIL Open Font License 1.1', copy, note, text: t });
+    }
+    const harper = await readText('vendor/harper/LICENSE');
+    if (harper) items.push({ name: 'Harper 2.10.0', kind: 'Grammar checker · Apache License 2.0', copy: 'By Automattic and the Harper contributors (github.com/Automattic/harper). Included unmodified.', note: 'Harper is built from many smaller open-source libraries, each under the MIT or Apache 2.0 licence; their notices are kept in the Harper project.', text: harper });
+    if (api.engineLicenses) {
+      const e = await api.engineLicenses().catch(() => null);
+      if (e && e.license) items.push({ name: `Electron ${e.electron}`, kind: 'Runs the PC app · MIT License', copy: (e.license.split('\n').find(l => /^Copyright/i.test(l)) || '').trim(), text: e.license, chromium: e.chromium, chrome: e.chrome });
+    }
+    const body = document.createElement('div'); body.className = 'lic';
+    body.innerHTML = `<p>Unwip includes the open-source work below. Thank you to everyone who made it. Each licence lets Unwip include it, as long as these notices go along with it.</p>
+      ${items.map((it, i) => `<details class="lic-item"><summary><b>${esc(it.name)}</b> <span>${esc(it.kind)}</span></summary>
+        ${it.copy ? `<p class="lic-copy">${esc(it.copy)}</p>` : ''}${it.note ? `<p class="lic-note">${esc(it.note)}</p>` : ''}
+        ${it.chromium !== undefined ? `<p class="lic-note">Electron includes Chromium ${esc(it.chrome || '')} and its components, each under its own open-source licence. ${it.chromium ? '<button class="link-btn" type="button" data-chromium>Open the Chromium licences</button>' : ''}</p>` : ''}
+        <pre>${esc(it.text)}</pre></details>`).join('')}
+      <p class="about-small">Spell checking uses the spell checker built into ${api.web ? 'your browser' : 'Chromium'}.</p>`;
+    const cb = body.querySelector('[data-chromium]'); if (cb) cb.onclick = () => api.openChromiumLicenses();
+    await U.modal({ title: 'Open-source licences', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
   }
 
   // ---------------------------------------------------------------- the note on the main screen
@@ -124,5 +156,5 @@ window.UnwipAbout = (function () {
   }
   U.on('library', layoutCheck); layoutCheck();
 
-  return { about, report, note, log: () => log.slice() };
+  return { about, report, licenses, note, log: () => log.slice() };
 })();

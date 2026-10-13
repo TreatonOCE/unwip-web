@@ -50,7 +50,7 @@
   }
   function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function escAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
-  function quoteFamily(f) { return /^[\w-]+$/.test(f) ? f : `'${f.replace(/'/g, '')}'`; }
+  function quoteFamily(f) { if (window.FolioFonts) f = window.FolioFonts.external(f); return /^[\w-]+$/.test(f) ? f : `'${f.replace(/'/g, '')}'`; }
 
   // ---- read: any HTML -> blocks/runs -------------------------------------
   function extract(root) {

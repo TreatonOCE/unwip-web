@@ -16,7 +16,7 @@ window.UnwipCommand = (function () {
   const ACTIONS = () => [
     ['Take a snapshot', 'save version backup copy', 'Ctrl+Shift+S', () => U.takeSnapshot(''), needDoc],
     ['Snapshots of this chapter', 'versions history compare restore', '', side('snapshots'), needDoc],
-    ['Revise', 'highlights hard sentences adverbs passive grammar hemingway check', 'F7', () => U.setRevise(!S.revise), needDoc],
+    ['Revise', 'highlights hard sentences adverbs passive grammar readability check', 'F7', () => U.setRevise(!S.revise), needDoc],
     ['Comments & footnotes', 'notes margin', '', side('comments'), needDoc],
     ['Manuscript style', 'font size spacing indent headings look', '', side('style'), inProject],
     ['Track changes (on / off)', 'suggest suggestions suggesting edits editor review word', 'Ctrl+Shift+E', () => window.UnwipTrack && window.UnwipTrack.toggle(), () => inProject() && !!window.UnwipTrack],
@@ -58,6 +58,7 @@ window.UnwipCommand = (function () {
     ['Insights: pacing and characters', 'chapter length dialogue scenes pov point of view character tracker appearances chart', '', detailed(() => U.setView('insights')), desk(inProject)],
     ['Writing goals', 'target daily words deadline', '', () => U.goalsDialog(), desk(inProject)],
     ['Report a problem', 'bug broken not working feedback help crash error send support', '', () => window.UnwipAbout && window.UnwipAbout.report(), () => !!window.UnwipAbout],
+    ['Open-source licences', 'licenses licences fonts ofl harper electron chromium credits copyright', '', () => window.UnwipAbout && window.UnwipAbout.licenses(), () => !!window.UnwipAbout],
     ['About Unwip', 'version credits licences licenses privacy ai no ai', '', () => window.UnwipAbout && window.UnwipAbout.about(), () => !!window.UnwipAbout],
     ['Sprint history', 'sprints wpm words per minute speed average best runs timer delete', '', () => window.UnwipSprints && window.UnwipSprints.open(), () => !!window.UnwipSprints],
     ['Writing history', 'calendar heatmap streak days stats statistics time of day best times words per day month progress log', '', () => window.UnwipHistory && window.UnwipHistory.open(), () => !!window.UnwipHistory],

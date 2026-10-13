@@ -5,8 +5,16 @@ window.FolioFonts = (function () {
     'Times New Roman', 'Garamond', 'EB Garamond', 'Georgia', 'Palatino Linotype', 'Book Antiqua',
     'Baskerville Old Face', 'Libre Baskerville', 'Caslon', 'Adobe Caslon Pro', 'Minion Pro', 'Sabon',
     'Crimson Pro', 'Crimson Text', 'Lora', 'Merriweather', 'Literata', 'Cambria', 'Constantia',
-    'Courier New', 'Courier Prime', 'Arial', 'Calibri', 'Segoe UI'
+    'Courier New', 'Courier Prime', 'Arial', 'Calibri', 'Segoe UI', 'Larkspur', 'Bookhaven', 'Cinzel', 'Oswald'
   ];
+  // fonts that come with Unwip (SIL Open Font License). Larkspur and Bookhaven are our cuts of Lora and Libre Baskerville:
+  // the licence reserves those names for the untouched originals, so modified copies must carry other names.
+  const BUNDLED = ['EB Garamond', 'Larkspur', 'Bookhaven', 'Crimson Pro', 'Cinzel', 'Oswald'];
+  const RENAMED = { 'lora': 'Larkspur', 'libre baskerville': 'Bookhaven' };                 // settings saved before the rename
+  const ORIGINAL = { 'larkspur': 'Lora', 'bookhaven': 'Libre Baskerville' };                // what Word and Google Docs know them as
+  const alias = f => (f && !installedHas(f) && RENAMED[String(f).toLowerCase()]) || f;
+  const external = f => (f && ORIGINAL[String(f).toLowerCase()]) || f;
+  const installedHas = f => !!(installed && installed.has && installed.has(f));
   // Always shown even if detection fails (these ship with Windows)
   const WINDOWS_CORE = ['Times New Roman', 'Georgia', 'Palatino Linotype', 'Book Antiqua', 'Cambria', 'Constantia', 'Courier New', 'Arial', 'Calibri', 'Segoe UI', 'Garamond'];
 
@@ -25,6 +33,7 @@ window.FolioFonts = (function () {
     'palatino linotype': 'Gentium Book Plus', 'palatino': 'Gentium Book Plus', 'book antiqua': 'Gentium Book Plus',
     'baskerville old face': 'Libre Baskerville', 'baskerville': 'Libre Baskerville',
     'caslon': 'Libre Caslon Text', 'adobe caslon pro': 'Libre Caslon Text',
+    'larkspur': 'Lora', 'bookhaven': 'Libre Baskerville',
     'minion pro': 'Crimson Pro', 'constantia': 'Lora', 'segoe ui': 'Open Sans', 'helvetica': 'Arial'
   };
 
@@ -91,6 +100,7 @@ window.FolioFonts = (function () {
     return a !== b || c !== d;
   }
   function isAvailable(family) {
+    if (BUNDLED.includes(family)) return true;
     if (imported.some(i => i.family === family)) return true;
     if (installed && installed.size) return installed.has(family);
     return WINDOWS_CORE.includes(family) || measured(family);
@@ -99,13 +109,13 @@ window.FolioFonts = (function () {
   function docsCheck(families) {
     const problems = [];
     for (const f of new Set(families.filter(Boolean))) {
-      if (!DOCS_FONTS.has(f)) problems.push({ font: f, suggestion: DOCS_SUBSTITUTES[f.toLowerCase()] || null });
+      if (!DOCS_FONTS.has(external(f))) problems.push({ font: f, suggestion: DOCS_SUBSTITUTES[f.toLowerCase()] || null });
     }
     return problems;
   }
 
   return {
-    FAVOURITES, loadInstalled, loadImported, isAvailable, docsCheck,
+    FAVOURITES, BUNDLED, alias, external, loadInstalled, loadImported, isAvailable, docsCheck,
     get imported() { return imported; },
     get installed() { return installed; }
   };

@@ -11,7 +11,7 @@ window.FolioDOCX = (function () {
     m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i); if (m) return [m[1], m[2], m[3]].map(v => (+v).toString(16).padStart(2, '0')).join('').toUpperCase();
     return null;
   }
-  const fonts = f => `<w:rFonts w:ascii="${x(f)}" w:hAnsi="${x(f)}" w:cs="${x(f)}" w:eastAsia="${x(f)}"/>`;
+  const fonts = f => (f = window.FolioFonts ? window.FolioFonts.external(f) : f, `<w:rFonts w:ascii="${x(f)}" w:hAnsi="${x(f)}" w:cs="${x(f)}" w:eastAsia="${x(f)}"/>`);
   const field = name => `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ${name} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
 
   let TC_ID = 1, BM_ID = 1;

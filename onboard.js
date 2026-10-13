@@ -31,7 +31,7 @@ window.UnwipIntro = (function () {
       tip: 'Bring a Word document in and Unwip splits it into chapters at the headings.'
     },
     hemingway: {
-      name: 'Hemingway / ProWritingAid', icon: '✂️', blurb: 'Editing and tightening',
+      name: 'An editing or style checker', icon: '✂️', blurb: 'Tightening and readability',
       layout: 'calm', structure: 'chapters', font: 'Georgia', para: 'book',
       map: [['Highlighted problems', 'Revise (repeated words, adverbs, long sentences, filler)'], ['Readability', 'Revise › readability score'],
         ['Write mode', 'Writer mode with typewriter scrolling'], ['Word counts', 'Live counts, goals and progress']],
@@ -47,7 +47,7 @@ window.UnwipIntro = (function () {
   const LAYOUTS = {
     page: { name: 'Clean page', like: 'Feels like Google Docs or Word', desc: 'A list of chapters and a page. Everything else stays out of the way until you want it.', mode: 'focused' },
     desk: { name: 'Writer’s desk', like: 'Feels like Scrivener', desc: 'Binder, corkboard, outline, statuses and timeline: the whole project laid out.', mode: 'detailed' },
-    calm: { name: 'Distraction-free', like: 'Feels like iA Writer or Hemingway', desc: 'Just your words, full screen, with the current line kept in the middle.', mode: 'focused', writer: true }
+    calm: { name: 'Distraction-free', like: 'Feels like a distraction-free writing app', desc: 'Just your words, full screen, with the current line kept in the middle.', mode: 'focused', writer: true }
   };
   const STRUCT = {
     chapters: { name: 'Chapters', desc: 'Each chapter is one page.', tree: ['Chapter 1', 'Chapter 2', 'Chapter 3'] },
@@ -335,7 +335,7 @@ Ideas:
     ['#btn-cmdk', 'Find anything', 'Press Ctrl+K (or this magnifying glass) and type what you want: “snapshot”, “epub”, “map”, a chapter name. Every feature is in there, so nothing is ever more than a few letters away.'],
     ['#btn-panel', 'Side panel', 'Revise, Comments, Snapshots and Manuscript style share this panel. Click a tab to switch. Select some words and a small bar appears for comments, footnotes and alignment.'],
     ['#btn-revise', 'Revise', 'Highlights repeated words, adverbs, long sentences and filler for you to look at. It never changes anything by itself.',
-      { hemingway: 'This is the Hemingway-style part, without any AI.' }],
+      { hemingway: 'This is the readability checker, without any AI.' }],
     ['#btn-snap', 'Snapshots', 'Save a copy of a chapter before a big rewrite, and compare or go back later.',
       { scrivener: 'Same as Scrivener’s Snapshots.', docs: 'Like Version history, but you choose the moments.' }],
     ['#btn-copy-docs', 'Copy for Google Docs', 'Copies the chapter (or the whole book) ready to paste into Google Docs with the formatting right.'],
