@@ -160,9 +160,29 @@ window.UnwipDropbox = (function () {
     if (!(await listAll(OLD, true)).some(x => x['.tag'] === 'file')) await rpc('/files/delete_v2', { path: OLD });
     else throw new Error('Some files could not be moved out of the old Unwip folder yet');
   }
+  // which folder layout the books in Dropbox use. A version of Unwip that doesn't know the layout stops syncing
+  // and asks to be updated, instead of guessing (an older version guessing is what empties a phone).
+  const LAYOUT = 2, LAYOUT_FILE = '/.unwip-layout.json';
+  async function layoutGuard() {
+    const r = await call(CONTENT + '/files/download', { method: 'POST', headers: { 'Dropbox-API-Arg': headerJSON({ path: LAYOUT_FILE }) } });
+    if (r.ok) {
+      let j = {}; try { j = JSON.parse(await r.text()); } catch {}
+      if ((j.layout || 0) > LAYOUT) { st.needsUpdate = true; throw new Error('Your books in Dropbox were set up by a newer version of Unwip. Update this one (close and reopen it) to keep syncing.'); }
+      st.needsUpdate = false;
+      return j.layout === LAYOUT;
+    }
+    if (r.status !== 409) throw new Error('Dropbox check failed (' + r.status + ')');
+    return false;
+  }
+  async function writeLayout() {
+    const body = new TextEncoder().encode(JSON.stringify({ layout: LAYOUT, note: 'Written by Unwip. Tells older versions of Unwip to update before syncing.', by: window.UNWIP_VERSION || '' }, null, 1));
+    await call(CONTENT + '/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'Dropbox-API-Arg': headerJSON({ path: LAYOUT_FILE, mode: 'overwrite', mute: true }) }, body });
+  }
   async function syncOnce(opts) {
     await load();
+    const marked = await layoutGuard();
     await flatten();
+    if (!marked) await writeLayout();
     progress = { phase: 'list', found: 0 }; renderSoon();
     const changedNow = new Set(dirty); dirty.clear();
     // what's in Dropbox
@@ -379,6 +399,7 @@ window.UnwipDropbox = (function () {
   function statusText(short) {
     if (!st || !connected()) return { cls: 'off', text: 'Connect Dropbox' };
     if (st.broken) return { cls: 'warn', text: 'Dropbox: sign in again' };
+    if (st.needsUpdate && !running) return { cls: 'warn', text: short ? 'Update Unwip to sync' : 'Update Unwip to keep syncing (close and reopen it)' };
     if (running) return { cls: 'busy', text: progressText(short) };
     if (lastError) return { cls: 'warn', text: navigator.onLine === false ? 'Offline · will sync later' : 'Dropbox: couldn’t sync' };
     return { cls: 'ok', text: `Synced ${ago(st.last)}` };

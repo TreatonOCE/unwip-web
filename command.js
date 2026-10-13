@@ -57,6 +57,8 @@ window.UnwipCommand = (function () {
     ['Timeline', 'events days dates', '', detailed(() => U.setView('timeline')), desk(inProject)],
     ['Insights: pacing and characters', 'chapter length dialogue scenes pov point of view character tracker appearances chart', '', detailed(() => U.setView('insights')), desk(inProject)],
     ['Writing goals', 'target daily words deadline', '', () => U.goalsDialog(), desk(inProject)],
+    ['Report a problem', 'bug broken not working feedback help crash error send support', '', () => window.UnwipAbout && window.UnwipAbout.report(), () => !!window.UnwipAbout],
+    ['About Unwip', 'version credits licences licenses privacy ai no ai', '', () => window.UnwipAbout && window.UnwipAbout.about(), () => !!window.UnwipAbout],
     ['Sprint history', 'sprints wpm words per minute speed average best runs timer delete', '', () => window.UnwipSprints && window.UnwipSprints.open(), () => !!window.UnwipSprints],
     ['Writing history', 'calendar heatmap streak days stats statistics time of day best times words per day month progress log', '', () => window.UnwipHistory && window.UnwipHistory.open(), () => !!window.UnwipHistory],
     ['Dialogue view: only the dialogue', 'speech quotes conversation talking lines who speaks narration dim', 'Ctrl+Shift+D', () => window.UnwipDialogue && window.UnwipDialogue.toggle('dialogue'), needDoc],

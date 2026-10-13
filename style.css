@@ -1987,3 +1987,18 @@ button.stat-card { font: inherit; color: inherit; text-align: left; cursor: poin
 button.stat-card:hover { border-color: var(--accent); }
 @media (max-width: 620px) { .spr-cards { grid-template-columns: repeat(2, 1fr); } .spr-table td:nth-child(2), .spr-table th:nth-child(2) { display: none; } }
 .spr-filter select { width: auto; min-width: 220px; }
+
+/* ---- main screen footer: no-AI note, About, Report */
+.lib-foot { margin: 40px 0 10px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; color: var(--muted); font: 13px/1.5 var(--ui); }
+.noai { display: flex; align-items: center; gap: 10px; max-width: 640px; }
+.noai-badge { flex: none; border: 1.5px solid currentColor; border-radius: 99px; padding: 2px 10px; font: 700 11px var(--ui); letter-spacing: .5px; text-transform: uppercase; color: var(--text); }
+.lib-links { display: flex; gap: 8px; align-items: center; }
+.about-head { font: 15px var(--ui); } .about-head b { font-size: 22px; margin-right: 6px; } .about-head span { color: var(--muted); }
+.about-slogan { margin: 2px 0 12px; font-style: italic; color: var(--muted); }
+.about h4 { margin: 16px 0 4px; font: 700 12px var(--ui); text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.about p { margin: 0; }
+.about-credits { margin: 4px 0 14px; padding-left: 18px; font-size: 13.5px; } .about-credits li { margin: 4px 0; }
+.rep textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 90px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 14px/1.4 var(--ui); background: var(--paper); color: var(--text); }
+.rep-details { margin-top: 10px; font-size: 13px; } .rep-details summary { cursor: pointer; color: var(--muted); }
+.rep-details pre { white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 12px/1.45 ui-monospace, Consolas, monospace; }
+@media (max-width: 720px) { .noai { flex-direction: column; gap: 6px; } }

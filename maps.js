@@ -482,7 +482,7 @@ window.UnwipMaps = (function () {
     view.innerHTML = `<div class="mp-top">
         <button class="icon-btn" id="mp-close" data-tip="Close the map">${I.back}</button><b class="mp-title">${esc(f ? f.node.title : 'Map')}</b><span class="mp-saved" id="mp-saved">Saved</span>
         <span class="mp-sp"></span>
-        <button class="btn small" id="mp-gen" data-tip="Make a new random coastline, mountains, forests, rivers and towns. You can edit everything after">✨ Generate…</button>
+        <button class="btn small" id="mp-gen" data-tip="Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after">🎲 Random map…</button>
         <select id="mp-style" data-tip="Map style">${Object.entries(STYLES).map(([k, v]) => `<option value="${k}" ${st.style === k ? 'selected' : ''}>${v.name}</option>`).join('')}</select>
         <button class="btn small ghost ${st.grid ? 'on' : ''}" id="mp-grid" data-tip="Hex grid">⬡ Grid</button>
         <button class="btn small ghost ${st.compass ? 'on' : ''}" id="mp-compass" data-tip="Compass rose">🧭</button>
@@ -530,8 +530,8 @@ window.UnwipMaps = (function () {
     $('#mp-gen', view).onclick = async () => {
       let el;
       const hasLand = !!maskData();
-      const kind = await U.modal({ title: 'Generate land', onOpen: x => { el = x; },
-        body: `<p>Makes random land with mountains, forests, rivers, towns and made-up names. Undo brings back what was there.</p>
+      const kind = await U.modal({ title: 'Random map', onOpen: x => { el = x; },
+        body: `<p>Rolls random land with mountains, forests, rivers, towns and made-up names, using fixed rules and random numbers (like dice), not AI. Undo brings back what was there.</p>
           <div class="chip-row" id="mp-gen-mode" style="margin-top:8px"><button type="button" class="chip ${hasLand ? 'on' : ''}" data-v="add">Add it to this map (keep what’s here)</button><button type="button" class="chip ${hasLand ? '' : 'on'}" data-v="replace">Replace this map</button></div>`,
         buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Islands', value: 'archipelago', kind: 'ghost' }, { label: 'Continent', value: 'continent', kind: 'ghost' }, { label: 'One island', value: 'island', kind: 'primary' }] });
       if (!kind) return;
@@ -540,7 +540,7 @@ window.UnwipMaps = (function () {
     };
     document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('#mp-gen-mode .chip'); if (c) { c.parentElement.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); } });
     document.addEventListener('keydown', keys, true);
-    if (!st.land && !st.stamps.length) U.toast('A blank map. Try ✨ Generate… for a starting point, or paint land with 🟫.', '', 6000);
+    if (!st.land && !st.stamps.length) U.toast('A blank map. Try 🎲 Random map… for a starting point, or paint land with 🟫.', '', 6000);
   }
   // ---- sections: several maps inside one (the world, a region, a city…)
   function renderTabs() {
