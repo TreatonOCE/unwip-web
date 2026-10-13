@@ -17,12 +17,12 @@ window.UnwipDropbox = (function () {
   const CONFLICT = /\(([^()]*?)(?:['’]s)?\s*conflicted copy[^()]*\)/i;
 
   // which files travel: the project, its chapters, pictures and snapshots (not backups, not deleted projects)
-  const tracked = rel => {
+  const shaped = rel => {
     if (CONFLICT.test(rel)) return false;
-    const m = /^([^/]+)\/(.+)$/.exec(rel); if (!m) return false;
-    if (m[1].startsWith('_') || (st && [...(st.localOnly || []), ...(st.removedHere || [])].includes(m[1]))) return false;
+    const m = /^([^/]+)\/(.+)$/.exec(rel); if (!m || m[1].startsWith('_')) return false;
     return /^project\.json$|^docs\/[\w-]+\.html$|^media\/[^/]+$|^snapshots\/[\w-]+\/[^/]+$/.test(m[2]);
   };
+  const tracked = rel => shaped(rel) && !(st && [...(st.localOnly || []), ...(st.removedHere || [])].includes(rel.split('/')[0]));
   const isText = rel => /\.(html|json)$/.test(rel);
 
   // ---------------------------------------------------------------- state (kept on this device only)
@@ -35,11 +35,16 @@ window.UnwipDropbox = (function () {
   // every save marks the file as changed, and a sync follows a few seconds later
   const origWrite = FS.write, origRemove = FS.remove;
   const dirty = new Set();
-  FS.write = async (p, d) => { const r = await origWrite(p, d); if (p.startsWith(LOCAL)) { dirty.add(p.slice(LOCAL.length).toLowerCase()); soon(); } return r; };
-  FS.remove = async (p) => { const r = await origRemove(p); if (p.startsWith(LOCAL)) { dirty.add(p.slice(LOCAL.length).toLowerCase()); soon(); } return r; };
+  const changed = p => { if (!p.startsWith(LOCAL)) return; const rel = p.slice(LOCAL.length); dirty.add(rel.toLowerCase()); if (tracked(rel) && st && !st.pending) { st.pending = true; persist(); renderSoon(); } soon(); };
+  FS.write = async (p, d) => { const r = await origWrite(p, d); changed(p); return r; };
+  FS.remove = async (p) => { const r = await origRemove(p); changed(p); return r; };
   let soonT = null, firstDirtyAt = 0;
+  // syncing by itself is a choice (Settings › Where your projects live); otherwise it's the Sync button, with a ⚠
+  // when another device has changed something
+  const auto = () => !!(st && st.auto);
+  let news = false;
   function soon() {
-    if (!connected()) return;
+    if (!connected() || !auto()) return;
     if (!firstDirtyAt) firstDirtyAt = Date.now();
     clearTimeout(soonT);
     const wait = Date.now() - firstDirtyAt > 20000 ? 0 : 4000;   // a pause in typing, or at least every 20 seconds
@@ -187,11 +192,7 @@ window.UnwipDropbox = (function () {
     const changedNow = new Set(dirty); dirty.clear();
     // what's in Dropbox
     const remote = {};
-    for (const e of await listAll(REMOTE, true, n => { progress.found = n; renderSoon(); })) {
-      if (e['.tag'] !== 'file') continue;
-      const rel = e.path_display.slice(REMOTE.length + 1), k = e.path_lower.slice(REMOTE.length + 1);
-      if (tracked(rel)) remote[k] = { rel, rev: e.rev, hash: e.content_hash, lower: e.path_lower };
-    }
+    for (const [k, v] of Object.entries(await remoteFiles())) if (tracked(v.rel)) remote[k] = { ...v };
     // a whole project deleted on this device stays in Dropbox (and on the PC); it just stops syncing here
     const hereDirs = new Set((await FS.list('Unwip')).dirs.map(x => x.toLowerCase()));
     for (const k of Object.keys(st.records)) {
@@ -233,9 +234,59 @@ window.UnwipDropbox = (function () {
         else await push(k, L.rel, lb, lh, undefined);
       } else delete st.records[k];
     }
-    st.last = Date.now(); progress = null;
+    st.last = Date.now(); progress = null; news = false;
+    if (!dirty.size) st.pending = false;
     await persist();
     if (touched.size) tell(touched);
+  }
+  // what's in Dropbox. The first time, everything is listed; after that Dropbox is only asked what changed since
+  // (much quicker on a phone, and no "Checking… 2,000" every time)
+  function applyEntries(cache, entries) {
+    for (const e of entries) {
+      const k = e.path_lower.slice(REMOTE.length + 1);
+      if (e['.tag'] === 'deleted') { delete cache[k]; for (const x of Object.keys(cache)) if (x.startsWith(k + '/')) delete cache[x]; continue; }
+      if (e['.tag'] !== 'file') continue;
+      const rel = e.path_display.slice(REMOTE.length + 1);
+      if (shaped(rel)) cache[k] = { rel, rev: e.rev, hash: e.content_hash, lower: e.path_lower }; else delete cache[k];
+    }
+  }
+  async function remoteFiles() {
+    if (st.cursor && st.remote) {
+      const cache = { ...st.remote };
+      let r = await rpc('/files/list_folder/continue', { cursor: st.cursor });
+      if (r.ok) {
+        let j = await r.json(); applyEntries(cache, j.entries);
+        while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) throw new Error('Dropbox list failed (' + r.status + ')'); j = await r.json(); applyEntries(cache, j.entries); }
+        st.remote = cache; st.cursor = j.cursor; return cache;
+      }
+      if (r.status !== 409) throw new Error('Dropbox list failed (' + r.status + ')');   // 409: Dropbox wants a fresh start
+    }
+    const cache = {};
+    let r = await rpc('/files/list_folder', { path: REMOTE, recursive: true, include_deleted: false, limit: 2000 });
+    if (r.status === 409) { st.remote = {}; st.cursor = null; return {}; }
+    if (!r.ok) throw new Error('Dropbox list failed (' + r.status + ')');
+    let j = await r.json(), n = j.entries.length; applyEntries(cache, j.entries); progress.found = n; renderSoon();
+    while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) throw new Error('Dropbox list failed'); j = await r.json(); applyEntries(cache, j.entries); n += j.entries.length; progress.found = n; renderSoon(); }
+    st.remote = cache; st.cursor = j.cursor; return cache;
+  }
+  // has another device changed anything since the last sync? (asks Dropbox, changes nothing)
+  async function check() {
+    if (!connected() || running || !st.cursor || auto()) return news;
+    try {
+      let r = await rpc('/files/list_folder/continue', { cursor: st.cursor });
+      if (r.status === 409) { news = true; render(); return news; }
+      if (!r.ok) return news;
+      let j = await r.json(); const entries = [...j.entries];
+      while (j.has_more && entries.length < 20000) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) break; j = await r.json(); entries.push(...j.entries); }
+      news = entries.some(e => {
+        const rel = (e.path_display || e.path_lower || '').slice(REMOTE.length + 1), k = (e.path_lower || '').slice(REMOTE.length + 1);
+        if (!tracked(rel)) return false;
+        const rec = st.records[k];
+        return e['.tag'] === 'deleted' ? !!rec : e['.tag'] === 'file' && (!rec || rec.rev !== e.rev);
+      });
+      lastError = ''; render();
+    } catch (e) { lastError = e.message || String(e); render(); }
+    return news;
   }
   async function push(k, rel, bytes, hash, rev) {
     if (progress) progress.up++;
@@ -481,7 +532,9 @@ window.UnwipDropbox = (function () {
     if (st.broken) return { cls: 'warn', text: 'Dropbox: sign in again' };
     if (st.needsUpdate && !running) return { cls: 'warn', text: short ? 'Update Unwip to sync' : 'Update Unwip to keep syncing (close and reopen it)' };
     if (running) return { cls: 'busy', text: progressText(short) };
-    if (lastError) return { cls: 'warn', text: navigator.onLine === false ? 'Offline · will sync later' : 'Dropbox: couldn’t sync' };
+    if (lastError) return { cls: 'warn', text: navigator.onLine === false ? (auto() ? 'Offline · will sync later' : 'Offline') : 'Dropbox: couldn’t sync' };
+    if (!auto() && news) return { cls: 'news', text: short ? 'Changed elsewhere · Sync' : 'Changed on another device. Sync to bring it in.' };
+    if (!auto() && st.pending) return { cls: 'pending', text: short ? 'Not synced · Sync' : 'Changes on this device aren’t in Dropbox yet.' };
     return { cls: 'ok', text: `Synced ${ago(st.last)}` };
   }
   const CLOUD = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.2 4.4 4.4 0 0 0 7 18z"/></svg>';
@@ -490,7 +543,13 @@ window.UnwipDropbox = (function () {
     let pill = document.getElementById('dbx-pill');
     if (!pill) { pill = document.createElement('button'); pill.id = 'dbx-pill'; pill.className = 'dbx-pill'; head.insertBefore(pill, head.firstChild); pill.onclick = pillClick; }
     const s = statusText(true);
-    pill.className = 'dbx-pill ' + s.cls; pill.innerHTML = CLOUD + `<span>${esc(s.text)}</span>`;
+    const mark = s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : s.cls === 'pending' ? '<i class="dbx-dot"></i>' : '';
+    pill.className = 'dbx-pill ' + s.cls; pill.innerHTML = CLOUD + mark + `<span>${esc(s.text)}</span>`;
+    // in the writing screen, a small cloud button beside the book's name (same states, tap to sync)
+    const tb = document.querySelector('#workspace .tb-left');
+    let mini = document.getElementById('dbx-mini');
+    if (tb && connected() && !mini) { mini = document.createElement('button'); mini.id = 'dbx-mini'; mini.className = 'icon-btn dbx-mini'; tb.appendChild(mini); mini.onclick = pillClick; }
+    if (mini) { if (!connected()) mini.remove(); else { mini.className = 'icon-btn dbx-mini ' + s.cls; mini.innerHTML = CLOUD + mark; mini.title = statusText().text + (running ? '' : ' Tap to sync.'); } }
     pill.title = connected() ? `Dropbox${st.email ? ' · ' + st.email : ''}. Tap to sync now.` : 'Keep your books in step with your PC through Dropbox';
     const card = document.getElementById('dbx-card'); if (card) fillCard(card);
   }
@@ -502,12 +561,14 @@ window.UnwipDropbox = (function () {
          ${lastError ? `<p class="sy-note">Last problem: ${esc(lastError)}</p>` : ''}
          ${st.localOnly.length ? `<p class="sy-note">Kept on this ${esc(DEVICE)} only: ${st.localOnly.map(esc).join(', ')}</p>` : ''}
          ${st.removedHere.length ? `<p class="sy-note">Deleted on this ${esc(DEVICE)} but still in Dropbox: ${st.removedHere.map(esc).join(', ')}. <button class="link-btn" type="button" data-dbx="restore">Bring back</button></p>` : ''}
+         <label class="check sy-auto"><input type="checkbox" id="dbx-auto" ${auto() ? 'checked' : ''}><span>Sync by itself while I write. Off: tap <b>Sync</b> when you want to, and a ⚠ shows when another device has changed something.</span></label>
          <div class="sy-moves"><button class="btn primary" type="button" data-dbx="${st.broken ? 'connect' : 'sync'}">${st.broken ? 'Sign in to Dropbox again' : 'Sync now'}</button><button class="btn ghost" type="button" data-dbx="off">Disconnect</button></div>
          <p class="sy-note">Chapters, the binder, pictures and snapshots sync with the Unwip folder in your Dropbox, the same one your PC uses (on the PC: Settings › Where your projects live › Sync with Dropbox). If a chapter is changed on both at once, nothing is lost: the other version goes into Snapshots.</p>`
       : `<div class="sy-cur"><span class="sy-ic">📱</span><div><b>On this ${esc(DEVICE)} only</b><span class="sy-path">Saved inside this app. Connect Dropbox to work on the same books as your PC.</span></div></div>
          <div class="sy-moves"><button class="btn primary" type="button" data-dbx="connect">Connect Dropbox</button></div>`;
     const restore = async () => { st.removedHere = []; await persist(); sync(); };
     card.querySelectorAll('[data-dbx]').forEach(b => b.onclick = () => ({ connect, sync, off: disconnect, restore })[b.dataset.dbx]());
+    const ac = card.querySelector('#dbx-auto'); if (ac) ac.onchange = async () => { st.auto = ac.checked; await persist(); if (st.auto) sync(); else check(); render(); };
   }
 
   // ---------------------------------------------------------------- start up
@@ -521,10 +582,18 @@ window.UnwipDropbox = (function () {
       if (saved && q.get('state') === saved.state) setTimeout(() => finish(q.get('code'), saved.v, redirectUri()), 800);
     } else if (q.get('error')) history.replaceState(null, '', location.pathname);
     render();
-    if (connected()) setTimeout(() => sync({ quiet: true }), 1500);
-    setInterval(() => { if (connected() && !document.hidden) sync({ quiet: true }); else render(); }, 60000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && connected()) sync({ quiet: true }); });
-    window.addEventListener('online', () => { if (connected()) sync({ quiet: true }); });
+    const wake = () => { if (!connected()) return render(); if (auto()) sync({ quiet: true }); else check(); };
+    if (connected()) setTimeout(wake, 1500);
+    setInterval(() => { if (!document.hidden) wake(); else render(); }, 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
+    window.addEventListener('online', wake);
+    try {
+      const U = window.__unwip;
+      // leaving a book with changes that only this device has: say so, once
+      U.on('leave', () => { if (connected() && !auto() && st.pending) setTimeout(() => U.toastAction(`Some changes are only on this ${DEVICE} so far.`, 'Sync now', () => sync()), 400); render(); });
+      // opening a book when another device has changed things: offer to bring them in first
+      U.on('project', async () => { render(); if (connected() && !auto() && (news || await check())) U.toastAction('Another device has changed things since you last synced.', 'Sync now', () => sync(), 15000); });
+    } catch {}
     setTimeout(safariWarning, 5000);
   })();
 
@@ -542,5 +611,5 @@ window.UnwipDropbox = (function () {
     } catch {}
   }
 
-  return { connect, disconnect, sync, render, fillCard, connected: () => connected(), get state() { return st; }, get lastError() { return lastError; }, hasKey: !!KEY };
+  return { connect, disconnect, sync, check, render, fillCard, connected: () => connected(), get state() { return st; }, get lastError() { return lastError; }, hasKey: !!KEY };
 })();

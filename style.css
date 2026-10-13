@@ -2225,3 +2225,15 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .lib-group { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; margin: 14px 2px -4px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-weight: 600; }
 .lib-group:first-child { margin-top: 0; }
 .lib-group small { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+/* Dropbox on the phone: synced by a tap, with a ⚠ when another device changed something */
+.dbx-pill.news { color: #b45309; border-color: rgba(180, 83, 9, .45); }
+:root[data-theme="dark"] .dbx-pill.news { color: #fbbf24; }
+.dbx-pill.pending svg, .dbx-pill.news svg { color: #0061fe; }
+.dbx-warn { font-weight: 700; color: #d97706; margin-left: -2px; }
+.dbx-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #0061fe; margin-left: -3px; }
+.dbx-mini { position: relative; color: var(--muted); }
+.dbx-mini.ok svg { color: #0061fe; }
+.dbx-mini.busy svg { animation: pulse 1.2s ease-in-out infinite; color: #0061fe; }
+.dbx-mini .dbx-warn, .dbx-mini .dbx-dot { position: absolute; right: 2px; top: 2px; font-size: 11px; }
+.dbx-mini.warn { color: #b45309; }
+.sy-auto { margin: 10px 0 4px; }
