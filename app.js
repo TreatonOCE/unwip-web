@@ -653,7 +653,19 @@
       if (x.d.id === S.docId) { editor.innerHTML = x.html; markScenes(editor); resyncWords(); }
     }
     scheduleMeta(); renderBinder(); updateStatus();
-    toast(`Removed ${fmt(lines)} empty line${lines === 1 ? '' : 's'}${scenes ? ` and added ${scenes} scene break${scenes === 1 ? '' : 's'}` : ''}.`);
+    const undoTidy = async () => {
+      await flushSave();
+      for (const x of plan) {
+        await api.saveDoc(S.slug, x.d.id, x.before);
+        x.d.words = countWords(htmlText(x.before));
+        if (x.d.id === S.docId) { editor.innerHTML = x.before; markScenes(editor); resyncWords(); }
+      }
+      S.appUndo = null; scheduleMeta(); renderBinder(); updateStatus(); toast('Empty lines put back.');
+    };
+    // Ctrl+Z straight afterwards undoes it too (until you type in that document)
+    const open = plan.find(x => x.d.id === S.docId);
+    S.appUndo = open ? { docId: S.docId, html: editor.innerHTML, run: undoTidy } : null;
+    toastAction(`Removed ${fmt(lines)} empty line${lines === 1 ? '' : 's'}${scenes ? ` and added ${scenes} scene break${scenes === 1 ? '' : 's'}` : ''}.`, 'Undo', undoTidy, 15000);
   }
 
   async function mergeFolder(id) {
@@ -1327,6 +1339,14 @@
     if (S.docId === lp.docId) requestAnimationFrame(() => placeCaretAt(lp.offset || 0));
   }
 
+  // Ctrl+Z right after a whole-document change Unwip made (like Remove empty lines) undoes that change
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z' || !S.appUndo) return;
+    const t = e.target; if (t !== editor && t !== document.body && !(t.closest && t.closest('#binder, .tree')) && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    const u = S.appUndo;
+    if (u.docId !== S.docId || editor.innerHTML !== u.html) { S.appUndo = null; return; }
+    e.preventDefault(); e.stopPropagation(); S.appUndo = null; u.run();
+  }, true);
   editor.addEventListener('keydown', e => {
     emit('keydown', e); if (e.defaultPrevented) return;
     if (e.key === 'Tab') { e.preventDefault(); return; } // first-line indents are automatic
@@ -3954,13 +3974,18 @@
   $('#btn-split').innerHTML = I.columns;
   $('#sp-open').innerHTML = I.export;
   let spTimer = null;
+  // the same folders and order as the binder: folders as headings you can't pick, documents indented under them
   function splitOptions() {
-    const groups = [];
+    const groups = [], pad = d => '\u00a0\u00a0\u00a0\u00a0'.repeat(d);
     for (const r of S.project.binder) {
       if (r.kind === 'trash') continue;
-      const docs = []; const walk = (l, d) => l.forEach(n => { if (n.type === 'doc') docs.push({ n, d }); if (n.children) walk(n.children, d + 1); });
-      if (r.root) walk(r.children || [], 0); else if (r.type === 'doc') docs.push({ n: r, d: 0 });
-      if (docs.length) groups.push(`<optgroup label="${esc(r.root ? r.title : 'Unsorted')}">${docs.map(({ n, d }) => `<option value="${n.id}" ${n.id === S.splitId ? 'selected' : ''}>${'  '.repeat(d)}${esc(n.title || 'Untitled')}</option>`).join('')}</optgroup>`);
+      const rows = []; let docs = 0;
+      const walk = (l, d) => l.forEach(n => {
+        if (n.type === 'doc') { docs++; rows.push(`<option value="${n.id}" ${n.id === S.splitId ? 'selected' : ''}>${pad(d)}${n.map ? '🗺️ ' : ''}${esc(n.title || 'Untitled')}</option>`); }
+        else if (n.children && n.children.length) { rows.push(`<option disabled>${pad(d)}📁 ${esc(n.title || 'Folder')}</option>`); walk(n.children, d + 1); }
+      });
+      if (r.root) walk(r.children || [], 0); else if (r.type === 'doc') { docs++; rows.push(`<option value="${r.id}">${esc(r.title || 'Untitled')}</option>`); }
+      if (docs) groups.push(`<optgroup label="${esc(r.root ? r.title : 'Unsorted')}">${rows.join('')}</optgroup>`);
     }
     return groups.join('');
   }
@@ -3976,6 +4001,19 @@
     $('#split-pane').classList.remove('hidden');
     $('#btn-split').classList.add('on');
     $('#sp-doc').innerHTML = splitOptions();
+    const fn = findNode(id);
+    if (fn && fn.node.map) {   // a map: show its picture (edit it by opening it)
+      spEd.contentEditable = 'false'; spEd.classList.add('sp-map'); spEd.classList.remove('sheet-like');
+      spEd.innerHTML = '<p class="sp-map-wait">Drawing the map…</p>';
+      const pics = window.UnwipMaps && window.UnwipMaps.pictures ? await window.UnwipMaps.pictures(id).catch(() => []) : [];
+      if (S.splitId !== id) return;
+      spEd.innerHTML = pics.length ? '' : '<p>Couldn’t draw this map.</p>';
+      pics.forEach(p => { const fig = document.createElement('figure'); if (pics.length > 1) { const c = document.createElement('figcaption'); c.textContent = p.name; fig.appendChild(c); } p.canvas.className = 'sp-map-img'; fig.appendChild(p.canvas); spEd.appendChild(fig); });
+      const b = document.createElement('button'); b.className = 'btn small'; b.textContent = 'Open this map to edit it'; b.onclick = () => openDoc(id); spEd.appendChild(b);
+      $('#sp-foot').textContent = `Map · ${pics.length} section${pics.length === 1 ? '' : 's'} · ${rootOf(id).title || ''}`;
+      return;
+    }
+    spEd.contentEditable = 'true'; spEd.classList.remove('sp-map');
     spEd.innerHTML = (await api.loadDoc(S.slug, id)) || '<p><br></p>';
     spEd.classList.toggle('sheet-like', rootOf(id).kind !== 'manuscript');
     spFoot();

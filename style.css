@@ -2094,3 +2094,8 @@ button.stat-card:hover { border-color: var(--accent); }
 .tsh-left { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
 .tsh-opt { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 13.5px; }
 .tsh-sum { margin: 10px 0 0; }
+
+/* a map in split view */
+.sp-map figure { margin: 0 0 14px; } .sp-map figcaption { font: 600 13px var(--ui); color: var(--muted); margin-bottom: 4px; }
+.sp-map .sp-map-img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; }
+.sp-map-wait { color: var(--muted); font: 13px var(--ui); }

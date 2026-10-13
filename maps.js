@@ -497,6 +497,32 @@ window.UnwipMaps = (function () {
     st[list].splice(sel.i, 1); sel = null; changed(); schedule();
   }
 
+  // ================================================================== A PICTURE OF ANY MAP (split view)
+  // Draws another map document without touching the one open on screen: its pictures are read first, then the
+  // drawing swaps the map in and back out in one go, so nothing on screen or in a save can see it in between.
+  async function pictures(id) {
+    let data = null; try { data = JSON.parse(await api.loadDoc(S.slug, id) || 'null'); } catch {}
+    const secs = data && Array.isArray(data.sections) ? data.sections : [{ name: 'Main map', ...(data || {}) }];
+    const ready = [];
+    for (const sec of secs) {
+      const s = Object.assign(blank(), sec); s.boxes = s.boxes || [];
+      if (s.kind === 'town' && T) { const b = T.blank(); for (const k of Object.keys(b)) s[k] = s[k] || b[k]; }
+      const mk = document.createElement('canvas'); mk.width = MW; mk.height = MH; const mg = mk.getContext('2d', { willReadFrequently: true });
+      if (s.land) { const im = new Image(); im.src = s.land; await im.decode().catch(() => {}); mg.drawImage(im, 0, 0); }
+      ready.push({ s, mk, mg, name: sec.name || 'Map' });
+    }
+    const keep = { st, mask, mctx, landCache, landDirty, itemsDirty }, out = [];
+    try {
+      for (const r of ready) {
+        st = r.s; mask = r.mk; mctx = r.mg; landCache = null; landDirty = true;
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        renderAll(c.getContext('2d'), STYLES[st.style] || STYLES.parchment);
+        out.push({ name: r.name, canvas: c });
+      }
+    } finally { ({ st, mask, mctx, landCache, landDirty, itemsDirty } = keep); baseKey = ''; }
+    return out;
+  }
+
   // ================================================================== SCREEN
   async function exportPNG(copy) {
     const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2; const g = c.getContext('2d'); g.scale(2, 2);
@@ -688,5 +714,5 @@ window.UnwipMaps = (function () {
     undoPop: () => undo.pop(), select: s => { sel = s; }, landDirty: () => { landDirty = true; baseKey = ''; }, toast: (m, k) => U.toast(m, k || '', 6000)
   });
   U.on('leave', () => close(true)); U.on('doc', () => close(true)); U.on('view', () => close(true));
-  return { open, create, close, townGen: k => T && T.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
+  return { open, create, close, pictures, townGen: k => T && T.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
 })();
