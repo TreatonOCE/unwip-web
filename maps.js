@@ -31,7 +31,9 @@ window.UnwipMaps = (function () {
   let mask = null, mctx = null, landCache = null, landDirty = true, saveT = null, view = null, cv = null, ctx = null, drawing = null;
 
   // ================================================================== DATA
-  function blank(style = 'parchment') { return { v: 1, style, land: null, stamps: [], paths: [], labels: [], pins: [], grid: false, compass: true, frame: 'double', boxes: [], seed: 1 }; }
+  function blank(style = 'parchment', kind = 'world') { const b = { v: 1, kind, style, land: null, stamps: [], paths: [], labels: [], pins: [], grid: false, compass: true, frame: 'double', boxes: [], seed: 1 }; return kind === 'town' && T ? Object.assign(b, T.blank()) : b; }
+  let T = null;                               // town and city maps (town.js)
+  const isTown = () => !!(st && st.kind === 'town' && T);
   // a map document holds one or more sections (the whole world, a region, a city…), each a full map of its own
   let docData = null;
   async function load(id) {
@@ -48,6 +50,7 @@ window.UnwipMaps = (function () {
   async function useSection(i) {
     if (st && mask) st.land = maskData();
     docData.active = i; st = docData.sections[i]; st.boxes = st.boxes || [];
+    if (st.kind === 'town' && T) { const b = T.blank(); for (const k of Object.keys(b)) st[k] = st[k] || b[k]; }
     mctx.clearRect(0, 0, MW, MH);
     if (st.land) { const im = new Image(); im.src = st.land; await im.decode().catch(() => {}); mctx.drawImage(im, 0, 0); }
     landDirty = true; itemsDirty = true; undo = []; redo = []; sel = null;
@@ -186,6 +189,7 @@ window.UnwipMaps = (function () {
     return out;
   }
   function stamp(g, s, P) {
+    if (T && T.stamp(g, s, P)) return;
     const z = s.s || 1; g.save(); g.translate(s.x, s.y); g.scale(z, z); g.lineWidth = 1.6; g.strokeStyle = P.ink; g.lineJoin = 'round';
     if (s.k === 'tree') { g.fillStyle = P.forest; g.beginPath(); g.moveTo(0, -12); g.quadraticCurveTo(9, -9, 7, 0); g.quadraticCurveTo(0, 4, -7, 0); g.quadraticCurveTo(-9, -9, 0, -12); g.fill(); g.stroke(); g.beginPath(); g.moveTo(0, 1); g.lineTo(0, 6); g.stroke(); }
     else if (s.k === 'mountain') { g.fillStyle = P.mountain; g.beginPath(); g.moveTo(-18, 8); g.lineTo(-2, -20); g.lineTo(18, 8); g.closePath(); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-2, -20); g.lineTo(3, -6); g.lineTo(0, 8); g.stroke(); g.globalAlpha = 0.35; g.fillStyle = P.ink; g.beginPath(); g.moveTo(-2, -20); g.lineTo(18, 8); g.lineTo(3, 8); g.lineTo(3, -6); g.closePath(); g.fill(); }
@@ -203,6 +207,7 @@ window.UnwipMaps = (function () {
   }
   // the map is drawn in two cached layers (sea + land, then everything on top) so dragging and painting stay smooth
   function renderBase(g, P) {
+    if (isTown()) { T.renderBase(g, P); landDirty = false; return; }
     g.fillStyle = P.sea; g.fillRect(0, 0, W, H);
     g.strokeStyle = P.seaLine; g.globalAlpha = 0.25; g.lineWidth = 1;
     const r = rng(42); for (let i = 0; i < 140; i++) { const x = r() * W, y = r() * H; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 8, y - 5, x + 16, y); g.quadraticCurveTo(x + 24, y + 5, x + 32, y); g.stroke(); }
@@ -267,6 +272,7 @@ window.UnwipMaps = (function () {
   // skip: an item being dragged, drawn separately on top
   function renderItems(g, P, skip) {
     st.paths.forEach((p, i) => { if (!(skip && skip.type === 'path' && skip.i === i)) drawPath(g, p, P); });
+    if (isTown()) T.renderUnder(g, P, skip);
     st.stamps.map((s, i) => [s, i]).sort((a, b) => a[0].y - b[0].y).forEach(([s, i]) => { if (!(skip && skip.type === 'stamp' && skip.i === i)) stamp(g, s, P); });
     (st.boxes || []).forEach((b, i) => { if (!(skip && skip.type === 'box' && skip.i === i)) drawRectFrame(g, P, b.x, b.y, b.w, b.h, b.f); });
     st.labels.forEach((l, i) => { if (!(skip && skip.type === 'label' && skip.i === i)) drawLabel(g, l, P); });
@@ -281,6 +287,7 @@ window.UnwipMaps = (function () {
     if (s.type === 'label' && st.labels[s.i]) drawLabel(g, st.labels[s.i], P);
     if (s.type === 'pin' && st.pins[s.i]) drawPin(g, st.pins[s.i], P);
     if (s.type === 'box' && st.boxes[s.i]) { const b = st.boxes[s.i]; drawRectFrame(g, P, b.x, b.y, b.w, b.h, b.f); }
+    if (T && T.LISTS[s.type]) T.drawOne(g, s, P);
   }
   // for saving a picture
   function renderAll(g, P) { renderBase(g, P); renderItems(g, P); }
@@ -309,7 +316,10 @@ window.UnwipMaps = (function () {
     if (!itemsCache || itemsDirty) { if (!itemsCache) itemsCache = layer(); const g = itemsCache.getContext('2d'); g.clearRect(0, 0, W, H); renderItems(g, P, moving); itemsDirty = false; itemsSkip = moving; }
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = P.paper; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.setTransform(cam.z * dpr, 0, 0, cam.z * dpr, cam.x * dpr, cam.y * dpr);
-    if (painting) {
+    if (isTown() && T.busy && tool === 'water') {
+      ctx.drawImage(baseCache, 0, 0);
+      const q = quickLand({ land: '#7fa7c7' }); ctx.globalAlpha = 0.7; ctx.drawImage(q, 0, 0, W, H); ctx.globalAlpha = 1;
+    } else if (painting) {
       // plain sea with the live land on top; the full coastline is drawn again when you let go
       ctx.drawImage(seaCache, 0, 0); ctx.drawImage(quickLand(P), 0, 0, W, H);
     } else ctx.drawImage(baseCache, 0, 0);
@@ -323,8 +333,9 @@ window.UnwipMaps = (function () {
     if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i], hs = 12 / cam.z; ctx.save(); ctx.fillStyle = '#3d7bd9'; ctx.fillRect(b.x + b.w - hs / 2, b.y + b.h - hs / 2, hs, hs); ctx.restore(); }
     if (drawing && drawing.path) drawPath(ctx, drawing.path, P);
     if (drawing && drawing.box) { const b = norm(drawing.box); drawRectFrame(ctx, P, b.x, b.y, b.w, b.h, b.f); }
+    if (isTown()) T.drawPreview(ctx, P);
     syncFrameSelect();
-    if (BRUSHY.includes(tool) && hover) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 1.5 / cam.z; ctx.beginPath(); ctx.arc(hover.x, hover.y, brush * K / 2, 0, 7); ctx.stroke(); ctx.restore(); }
+    if ((BRUSHY.includes(tool) || (isTown() && T.brushy(tool))) && hover) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 1.5 / cam.z; ctx.beginPath(); ctx.arc(hover.x, hover.y, brush * K / 2, 0, 7); ctx.stroke(); ctx.restore(); }
   }
   let itemsSkip = null, raf = 0;
   const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
@@ -333,6 +344,8 @@ window.UnwipMaps = (function () {
 
   // ================================================================== HIT TESTING
   function bounds(s) {
+    if (s.type === 'stamp' && st.stamps[s.i] && T && /^t-/.test(st.stamps[s.i].k)) return T.stampBounds(st.stamps[s.i]);
+    if (T && T.LISTS[s.type]) return T.bounds(s);
     if (s.type === 'stamp') { const o = st.stamps[s.i]; if (!o) return null; const z = (o.s || 1) * (o.k === 'city' ? 26 : 18); return { x: o.x - z, y: o.y - z * 1.4, w: z * 2, h: z * 1.8 }; }
     if (s.type === 'pin') { const o = st.pins[s.i]; if (!o) return null; return { x: o.x - 12, y: o.y - 30, w: 24, h: 52 }; }
     if (s.type === 'box') { const o = st.boxes[s.i]; return o ? { x: o.x, y: o.y, w: o.w, h: o.h } : null; }
@@ -345,6 +358,10 @@ window.UnwipMaps = (function () {
     for (let i = st.labels.length - 1; i >= 0; i--) if (inB(bounds({ type: 'label', i }))) return { type: 'label', i };
     for (let i = st.stamps.length - 1; i >= 0; i--) if (inB(bounds({ type: 'stamp', i }))) return { type: 'stamp', i };
     for (let i = st.paths.length - 1; i >= 0; i--) if (st.paths[i].pts.some(p => Math.hypot(p[0] - x, p[1] - y) < 10)) return { type: 'path', i };
+    if (isTown()) { const h = T.hit(x, y); if (h && h.type !== 'area') return h; const b = hitBox(x, y); if (b) return b; return h; }
+    return hitBox(x, y);
+  }
+  function hitBox(x, y) {
     // frames: grab them by their lines (so clicking inside one still reaches what's in it)
     const near = 12 / Math.max(0.5, cam.z);
     for (let i = (st.boxes || []).length - 1; i >= 0; i--) { const b = st.boxes[i];
@@ -372,6 +389,7 @@ window.UnwipMaps = (function () {
     if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i]; if (Math.abs(p.x - b.x - b.w) < 14 / cam.z && Math.abs(p.y - b.y - b.h) < 14 / cam.z) { push(); drawing = { resize: b }; return; } }
     if (tool === 'select') { sel = hit(p.x, p.y); push(); drawing = { move: true, last: p }; itemsDirty = true; redraw(); return; }
     push();
+    if (isTown() && T.pointerDown(p, tool)) return;
     if (tool === 'land' || tool === 'water') { drawing = { brush: true, on: tool === 'land', last: p }; paint(p.x, p.y, drawing.on); redraw(); return; }
     if (['forest', 'mountain', 'hill'].includes(tool)) { drawing = { scatter: tool === 'forest' ? 'tree' : tool, last: p }; scatter(p); changed(); return; }
     if (['town', 'city', 'tower', 'ruin'].includes(tool)) { st.stamps.push({ k: tool, x: p.x, y: p.y, s: 1 }); sel = { type: 'stamp', i: st.stamps.length - 1 }; changed(); schedule(); return; }
@@ -395,10 +413,12 @@ window.UnwipMaps = (function () {
   }
   function pointerMove(e) {
     const p = world(e); hover = p;
+    if (T && T.busy) { T.pointerMove(p); return; }
     if (!drawing) { if (BRUSHY.includes(tool)) redraw(); return; }
     if (drawing.pan) { cam.x = drawing.cx + e.clientX - drawing.sx; cam.y = drawing.cy + e.clientY - drawing.sy; redraw(); return; }
     if (drawing.move && sel) {
       const dx = p.x - drawing.last.x, dy = p.y - drawing.last.y; drawing.last = p;
+      if (T && T.LISTS[sel.type]) { T.moveBy(sel, dx, dy); redraw(); return; }
       const o = sel.type === 'path' ? null : st[{ stamp: 'stamps', pin: 'pins', label: 'labels', box: 'boxes' }[sel.type]][sel.i];
       if (o) { o.x += dx; o.y += dy; } else if (sel.type === 'path') st.paths[sel.i].pts.forEach(q => { q[0] += dx; q[1] += dy; });
       redraw(); return;                      // the dragged item is drawn on its own layer, so nothing else is redrawn
@@ -410,6 +430,7 @@ window.UnwipMaps = (function () {
     if (drawing.path) { const l = drawing.path.pts[drawing.path.pts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) > 10) { drawing.path.pts.push([p.x, p.y]); redraw(); } }
   }
   function pointerUp() {
+    if (T && T.busy) { T.pointerUp(); return; }
     if (!drawing) return;
     const d = drawing; drawing = null;
     if (d.brush) landDirty = true;
@@ -451,14 +472,28 @@ window.UnwipMaps = (function () {
     if (existing) Object.assign(existing, data); else { st.labels.push({ x: p.x, y: p.y, ...data }); sel = { type: 'label', i: st.labels.length - 1 }; }
     changed(); schedule();
   }
+  async function townFor(s) {
+    let sec = s.townId && docData.sections.find(x => x.id === s.townId);
+    if (!sec) {
+      const lab = st.labels.filter(l => Math.hypot(l.x - s.x, l.y - s.y) < 70).sort((a, b) => Math.hypot(a.x - s.x, a.y - s.y) - Math.hypot(b.x - s.x, b.y - s.y))[0];
+      const ok = await U.confirmBox('Make a town map?', `Adds a town map${lab ? ` for <b>${esc(lab.text)}</b>` : ''} to this map, as a new section. Double-click the ${s.k === 'city' ? 'city' : 'town'} again any time to go there.`, 'Make a town map');
+      if (!ok) return;
+      const here = st; sec = await addSection(s.k === 'city' ? 'city' : 'town', null, { name: lab ? lab.text : '' });
+      if (!sec) return;
+      s.townId = sec.id; here.townId = here.townId || null; schedule();
+      return;
+    }
+    await switchTo(docData.sections.indexOf(sec));
+  }
   function dblclick(e) {
     const p = world(e), h = hit(p.x, p.y); if (!h) return;
+    if (h.type === 'stamp' && !isTown() && ['town', 'city'].includes(st.stamps[h.i].k) && T) { townFor(st.stamps[h.i]); return; }
     if (h.type === 'label') { push(); addLabel(null, st.labels[h.i]); }
     if (h.type === 'pin') { const pin = st.pins[h.i]; if (pin.placeId && U.findNode(pin.placeId)) { close().then(() => U.openDoc(pin.placeId)); } else { push(); addPin(null, pin); } }
   }
   function removeSel() {
     if (!sel) return; push();
-    const list = { stamp: 'stamps', pin: 'pins', label: 'labels', path: 'paths', box: 'boxes' }[sel.type];
+    const list = { stamp: 'stamps', pin: 'pins', label: 'labels', path: 'paths', box: 'boxes', ...(T ? T.LISTS : {}) }[sel.type];
     st[list].splice(sel.i, 1); sel = null; changed(); schedule();
   }
 
@@ -473,7 +508,15 @@ window.UnwipMaps = (function () {
   }
   function fit() { const r = view.querySelector('.mp-stage').getBoundingClientRect(); const z = Math.min(r.width / W, r.height / H) * 0.96; cam = { z, x: (r.width - W * z) / 2, y: (r.height - H * z) / 2 }; }
   function resize() { if (!cv) return; const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; draw(); }
-  function setTool(t) { tool = t; if (t === 'frame' && sel && sel.type === 'box') { sel = null; if (cv) redraw(); } $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('.mp-brush', view).classList.toggle('dim', !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); syncFrameSelect(); }
+  function buildTools() {
+    const box = view && $('.mp-toollist', view); if (!box) return;
+    box.innerHTML = (isTown() ? T.TOOLS : TOOLS).map(([t, ic, tip]) => `<button class="mp-tool" data-t="${t}" data-tip="${esc(tip)}">${ic}</button>`).join('');
+    $$('.mp-tool', box).forEach(b => b.onclick = () => setTool(b.dataset.t));
+    const gen = $('#mp-gen', view); if (gen) { gen.textContent = isTown() ? '🎲 Random town…' : '🎲 Random map…'; gen.dataset.tip = isTown() ? 'Roll a random village, town or city: streets, buildings, walls and water, from fixed rules and random numbers (no AI). You can edit everything after' : 'Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after'; }
+    const clr = $('#mp-clear', view); if (clr) clr.dataset.tip = isTown() ? 'Start this town again from empty ground' : 'Start this map section again from empty sea';
+  }
+  function setTool(t) { tool = t;
+    { const o = view && $('#mp-opts', view); if (o) { if (isTown()) T.optionsBar(t, o); else { o.innerHTML = ''; o.classList.add('hidden'); } } } if (t === 'frame' && sel && sel.type === 'box') { sel = null; if (cv) redraw(); } $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('.mp-brush', view).classList.toggle('dim', isTown() ? t !== 'water' : !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); syncFrameSelect(); }
   async function open(id) {
     await close(true);
     nodeId = id; await load(id);
@@ -493,18 +536,18 @@ window.UnwipMaps = (function () {
         <button class="btn small" id="mp-png" data-tip="Save as a PNG picture (high resolution)">Save PNG…</button>
       </div>
       <div class="mp-tabs" id="mp-tabs"></div>
-      <div class="mp-body"><div class="mp-tools">${TOOLS.map(([t, ic, tip]) => `<button class="mp-tool" data-t="${t}" data-tip="${esc(tip)}">${ic}</button>`).join('')}
+      <div class="mp-body"><div class="mp-tools"><div class="mp-toollist"></div>
         <div class="mp-brush" data-tip="Brush size: how big the land, water, forest and mountain brushes paint"><span class="mp-brush-ic">🖌️</span><input type="range" id="mp-size" min="4" max="60" value="${brush}" orient="vertical"><span class="mp-brush-n" id="mp-size-n">${brush}</span></div></div>
-        <div class="mp-stage"><canvas></canvas><div class="mp-hint">Scroll to zoom · drag empty space to move around · double-click a pin or label to edit it</div></div></div>`;
+        <div class="mp-stage"><canvas></canvas><div class="mp-opts hidden" id="mp-opts"></div><div class="mp-hint">Scroll to zoom · drag empty space to move around · double-click a pin or label to edit it</div></div></div>`;
     const ew = $('#editor-wrap'); ew.classList.add('hidden'); ew.after(view);
     cv = $('canvas', view); ctx = cv.getContext('2d');
-    resize(); fit(); setTool('select'); draw();
+    buildTools(); resize(); fit(); setTool('select'); draw();
     cv.addEventListener('pointerdown', pointerDown); cv.addEventListener('pointermove', pointerMove); window.addEventListener('pointerup', pointerUp);
     cv.addEventListener('wheel', wheel, { passive: false }); cv.addEventListener('dblclick', dblclick);
     let autoFit = true;
     new ResizeObserver(() => { if (!view) return; if (autoFit) fit(); resize(); }).observe($('.mp-stage', view));
     cv.addEventListener('pointerdown', () => { autoFit = false; }); cv.addEventListener('wheel', () => { autoFit = false; });
-    $$('.mp-tool', view).forEach(b => b.onclick = () => setTool(b.dataset.t));
+    buildTools();
     $('#mp-size', view).oninput = e => { brush = +e.target.value; $('#mp-size-n', view).textContent = brush; redraw(); };
     $('#mp-close', view).onclick = () => close();
     $('#mp-style', view).onchange = e => { push(); st.style = e.target.value; landDirty = true; changed(); schedule(); };
@@ -517,9 +560,9 @@ window.UnwipMaps = (function () {
       else { push(); st.frame = v; }
       changed(); schedule(); };
     $('#mp-clear', view).onclick = async () => {
-      if (!await U.confirmBox('Clear this map?', 'Removes all land, forests, towns, roads, labels and pins from this section. Undo (Ctrl+Z) brings it back.', 'Clear the map')) return;
-      push(); const keep = { name: st.name, style: st.style, grid: st.grid, compass: st.compass, frame: st.frame };
-      Object.keys(st).forEach(k => delete st[k]); Object.assign(st, blank(keep.style), keep);
+      if (!await U.confirmBox('Clear this map?', isTown() ? 'Removes all streets, buildings, walls, water, areas, landmarks, labels and pins from this section. Undo (Ctrl+Z) brings it back.' : 'Removes all land, forests, towns, roads, labels and pins from this section. Undo (Ctrl+Z) brings it back.', 'Clear the map')) return;
+      push(); const keep = { name: st.name, style: st.style, grid: st.grid, compass: st.compass, frame: st.frame, kind: st.kind || 'world' };
+      Object.keys(st).forEach(k => delete st[k]); Object.assign(st, blank(keep.style, keep.kind), keep);
       mctx.clearRect(0, 0, MW, MH); landDirty = true; sel = null; changed(); schedule();
     };
     renderTabs();
@@ -528,6 +571,7 @@ window.UnwipMaps = (function () {
     $('#mp-copy', view).onclick = () => exportPNG(true);
     $('#mp-png', view).onclick = () => exportPNG(false);
     $('#mp-gen', view).onclick = async () => {
+      if (isTown()) return T.randomDialog();
       let el;
       const hasLand = !!maskData();
       const kind = await U.modal({ title: 'Random map', onOpen: x => { el = x; },
@@ -540,12 +584,12 @@ window.UnwipMaps = (function () {
     };
     document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('#mp-gen-mode .chip'); if (c) { c.parentElement.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); } });
     document.addEventListener('keydown', keys, true);
-    if (!st.land && !st.stamps.length) U.toast('A blank map. Try 🎲 Random map… for a starting point, or paint land with 🟫.', '', 6000);
+    if (isTown() ? !st.streets.length && !st.buildings.length : !st.land && !st.stamps.length) U.toast(isTown() ? 'An empty town. Try 🎲 Random town… for a starting point, or draw streets and click between them to fill in buildings.' : 'A blank map. Try 🎲 Random map… for a starting point, or paint land with 🟫.', '', 7000);
   }
   // ---- sections: several maps inside one (the world, a region, a city…)
   function renderTabs() {
     const box = $('#mp-tabs', view); if (!box) return;
-    box.innerHTML = docData.sections.map((x, i) => `<button class="mp-tab ${i === docData.active ? 'on' : ''}" data-i="${i}" data-tip="Double-click to rename, right-click for more">${esc(x.name || 'Map ' + (i + 1))}</button>`).join('') +
+    box.innerHTML = docData.sections.map((x, i) => `<button class="mp-tab ${i === docData.active ? 'on' : ''}" data-i="${i}" data-tip="${x.kind === 'town' ? 'Town map. ' : ''}Double-click to rename, right-click for more">${x.kind === 'town' ? '🏘️ ' : ''}${esc(x.name || 'Map ' + (i + 1))}</button>`).join('') +
       `<button class="mp-tab add" id="mp-add-sec" data-tip="Add another map section: a region close-up, a city, another continent…">+ Section</button>`;
     $$('.mp-tab[data-i]', box).forEach(b => {
       const i = +b.dataset.i;
@@ -563,6 +607,7 @@ window.UnwipMaps = (function () {
   function syncControls() {
     const v = view; if (!v) return;
     $('#mp-style', v).value = st.style; $('#mp-frame', v).value = st.frame || 'double';
+    buildTools(); setTool(tool && $$('.mp-tool', v).some(b => b.dataset.t === tool) ? tool : 'select');
     $('#mp-grid', v).classList.toggle('on', !!st.grid); $('#mp-compass', v).classList.toggle('on', !!st.compass);
   }
   async function renameSection(i) {
@@ -581,22 +626,30 @@ window.UnwipMaps = (function () {
     docData.sections.splice(i, 1);
     st = null; await useSection(Math.min(i, docData.sections.length - 1)); syncControls(); renderTabs(); baseKey = ''; changed(); schedule();
   }
-  async function addSection(how, from) {
+  async function addSection(how, from, opts = {}) {
     let el;
-    if (how !== 'copy') {
-      how = await U.modal({ title: 'New map section', onOpen: x => { el = x; },
-        body: `<div class="field"><label>Name</label><input id="ms-name" placeholder="e.g. The Northern Reach, City of Kael"></div><p class="hint" style="margin-top:8px">Start it empty, or generate land to work from.</p>`,
-        buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Empty', value: 'blank', kind: 'ghost' }, { label: 'Islands', value: 'archipelago', kind: 'ghost' }, { label: 'Continent', value: 'continent', kind: 'ghost' }, { label: 'One island', value: 'island', kind: 'primary' }] });
+    if (!how) {
+      let kind = opts.kind || (T ? null : 'world');
+      if (!kind) kind = await U.modal({ title: 'New map section', body: '<p>What kind of map?</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: '🏘️ Town or city', value: 'town', kind: 'ghost' }, { label: '🗺️ World or region', value: 'world', kind: 'primary' }] });
+      if (!kind) return;
+      how = await U.modal({ title: kind === 'town' ? 'New town map' : 'New map section', onOpen: x => { el = x; if (opts.name) x.querySelector('#ms-name').value = opts.name; },
+        body: `<div class="field"><label>Name</label><input id="ms-name" placeholder="${kind === 'town' ? 'e.g. Kael, Ashford, the Old Port' : 'e.g. The Northern Reach'}"></div><p class="hint" style="margin-top:8px">${kind === 'town' ? 'Start it empty, or roll a village, town or city to work from (🎲 no AI).' : 'Start it empty, or generate land to work from.'}</p>`,
+        buttons: kind === 'town' ? [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Empty', value: 'tblank', kind: 'ghost' }, { label: 'Village', value: 'village', kind: 'ghost' }, { label: 'Town', value: 'town', kind: 'ghost' }, { label: 'City', value: 'city', kind: 'primary' }]
+          : [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Empty', value: 'blank', kind: 'ghost' }, { label: 'Islands', value: 'archipelago', kind: 'ghost' }, { label: 'Continent', value: 'continent', kind: 'ghost' }, { label: 'One island', value: 'island', kind: 'primary' }] });
       if (!how) return;
     }
     st.land = maskData();
-    const name = how === 'copy' ? `${docData.sections[from].name} (copy)` : ((el && el.querySelector('#ms-name').value.trim()) || `Section ${docData.sections.length + 1}`);
-    const sec = how === 'copy' ? JSON.parse(JSON.stringify(docData.sections[from])) : blank(st.style);
-    sec.name = name;
+    const name = how === 'copy' ? `${docData.sections[from].name} (copy)` : ((el && el.querySelector('#ms-name').value.trim()) || opts.name || `Section ${docData.sections.length + 1}`);
+    const townKind = ['tblank', 'village', 'town', 'city'].includes(how);
+    const sec = how === 'copy' ? JSON.parse(JSON.stringify(docData.sections[from])) : blank(st.style, townKind ? 'town' : 'world');
+    sec.name = name; sec.id = U.uid();
+    if (how === 'copy') sec.id = U.uid();
     docData.sections.push(sec);
     await useSection(docData.sections.length - 1); syncControls(); renderTabs(); baseKey = '';
-    if (how !== 'copy' && how !== 'blank') generate(how); else { changed(); schedule(); }
+    if (townKind) { if (how !== 'tblank') T.generate(how); else { changed(); schedule(); } }
+    else if (how !== 'copy' && how !== 'blank') generate(how); else { changed(); schedule(); }
     undo = [];
+    return sec;
   }
   function keys(e) {
     if (!view || document.querySelector('.modal-back')) return;
@@ -615,15 +668,25 @@ window.UnwipMaps = (function () {
     $('#editor-wrap').classList.remove('hidden');
   }
   async function create(parentId) {
-    const title = await U.promptText('New map', 'Name of the map', 'Map of the world'); if (!title) return;
+    let kind = 'world';
+    if (T) { kind = await U.modal({ title: 'New map', body: '<p>What kind of map?</p><p class="hint">A <b>world or region</b> map has coastlines, mountains, forests and towns. A <b>town or city</b> map has streets, buildings and walls. One map can hold both: add sections with “+ Section”.</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: '🏘️ Town or city', value: 'town', kind: 'ghost' }, { label: '🗺️ World or region', value: 'world', kind: 'primary' }] }); if (!kind) return; }
+    const title = await U.promptText('New map', 'Name of the map', kind === 'town' ? 'Map of the city' : 'Map of the world'); if (!title) return;
     const home = S.project.binder.find(n => n.root && n.kind === 'places') || S.project.binder.find(n => n.root && n.kind === 'notes') || S.project.binder[0];
     const f = U.findNode(parentId) || U.findNode(home.id);
     const node = { id: U.uid(), type: 'doc', title, words: 0, map: true, icon: '🗺️' };
     (f.node.children = f.node.children || []).push(node); f.node.open = true;
-    await api.saveDoc(S.slug, node.id, JSON.stringify(blank()));
+    await api.saveDoc(S.slug, node.id, JSON.stringify(blank('parchment', kind)));
     U.scheduleMeta(); U.renderBinder();
     U.openDoc(node.id);
   }
+  // what town.js needs from here
+  const shade = (hex, amt) => { const n = parseInt(hex.slice(1), 16); const f = c => Math.max(0, Math.min(255, Math.round(c + (amt > 0 ? (255 - c) * amt : c * amt)))); return '#' + [f(n >> 16), f((n >> 8) & 255), f(n & 255)].map(v => v.toString(16).padStart(2, '0')).join(''); };
+  if (window.UnwipTownFactory) T = window.UnwipTownFactory({
+    W, H, MW, MH, K, STYLES, U, rng, noise2, fbm, name, shade,
+    get st() { return st; }, get mask() { return mask; }, get mctx() { return mctx; }, get brush() { return brush; },
+    paint: (x, y, on, from) => paint(x, y, on, from), push: () => push(), changed: () => changed(), schedule: () => schedule(), redraw: () => redraw(),
+    undoPop: () => undo.pop(), select: s => { sel = s; }, landDirty: () => { landDirty = true; baseKey = ''; }, toast: (m, k) => U.toast(m, k || '', 6000)
+  });
   U.on('leave', () => close(true)); U.on('doc', () => close(true)); U.on('view', () => close(true));
-  return { open, create, close, generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; } };
+  return { open, create, close, townGen: k => T && T.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
 })();

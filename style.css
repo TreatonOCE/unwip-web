@@ -2002,3 +2002,11 @@ button.stat-card:hover { border-color: var(--accent); }
 .rep-details { margin-top: 10px; font-size: 13px; } .rep-details summary { cursor: pointer; color: var(--muted); }
 .rep-details pre { white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 12px/1.45 ui-monospace, Consolas, monospace; }
 @media (max-width: 720px) { .noai { flex-direction: column; gap: 6px; } }
+/* ---- town maps: tool options appear only for the picked tool */
+.mp-toollist { display: contents; }
+.mp-opts { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; pointer-events: none; z-index: 2; }
+.mp-opts > * { pointer-events: auto; }
+.mp-opts .chip { background: var(--paper); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.mp-opts .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.mp-opt-l { font: 700 11px var(--ui); text-transform: uppercase; letter-spacing: .5px; color: var(--muted); background: var(--paper); padding: 5px 8px; border-radius: 99px; }
+.mp-opt-h { font: 12.5px var(--ui); color: var(--muted); background: color-mix(in srgb, var(--paper) 85%, transparent); padding: 4px 10px; border-radius: 99px; }
