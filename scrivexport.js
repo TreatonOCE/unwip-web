@@ -154,8 +154,19 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
     </ProjectProperties>
 </ScrivenerProject>
 `;
-    files.unshift({ name: `${name}.scrivx`, data: scrivx }, { name: 'Files/version.txt', data: '18' });
-    return { files: files.map(f => ({ name: f.name, data: typeof f.data === 'string' ? new TextEncoder().encode(f.data) : f.data })), docs: docsOut.length, mapsSkipped, pics };
+    // the other files Scrivener expects in a project: its settings, a styles list and a fingerprint of each document
+    const bookTitle = (P.book && P.book.title) || P.title || name, author = (P.book && P.book.author) || (S.settings && S.settings.author) || '';
+    const ini = s => String(s || '').replace(/[\r\n]+/g, ' ');
+    const sums = [];
+    for (const f of files) { const m = /^Files\/Docs\/(\d+\.rtf)$/.exec(f.name); if (!m) continue; const bytes = typeof f.data === 'string' ? new TextEncoder().encode(f.data) : f.data; const h = await crypto.subtle.digest('SHA-1', bytes); sums.push(`${m[1]}=${[...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('')}`); }
+    files.unshift(
+      { name: `${name}.scrivx`, data: scrivx }, { name: 'Files/version.txt', data: '18' },
+      { name: 'Files/styles.xml', data: '<?xml version="1.0" encoding="UTF-8"?>\n<Styles>\n</Styles>\n' },
+      { name: 'Files/Docs/docs.checksum', data: sums.join('\n') + '\n' },
+      { name: 'Snapshots/', dir: true, data: new Uint8Array(0) },
+      { name: 'Settings/ui.ini', data: '[General]\nexpandedBinderItems=\nfirstEditorSource=\nsecondEditorSource=\ninspectorMode=0\n\n[Inspector]\nmode=0\n' },
+      { name: 'Settings/compile.ini', data: `[General]\noutputType=-1\n\n[Content]\nDocumentSet=0\n\n[MetaData]\ntitle=${ini(bookTitle)}\nauthors=${ini(author)}\nlanguageCode=en\n` });
+    return { files: files.map(f => ({ name: f.name, dir: !!f.dir, data: typeof f.data === 'string' ? new TextEncoder().encode(f.data) : f.data })), docs: docsOut.length, mapsSkipped, pics };
   }
 
   // ------------------------------------------------------------------ the window
