@@ -453,6 +453,19 @@
     }
     const row = e.target.closest('.tree-row'); if (!row) return;
     if (e.target.closest('.tr-add')) { addNode('doc', row.dataset.id, true); return; }
+    // a second click on the same row straight after the first is a double-click: rename. Counted here rather than
+    // left to the browser's dblclick, because the first click redraws the binder and Windows may then not see a
+    // double-click on the new row at all.
+    if (!e.target.closest('input.rename')) {
+      const now = Date.now(), again = S.lastRowClick && S.lastRowClick.id === row.dataset.id && now - S.lastRowClick.t < 500;
+      S.lastRowClick = { id: row.dataset.id, t: now };
+      if ((e.detail >= 2 || again) && !e.target.closest('.tr-chev')) {
+        S.lastRowClick = null;
+        const n0 = (findNode(row.dataset.id) || {}).node;
+        if (n0 && !(n0.root && n0.kind === 'trash')) setTimeout(() => startRename(null, n0), 0);
+        return;
+      }
+    }
     const f = findNode(row.dataset.id); if (!f) return;
     const n = f.node;
     if (n.type === 'folder') {
@@ -535,6 +548,7 @@
   });
 
   function startRename(row, n) {
+    if (S.renaming && S.renaming.isConnected) return;   // already renaming (the click and the dblclick both ask)
     // the binder may have been redrawn since the first click of a double-click (opening the document does that)
     row = $(`.tree-row[data-id="${n.id}"]`) || row;
     const titleEl = row && $('.tr-title', row); if (!titleEl) return;
