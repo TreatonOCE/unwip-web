@@ -93,9 +93,10 @@ window.UnwipAbout = (function () {
       <p>Unwip is built with free and open-source fonts and software, used under their licences: the fonts EB Garamond, Crimson Pro, Cinzel and Oswald, Larkspur (our cut of Lora) and Bookhaven (our cut of Libre Baskerville)${api.web ? '' : ', the Harper grammar checker, and Electron and Chromium, which run the PC app'}. The full licence texts are under Open-source licences.</p>
       <h4>Trademarks</h4>
       <p class="about-small">Scrivener, Microsoft Word, Google Docs, Dropbox, OneDrive, Kindle, Apple Books, Kobo and other product names mentioned in Unwip belong to their owners. They’re named only to say what Unwip works with; Unwip isn’t made by, endorsed by or connected to any of them.</p>
-      <div class="sy-moves"><button class="btn" type="button" id="ab-lic">Open-source licences…</button><button class="btn" type="button" id="ab-report">Report a problem…</button></div>`;
+      <div class="sy-moves"><button class="btn" type="button" id="ab-lic">Open-source licences…</button><button class="btn" type="button" id="ab-report">Report a problem…</button><button class="btn" type="button" id="ab-usage">What I’ve used…</button></div>`;
     { const vb = body.querySelector('#ab-voice'); if (vb) vb.onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); window.UnwipVoice.setup(); }; }
     body.querySelector('#ab-lic').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); licenses(); };
+    body.querySelector('#ab-usage').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); window.UnwipUsage && window.UnwipUsage.open(); };
     body.querySelector('#ab-report').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); report(); };
     await U.modal({ title: 'About Unwip', body, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
   }

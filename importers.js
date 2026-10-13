@@ -245,10 +245,17 @@ window.FolioImport = (function () {
     if (g.length) out.g = g;
     return out.t || out.g ? out : null;
   }
+  // The project's binder: the .scrivx file, or, if that's damaged, Scrivener's own spare copy (newest first)
+  function binderOf(data) {
+    const tryParse = t => { if (!t) return null; const x = new DOMParser().parseFromString(t, 'application/xml'); return !x.querySelector('parsererror') && x.querySelector('Binder') ? x : null; };
+    const main = tryParse(data.scrivx); if (main) return { xml: main, spare: null };
+    for (const sp of (data.spares || []).slice().sort((a, b) => (b.at || 0) - (a.at || 0))) { const x = tryParse(sp.xml); if (x) return { xml: x, spare: sp }; }
+    throw new Error('This Scrivener project’s main file (the .scrivx inside it) is damaged, and there was no spare copy to use. Try opening it in Scrivener first, which can often repair it, or use one of Scrivener’s automatic backups (File › Back Up › Show Backup Folder).');
+  }
   // step 1 of importing: read the structure only (nothing is converted or changed) for the preview screen
   function scrivenerScan(data) {
-    const xml = new DOMParser().parseFromString(data.scrivx, 'application/xml');
-    const top = xml.querySelector('Binder'); if (!top) throw new Error('Could not read this Scrivener project.');
+    const B = binderOf(data), xml = B.xml;
+    const top = xml.querySelector('Binder');
     const count = el => { let docs = 0, folders = 0, pics = 0, other = 0; for (const b of el.querySelectorAll('BinderItem')) { const ty = b.getAttribute('Type'); if (/Folder/.test(ty)) folders++; else if (ty === 'Image') pics++; else if (['PDF', 'WebArchive', 'Media'].includes(ty)) other++; else docs++; } return { docs, folders, pics, other }; };
     const groups = [...top.children].filter(c => c.tagName === 'BinderItem').map(item => {
       const type = item.getAttribute('Type'), title = ((item.querySelector(':scope > Title') || {}).textContent || 'Untitled').trim();
@@ -266,12 +273,12 @@ window.FolioImport = (function () {
     const labels = [...xml.querySelectorAll('LabelSettings Labels Label')].map(l => l.textContent.trim()).filter(n => n && !/^no label$/i.test(n));
     const statuses = [...xml.querySelectorAll('StatusSettings StatusItems Status')].map(l => l.textContent.trim()).filter(n => n && !/^no status$/i.test(n));
     const prop = sel => ((xml.querySelector(sel) || {}).textContent || '').trim();
-    return { groups, notImported, labels, statuses, projectTitle: prop('ProjectProperties ProjectTitle'), author: prop('ProjectProperties FullName') };
+    return { groups, notImported, labels, statuses, projectTitle: prop('ProjectProperties ProjectTitle'), author: prop('ProjectProperties FullName'), spare: B.spare ? { name: B.spare.name, at: B.spare.at } : null };
   }
 
   function scrivener(data, uid, opts = {}) {
-    const xml = new DOMParser().parseFromString(data.scrivx, 'application/xml');
-    const report = { documents: 0, folders: 0, skipped: [], empty: 0, withNotes: 0 };
+    const xml = binderOf(data).xml;
+    const report = { documents: 0, folders: 0, skipped: [], empty: 0, withNotes: 0, missing: [], unreadable: [] };
     const docs = {};
     const noteDocs = [];
     const labels = {}, statuses = {};
@@ -318,6 +325,11 @@ window.FolioImport = (function () {
       }
       if (['Image', 'PDF', 'WebArchive', 'Media'].includes(type)) { report.skipped.push(`${title} (${type === 'WebArchive' ? 'web page' : type.toLowerCase()})`); return null; }
       const bodyHTML = rtfToHTML(f.content);   // cleaned at the end, once the project's main font is known
+      // a text document whose file is missing, or isn't readable RTF, is named in the report rather than quietly empty
+      if (!/Folder/.test(type) && !['Image', 'PDF', 'WebArchive', 'Media'].includes(type)) {
+        if (f.content == null && !(item.querySelector(':scope > Children'))) report.missing.push(title);
+        else if (f.content && !/^\s*\{\\rtf/.test(f.content)) report.unreadable.push(title);
+      }
       if (f.content) layoutOf(f.content);
       const look = rawLook(bodyHTML);
       const hasText = !!textOf(bodyHTML);

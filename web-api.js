@@ -290,7 +290,13 @@
       return slug;
     },
     async openProject(slug) { const p = await FS.json(`${pdir(slug)}/project.json`, null); if (!p) throw new Error('Could not open project'); return p; },
-    async saveProjectMeta(slug, project) { project.modified = Date.now(); await FS.write(`${pdir(slug)}/project.json`, JSON.stringify(project, null, 2)); return true; },
+    async saveProjectMeta(slug, project) {
+      // never save over a project a newer Unwip stored in a way this one doesn't know (main.js does the same)
+      const onDisk = await FS.json(`${pdir(slug)}/project.json`, null);
+      if (onDisk && (onDisk.format || 1) > (project.format || 1)) throw new Error('NEWER_FORMAT:' + (onDisk.savedBy || 'a newer version'));
+      project.modified = Date.now(); project.savedBy = window.UNWIP_VERSION || 'web';
+      await FS.write(`${pdir(slug)}/project.json`, JSON.stringify(project, null, 2)); return true;
+    },
     // deleting keeps a copy in a hidden “_Deleted” folder (the browser has no Recycle Bin)
     async deleteProject(slug) { await FS.copyTree(pdir(slug), `${LIB}/_Deleted/${Date.now()} ${slug}`); await FS.removeTree(pdir(slug)); return true; },
     revealProject: async () => '',
@@ -426,7 +432,8 @@
                 if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else if (/\.rtf$/i.test(m[2])) e.content = await f.text(); else e.image = await pic(f);
               }
             }
-            resolve({ name: (root.split('/').pop() || scrivx.name).replace(/\.scriv$/i, '').replace(/\.scrivx$/i, ''), scrivx: xml, files, mobile: stub, mobilePending: !stub && !!mob });
+            const spares = []; for (const n of ['binder.autosave', 'binder.backup']) { const f = list.find(x => rel(x) === 'Files/' + n); if (f) { const t = await f.text(); if (/<Binder[\s>]/.test(t)) spares.push({ name: n, xml: t, at: f.lastModified || 0 }); } }
+            resolve({ name: (root.split('/').pop() || scrivx.name).replace(/\.scriv$/i, '').replace(/\.scrivx$/i, ''), scrivx: xml, files, mobile: stub, mobilePending: !stub && !!mob, spares });
           } catch (e) { reject(e); }
         };
         inp.addEventListener('cancel', () => { inp.remove(); resolve(null); });

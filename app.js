@@ -173,7 +173,7 @@
 
   // ================================================================== LIBRARY
   async function showLibrary() {
-    if (S.slug) await leaveProject();
+    if (S.slug && (await leaveProject()) === false) return;   // stayed: the book couldn't be saved
     $('#workspace').classList.add('hidden');
     $('#library').classList.remove('hidden');
     try { S.settings = await api.getSettings(); } catch {}
@@ -228,7 +228,7 @@
   function newProjectTemplate() {
     const firstChapter = { id: uid(), type: 'doc', title: 'Chapter 1', words: 0 };
     return {
-      version: 1,
+      version: 1, format: FORMAT,
       style: mergeStyle({ ...JSON.parse(JSON.stringify(DEFAULT_STYLE)), ...((S.settings || {}).defaultStyle || {}) }),
       binder: ROOTS.map(r => ({ id: 'root-' + r.kind, type: 'folder', kind: r.kind, title: r.title, root: true, open: r.kind === 'manuscript', children: r.kind === 'manuscript' ? [firstChapter] : [] })),
       lastDoc: firstChapter.id,
@@ -238,10 +238,26 @@
   }
 
   // ================================================================== PROJECT
+  // How projects are stored. Raise FORMAT only when that changes, and add a step to MIGRATIONS that turns the
+  // previous format into the new one. Opening an older project backs it up first; a newer one is never opened
+  // (an older Unwip could drop things it doesn't understand), it asks you to update instead.
+  const FORMAT = 1;
+  const MIGRATIONS = { /* 2: project => { ... } */ };
   async function openProject(slug, opts = {}) {
     if (!opts.skipCheck && window.UnwipSync && !(await window.UnwipSync.beforeOpen(slug))) return false;
     try { S.settings = await api.getSettings(); } catch {}
     const project = await api.openProject(slug);
+    const fmt = project.format || 1;
+    if (fmt > FORMAT) {
+      await modal({ title: 'Made with a newer Unwip', body: `<p>“${esc(project.title || slug)}” was last saved by Unwip ${esc(project.savedBy || 'a newer version')}, which stores books in a newer way than this version can safely read.</p><p>To keep it safe, this version won’t open it. Update Unwip (Settings › Updates, or download it again from the Unwip page), then open it.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
+      return false;
+    }
+    if (fmt < FORMAT) {
+      try { await api.backup(slug); } catch (e) { toast('Couldn’t make a backup before updating this book, so it wasn’t changed: ' + esc(String(e.message || e)), 'warn', 9000); return false; }
+      for (let v = fmt + 1; v <= FORMAT; v++) if (MIGRATIONS[v]) MIGRATIONS[v](project);
+      toast(`Updated “${esc(project.title || slug)}” for this version of Unwip. A backup of how it was is in Backups.`, '', 7000);
+    }
+    project.format = FORMAT;
     project.style = mergeStyle(project.style);
     repairRoots(project);
     project.stats = project.stats || { days: {} };
@@ -310,6 +326,7 @@
     await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null;
     setRevise(false);
     await flushSave();
+    if (troubleRetry && !(await confirmBox('Not saved yet', 'Unwip still can’t save this book (the warning at the top says why). If you leave now, Unwip keeps trying in the background while it stays open, but it’s safest to fix the problem first.', 'Leave anyway'))) return false;
     if (S.metaTimer && S.slug) await saveMetaNow().catch(() => {});   // a rename or move made just before leaving
     if (S.slug) await api.backup(S.slug).catch(() => {});
     clearInterval(S.backupTimer);
@@ -1193,16 +1210,70 @@
     const f = findNode(id);
     if (f) { f.node.words = countWords(editorText()); f.node.mod = Date.now(); f.node.dev = S.device || ''; }
     if (S.loadedHTML && S.loadedHTML !== html) autoSnapshotIfNeeded(id, S.loadedHTML).catch(() => {});
-    await api.saveDoc(S.slug, id, html);
+    const slug = S.slug;
+    try { await api.saveDoc(slug, id, html); }
+    catch (e) {
+      // the words are kept (on screen, and in the retry) and tried again; nothing is thrown away
+      if (S.docId === id && editor.innerHTML === html) S.dirty = true;
+      saveTrouble(e, async () => { const now = S.slug === slug && S.docId === id ? editor.innerHTML : html; await api.saveDoc(slug, id, now); if (S.slug === slug && S.docId === id && editor.innerHTML === now) S.dirty = false; }, `doc:${slug}:${id}`);
+      return;
+    }
     if (f && f.node.series && window.UnwipSeries) window.UnwipSeries.push(f.node, html).catch(e => console.warn('series', e));
     emit('saved', id, html);
     if (f && ['characters', 'places', 'items'].includes((rootOf(id) || {}).kind)) scheduleNames();
-    await saveMetaNow();
-    $('#st-save').textContent = 'Saved'; $('#st-save').classList.remove('saving');
+    try { await saveMetaNow(); } catch { return; }
+    if (!troubleRetry) { $('#st-save').textContent = 'Saved'; $('#st-save').classList.remove('saving'); }
   }
-  function scheduleMeta() { clearTimeout(S.metaTimer); S.metaTimer = setTimeout(saveMetaNow, 600); }
-  async function saveMetaNow() { clearTimeout(S.metaTimer); S.metaTimer = null; if (!S.slug) return; S.project.totalWords = manuscriptWords(); S.project.lastDevice = S.device || S.project.lastDevice; await api.saveProjectMeta(S.slug, S.project); }
-  window.addEventListener('beforeunload', () => { flushSave(); if (S.metaTimer) saveMetaNow(); });
+  function scheduleMeta() { clearTimeout(S.metaTimer); S.metaTimer = setTimeout(() => saveMetaNow().catch(() => {}), 600); }
+  async function saveMetaNow() {
+    clearTimeout(S.metaTimer); S.metaTimer = null; if (!S.slug) return;
+    S.project.totalWords = manuscriptWords(); S.project.lastDevice = S.device || S.project.lastDevice;
+    try { await api.saveProjectMeta(S.slug, S.project); saveTrouble(null); }
+    catch (e) {
+      const msg = String(e && e.message || e);
+      if (/NEWER_FORMAT/.test(msg)) { newerElsewhere(msg.split('NEWER_FORMAT:')[1]); return; }   // (the message never holds up saving chapters)
+      const slug = S.slug, proj = S.project;
+      saveTrouble(e, () => api.saveProjectMeta(slug, proj), `meta:${slug}`); throw e;
+    }
+  }
+  // ---- when saving fails (disk full, folder not allowed, file locked): a warning that stays until it works again
+  // each thing that failed to save keeps its own retry (a chapter's words, the binder), so none replaces another
+  let troubleTimer = null; const pending = new Map();
+  let troubleRetry = null;   // truthy while anything is waiting to be saved
+  function saveTrouble(e, retry, key) {
+    let bar = $('#save-trouble');
+    if (!e) { if (bar && !pending.size) { bar.remove(); clearInterval(troubleTimer); troubleTimer = null; troubleRetry = null; if (api.setSaveTrouble) api.setSaveTrouble(false); } return; }
+    if (retry) pending.set(key || 'x' + Math.random(), retry);
+    troubleRetry = pending.size ? true : null;
+    if (api.setSaveTrouble) api.setSaveTrouble(!!troubleRetry);
+    const m = String(e && (e.code || e.message) || e);
+    const why = /ENOSPC|no space|quota|QuotaExceeded/i.test(m) ? 'Your disk is full, so Unwip can’t save. Free up some space (empty the Recycle Bin, or delete big downloads) and it will save by itself.'
+      : /EACCES|EPERM|not permitted|denied/i.test(m) ? 'Unwip isn’t allowed to save in this book’s folder. If it’s in OneDrive, Dropbox or a network folder, check that it’s available and not read-only.'
+      : /EBUSY|locked|in use/i.test(m) ? 'The book’s file is in use by another program (often a sync app or antivirus). Unwip will keep trying.'
+      : 'Unwip couldn’t save just now (' + esc(m.replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 120)) + ').';
+    if (!bar) { bar = document.createElement('div'); bar.id = 'save-trouble'; document.body.appendChild(bar); }
+    bar.innerHTML = `<b>Not saved yet.</b> ${why} Your words are still here; don’t close Unwip until this goes away. <button class="btn small" id="st-retry">Try again now</button>`;
+    $('#st-save').textContent = 'Not saved'; $('#st-save').classList.add('saving');
+    const attempt = async () => {
+      for (const [k, r] of [...pending]) { try { await r(); pending.delete(k); } catch (err) { /* still failing: the bar stays */ } }
+      if (pending.size) return;
+      troubleRetry = null; saveTrouble(null); $('#st-save').textContent = 'Saved'; $('#st-save').classList.remove('saving'); toast('Saved. Everything is safe again.');
+    };
+    $('#st-retry', bar).onclick = attempt;
+    if (!troubleTimer) troubleTimer = setInterval(attempt, 10000);
+  }
+  // another computer updated Unwip and saved this book in a newer way while it was open here
+  let warnedNewer = false;
+  async function newerElsewhere(by) {
+    if (warnedNewer) return; warnedNewer = true;
+    await modal({ title: 'Updated on another computer', body: `<p>This book was just saved by Unwip ${esc((by || '').replace(/^Error.*NEWER_FORMAT:/, '') || 'a newer version')} on another device, in a newer way than this version knows. To keep it safe, this version stops saving the binder now.</p><p>Your chapters are still saved. Update Unwip here, then open the book again.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
+  }
+  window.addEventListener('beforeunload', e => {
+    flushSave(); if (S.metaTimer) saveMetaNow().catch(() => {});
+    // closing while words couldn't be saved: ask first (the words would be gone)
+    // (on the PC the window itself asks before closing; in a browser, the browser's own "leave this page?" does)
+    if (troubleRetry && api.web) { e.preventDefault(); e.returnValue = ''; }
+  });
 
   // ---- status bar
   function updateStatus() {

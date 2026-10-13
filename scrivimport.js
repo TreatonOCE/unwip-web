@@ -25,7 +25,7 @@ window.UnwipScriv = (function () {
     try {
       scan = FI.scrivenerScan(data);
       conv = FI.scrivener(data, U.uid, { keepKeys: true });     // a first conversion, for the before-and-after look
-    } catch (e) { return U.toast(esc(errText(e)), 'warn', 7000); }
+    } catch (e) { return U.toast(esc(errText(e)), 'warn', 12000); }
     const remembered = (S.settings && S.settings.scrivMap) || {};
     const rows = scan.groups.map(g => {
       const mem = remembered[nameKey(g.title)];
@@ -134,7 +134,8 @@ window.UnwipScriv = (function () {
       S.settings = await api.setSettings({ scrivMap: memo });
     }
     U.toast('Importing…', '', 2500);
-    let res; try { res = FI.scrivener(data, U.uid, { map }); } catch (e) { return U.toast(esc(errText(e)), 'warn', 7000); }
+    let res; try { res = FI.scrivener(data, U.uid, { map }); } catch (e) { return U.toast(esc(errText(e)), 'warn', 12000); }
+    try { const sc = FI.scrivenerScan(data); if (sc.spare) res.spareUsed = `${sc.spare.name}${sc.spare.at ? ', saved ' + new Date(sc.spare.at).toLocaleString() : ''}`; } catch {}
     // typed chapter titles, as chosen
     let tidied = 0;
     if (v.titles && v.titles !== 'leave' && window.UnwipTitles) {
@@ -158,7 +159,9 @@ window.UnwipScriv = (function () {
     if (L.lineHeight >= 1 && L.lineHeight <= 3) tpl.style = { ...(tpl.style || {}), lineHeight: L.lineHeight };
     if (L.indent >= 0 && L.indent <= 1.5) tpl.style = { ...(tpl.style || {}), indent: L.indent };
     if (Object.keys(L).length) tpl.scrivLayout = L;
-    const slug = await api.createProject(v.name, tpl);
+    let slug = null;
+    try {
+    slug = await api.createProject(v.name, tpl);
     const project = await api.openProject(slug);
     const ids = Object.keys(res.docs);
     if (window.UnwipImages) for (const id of ids) {
@@ -174,6 +177,12 @@ window.UnwipScriv = (function () {
     U.walkTree(project.binder, n => { delete n._key; if (n.type === 'doc' && res.docs[n.id]) n.words = U.countWords(htmlText(res.docs[n.id])); });
     project.totalWords = 0;
     await api.saveProjectMeta(slug, project);
+    } catch (e) {
+      // stopped partway (a full disk, say): the half-made book goes, so it's never mistaken for the real thing
+      if (slug) await api.deleteProject(slug).catch(() => {});
+      await U.modal({ title: 'The import stopped', body: `<p>Unwip couldn’t finish bringing in “${esc(data.name)}”: ${esc(errText(e))}.</p><p>${/ENOSPC|no space|quota/i.test(errText(e)) ? 'Your disk looks full. Free up some space and try again.' : 'Nothing was kept from this attempt, and your Scrivener project is untouched. Try again; if it happens again, use Help › Report a problem.'}</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
+      return;
+    }
     await U.openProject(slug);
     S.project.totalWords = U.manuscriptWords(); U.scheduleMeta();
     const r = res.report, where = Object.fromEntries(TARGETS);
@@ -181,11 +190,14 @@ window.UnwipScriv = (function () {
         <p><b>${r.documents}</b> documents and <b>${r.folders}</b> folders from “${esc(data.name)}” are in the new project “${esc(v.name)}”. Your Scrivener project is untouched.</p>
         <ul>
           ${(r.placed || []).map(p => `<li>${esc(p.title)} → ${p.target === 'new' ? `a new section, “${esc(p.title)}”` : esc(where[p.target] || p.target)}</li>`).join('')}
-          ${tidied ? `<li>${tidied} chapter title${tidied === 1 ? ' was' : 's were'} typed into the text; ${v.titles === 'typed' ? 'they’re now the chapter names' : 'the binder names were kept'} and the typed line${tidied === 1 ? ' was' : 's were'} taken out, so nothing shows twice.</li>` : ''}
+          ${tidied ? `<li>${tidied} chapter title${tidied === 1 ? ' was' : 's were'} typed into the text; ${v.titles === 'typed' ? (tidied === 1 ? 'it’s now the chapter’s name' : 'they’re now the chapter names') : 'the binder names were kept'} and the typed line${tidied === 1 ? ' was' : 's were'} taken out, so nothing shows twice.</li>` : ''}
           ${r.withNotes ? `<li>Notes from ${r.withNotes} documents are in Notes › Document notes from Scrivener.</li>` : ''}
           ${res.docFont ? `<li>Your main font, ${esc(res.docFont)}${res.docSize ? ` ${res.docSize}pt` : ''}, is this project’s manuscript style. To change it everywhere, use Manuscript style › Font for the whole book.</li>` : ''}
           ${r.images ? `<li>${r.images} picture${r.images > 1 ? 's' : ''} came across.</li>` : ''}
-          ${r.empty ? `<li>${r.empty === 1 ? '1 document was' : `${r.empty} documents were`} empty in Scrivener and came across empty.</li>` : ''}
+          ${r.empty - (r.missing || []).length - (r.unreadable || []).length > 0 ? `<li>${r.empty - r.missing.length - r.unreadable.length === 1 ? '1 document was' : `${r.empty - r.missing.length - r.unreadable.length} documents were`} empty in Scrivener and came across empty.</li>` : ''}
+          ${(r.missing || []).length ? `<li class="ir-warn">${r.missing.length === 1 ? '1 document’s text file was' : `${r.missing.length} documents’ text files were`} missing from the Scrivener project, so ${r.missing.length === 1 ? 'it came' : 'they came'} across empty: ${esc(r.missing.slice(0, 8).join(', '))}${r.missing.length > 8 ? ` and ${r.missing.length - 8} more` : ''}. If they have text in Scrivener, it may still be syncing (Dropbox) there.</li>` : ''}
+          ${(r.unreadable || []).length ? `<li class="ir-warn">${r.unreadable.length === 1 ? '1 document' : `${r.unreadable.length} documents`} couldn’t be read (the file is damaged): ${esc(r.unreadable.slice(0, 8).join(', '))}. ${r.unreadable.length === 1 ? 'It came' : 'They came'} across empty; Scrivener’s backups may have ${r.unreadable.length === 1 ? 'it' : 'them'}.</li>` : ''}
+          ${res.spareUsed ? `<li class="ir-warn">The project’s main file was damaged, so Unwip used Scrivener’s own spare copy of the binder (${esc(res.spareUsed)}). Check the newest chapters are there.</li>` : ''}
           ${(r.left || []).length ? `<li>Left out, as you chose: ${esc(r.left.join(', '))}.</li>` : ''}
           ${r.skipped.length ? `<li>Not imported (Unwip doesn’t hold these yet): ${esc(r.skipped.slice(0, 8).join(', '))}${r.skipped.length > 8 ? ` and ${r.skipped.length - 8} more` : ''}.</li>` : ''}
           <li>Not imported: compile settings, collections, keywords, custom metadata, snapshots, links and Scrivener-only styles.</li>

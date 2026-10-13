@@ -2178,3 +2178,17 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .side-tabs { flex-wrap: wrap; overflow: visible; row-gap: 2px; padding-right: 36px; position: relative; }
 .side-tabs .side-x { position: absolute; right: 6px; top: 8px; margin: 0; }
 .nhf-tt { display: flex; gap: 8px; align-items: flex-start; margin: 10px 2px; font-size: 14px; } .nhf-tt small { display: block; color: var(--muted); font-size: 12.5px; }
+
+/* saving failed (disk full, no permission): stays until it saves again */
+#save-trouble { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 9999; max-width: min(720px, calc(100vw - 32px)); background: #fff4e5; color: #6b3a00; border: 1px solid #e0a34a; border-radius: 10px; padding: 10px 14px; font: 14px/1.45 var(--ui); box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+#save-trouble .btn { margin-left: 8px; }
+
+.import-report li.ir-warn { color: #8a4b00; }
+
+/* What I've used */
+.ug-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; } @media (max-width: 640px) { .ug-cols { grid-template-columns: 1fr; } }
+.ug-cols h4 { margin: 6px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.ug-list { margin: 0; padding: 0 0 0 1.4em; max-height: 46vh; overflow: auto; font-size: 13.5px; }
+.ug-list li { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.ug-list li span { flex: 1; } .ug-list li b { font-variant-numeric: tabular-nums; } .ug-list li small { color: var(--muted); font-size: 12px; min-width: 70px; text-align: right; }
+.ug-never { list-style: none; padding-left: 0; color: var(--muted); }
