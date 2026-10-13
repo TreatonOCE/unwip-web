@@ -418,6 +418,7 @@ body.sprinting.writer .statusbar { opacity: .8; }
 .pv-viewport[data-format="ebook"] { border-radius: 14px; }
 .pv-nav { display: flex; align-items: center; gap: 10px; background: var(--paper); padding: 6px 12px; border-radius: 999px; box-shadow: var(--shadow); }
 .pv-nav input[type=range] { width: min(380px, 40vw); accent-color: var(--accent); }
+@media (max-width: 640px) { .pv-nav { max-width: calc(100vw - 24px); gap: 6px; } .pv-nav input[type=range] { width: auto; flex: 1; min-width: 0; } #pv-pageinfo { white-space: nowrap; font-size: 13px; } }
 #pv-pageinfo { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 150px; text-align: right; font-size: 13px; }
 
 /* ---------- sprint button (top bar) ---------- */
@@ -572,6 +573,7 @@ body.in-outline .toolbar { visibility: hidden; }
 .srch-tabs button { border: 0; background: transparent; padding: 7px 12px; border-radius: 8px; cursor: pointer; color: var(--muted); }
 .srch-tabs button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .srch-tabs select { margin-left: auto; width: auto !important; }
+@media (max-width: 640px) { .srch-row { flex-wrap: wrap; } .srch-row #sr-q { flex: 1 1 100%; } .srch-tabs { flex-wrap: wrap; } .srch-tabs select { margin-left: 0; width: 100% !important; min-width: 0; } }
 .srch-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 8px; }
 .srch-row { display: flex; gap: 10px; align-items: center; }
 .srch-row input[type=text] { flex: 1; }
@@ -2268,3 +2270,25 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .pcs-mini.warn, .pcs-mini.news { border-color: color-mix(in srgb, #d97706 55%, var(--line)); background: color-mix(in srgb, #d97706 10%, var(--paper)); }
 .pcs-mini .dbx-warn { position: static; font-size: 12px; margin: 0; }
 :root[data-theme="dark"] .pcs-mini svg { color: #6aa8ff; }
+/* polish: empty chart, and the main screen on smaller screens */
+.chart-empty { position: absolute; inset: 0 0 22px 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding: 0 16px; pointer-events: none; }
+.lib-empty b { color: var(--text); }
+@media (max-width: 1000px) { .brand .brand-slogan { display: none; } .lib-total { white-space: nowrap; } }
+@media (max-width: 900px) { .lib-head-right .lib-total { display: none; } .lib-tabs { margin-left: 16px; } }
+@media (max-width: 640px) {
+  /* one tidy header: the name with sync and settings, then Write / Play across the width */
+  .lib-head { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 10px; padding: 10px 14px; }
+  .lib-head .brand { grid-column: 1; grid-row: 1; }
+  .lib-head .brand-wordmark { height: 28px; }
+  .lib-head-right { grid-column: 2; grid-row: 1; gap: 4px; }
+  .lib-head .lib-tabs { grid-column: 1 / -1; grid-row: 2; margin: 0; }
+  .lib-head .lib-tabs button { flex: 1; padding: 7px 0; }
+  .dbx-pill { margin-right: 0; max-width: 52vw; overflow: hidden; }
+  .dbx-pill span { overflow: hidden; text-overflow: ellipsis; }
+  /* the goal button sits under the dials instead of over them */
+  .dash-setgoal { position: static; flex-basis: 100%; order: 9; }
+  .quote-card { padding: 14px 44px 14px 16px; }
+  .form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .form-grid .field input, .form-grid .field select { width: 100%; box-sizing: border-box; }
+}
+@media (min-width: 641px) { .dash-card.dials:has(.dash-setgoal) .stat-stack { margin-top: 20px; } }

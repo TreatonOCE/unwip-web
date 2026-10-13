@@ -187,7 +187,7 @@
     document.title = 'Unwip — Write to finish';
     const grid = $('#project-grid');
     grid.innerHTML = '';
-    if (!list.length) grid.innerHTML = '<div class="lib-empty">No projects yet. Create one to start writing.</div>';
+    if (!list.length) grid.innerHTML = '<div class="lib-empty">No books yet. Start one with <b>New book</b>, or bring one in with <b>Import</b>.</div>';
     // grouped by where they're kept (Dropbox, then other synced folders, then this device), when there's more than one place
     const groupKey = p => `${p.placeRank ?? 2}|${p.place || ''}`;
     const groups = [...new Set(list.map(groupKey))].sort((a, b) => (+a.split('|')[0] - +b.split('|')[0]) || a.localeCompare(b));
@@ -301,8 +301,8 @@
   $('#btn-new-project').onclick = async () => {
     const pf = await placeField();
     const body = document.createElement('div');
-    body.innerHTML = `<div class="field"><label>Project title</label><input type="text" id="np-title"></div>${pf.html}`;
-    const ok = await modal({ title: 'New project', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Create', value: true, kind: 'primary' }], onOpen: () => setTimeout(() => $('#np-title', body).focus(), 50) });
+    body.innerHTML = `<div class="field"><label>Title</label><input type="text" id="np-title" placeholder="You can change it any time"></div>${pf.html}`;
+    const ok = await modal({ title: 'New book', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Create', value: true, kind: 'primary' }], onOpen: () => setTimeout(() => $('#np-title', body).focus(), 50) });
     const title = ok ? $('#np-title', body).value.trim() : '';
     if (!title) return;
     const place = await pf.read(body);
@@ -2276,7 +2276,7 @@
 
     let geo = null;
     const flow = $('#pv-flow', back), scaleEl = $('#pv-scale', back), vp = $('#pv-viewport', back);
-    const perView = () => PV.format === 'docs' ? 1 : 2;
+    const perView = () => PV.format === 'docs' || window.innerWidth <= 640 ? 1 : 2; // phones: one page at a time
     function fit() {
       if (!geo) return;
       const stage = $('.pv-stage', back).getBoundingClientRect();
@@ -2293,15 +2293,15 @@
       PV.page = Math.max(0, Math.min(PV.page, PV.pages - 1));
       if (n === 2 && PV.format === 'paperback') PV.page = PV.page === 0 ? 0 : PV.page - ((PV.page - 1) % 2); // book spreads: 1, 2–3, 4–5…
       const bookMode = PV.format === 'paperback' && PV.book;
-      // in a printed book page 1 is a right-hand page, so it sits on the right with nothing beside it
-      flow.style.transform = `translateX(${-(bookMode ? PV.page - (PV.page === 0 ? 1 : 0) : PV.page) * (geo.P + SPACE)}px)`;
+      // in a printed book page 1 is a right-hand page, so it sits on the right with nothing beside it (two-page view only)
+      flow.style.transform = `translateX(${-(bookMode && n === 2 ? PV.page - (PV.page === 0 ? 1 : 0) : PV.page) * (geo.P + SPACE)}px)`;
       if (bookMode) TS.fill(flow, PV.book, PV.page - 1, PV.page + 2, SPACE);
-      const last = bookMode && PV.page === 0 ? 1 : Math.min(PV.pages, PV.page + n);
+      const last = bookMode && n === 2 && PV.page === 0 ? 1 : Math.min(PV.pages, PV.page + n);
       const unit = PV.format === 'ebook' ? 'Screen' : 'Page';
       $('#pv-pageinfo', back).textContent = last > PV.page + 1 ? `${unit}s ${PV.page + 1}–${last} of ${fmt(PV.pages)}` : `${unit} ${PV.page + 1} of ${fmt(PV.pages)}`;
       const sl = $('#pv-slider', back); sl.max = Math.max(0, PV.pages - 1); sl.value = PV.page;
     }
-    function go(d) { PV.page += d * perView(); if (PV.format === 'paperback' && PV.page === 1 && d < 0) PV.page = 0; show(); }
+    function go(d) { PV.page += d * perView(); if (PV.format === 'paperback' && perView() === 2 && PV.page === 1 && d < 0) PV.page = 0; show(); }
     $('#pv-prev', back).onclick = () => go(-1);
     $('#pv-next', back).onclick = () => go(1);
     $('#pv-slider', back).oninput = e => { PV.page = +e.target.value; show(); };
@@ -2670,7 +2670,7 @@
       <div class="form-grid">
         <div class="section-label">You</div>
         <div class="field"><label>Author name (used on title pages and e-books)</label><input type="text" id="g-author" value="${esc(cfg.author || '')}" placeholder="e.g. Ima Novelist"></div>
-        <div class="field"><label>Daily writing goal (all projects)</label><input type="number" id="g-daily" min="0" step="50" value="${cfg.dailyGoal || ''}" placeholder="e.g. 1000"></div>
+        <div class="field"><label>Daily writing goal (all books)</label><input type="number" id="g-daily" min="0" step="50" value="${cfg.dailyGoal || ''}" placeholder="e.g. 1000"></div>
         <label class="check full"><input type="checkbox" id="g-quotes" ${cfg.quotes !== false ? 'checked' : ''}> Show quotes from writers (front page, writer mode, sprints, goals)</label>
         <div class="section-label">Appearance</div>
         <div class="field"><label>Theme and colours</label><button class="btn" id="s-themes" type="button">Themes &amp; colours…</button></div>
@@ -2681,12 +2681,12 @@
         <label class="check"><input type="checkbox" id="s-ac" ${acPrefs().on ? 'checked' : ''}> Suggest character, place and item names as I type</label>
         <div class="field"><label>Start suggesting after</label><select id="s-acmin">${opt([[2, '2 letters'], [3, '3 letters'], [4, '4 letters']], acPrefs().min)}</select></div>
         <div class="section-label">Language &amp; spelling</div>
-        ${api.web ? `<div class="field full"><label>Spelling language</label><div class="hint" style="padding-top:4px">${/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1 ? 'Your iPhone or iPad checks spelling in the languages of its keyboards, and Unwip can’t change that. To check another language, add its keyboard: Settings › General › Keyboard › Keyboards › Add New Keyboard, then switch to it with the 🌐 key while you write.' : 'This browser checks spelling in your device’s languages. Add a language in your device or browser settings to check it too.'}</div></div>` : `<div class="field"><label>Spelling language</label>${sp.available.length ? `<select id="s-lang">${spellOptions(sp)}</select>` : '<div style="padding-top:8px;color:var(--muted)">Uses your Windows language settings</div>'}</div>
+        ${api.web ? `<div class="field full"><label>Spelling language</label><div class="hint" style="padding-top:4px">${(/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) ? 'Your iPhone or iPad checks spelling in the languages of its keyboards, and Unwip can’t change that. To check another language, add its keyboard: Settings › General › Keyboard › Keyboards › Add New Keyboard, then switch to it with the 🌐 key while you write.' : 'This browser checks spelling in your device’s languages. Add a language in your device or browser settings to check it too.'}</div></div>` : `<div class="field"><label>Spelling language</label>${sp.available.length ? `<select id="s-lang">${spellOptions(sp)}</select>` : '<div style="padding-top:8px;color:var(--muted)">Uses your Windows language settings</div>'}</div>
         <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>`}
         <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
         <div class="section-label">Help</div>
         <div class="field"><label>New here, or showing someone?</label><button class="btn" id="g-intro" type="button">Welcome setup…</button></div>
-        <div class="field"><label>A quick look around a project</label><button class="btn" id="g-tour" type="button">Take the tour</button></div>
+        <div class="field"><label>A quick look around a book</label><button class="btn" id="g-tour" type="button">Take the tour</button></div>
         <div class="field"><label>What everything does, and keyboard shortcuts</label><button class="btn" id="g-help" type="button">Open Help (F1)</button></div>
 <div class="pc-only">        <div class="section-label">Updates</div>
         <label class="check"><input type="checkbox" id="g-autoup" ${cfg.autoUpdate !== false ? 'checked' : ''}> Install updates automatically</label>
@@ -3211,7 +3211,9 @@
       list.push({ key, label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), date: d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), words: writtenOn(key, allDays) });
     }
     const max = Math.max(1, daily * 1.15 || 0, ...list.map(x => x.words));
-    return `<div class="chart">
+    const none = list.every(x => !x.words);
+    return `<div class="chart${none ? ' chart-none' : ''}">
+      ${none ? '<div class="chart-empty">Your writing days show up here as you write.</div>' : ''}
       ${daily ? `<div class="chart-goal" style="bottom:${daily / max * 100}%"><span>goal ${fmt(daily)}</span></div>` : ''}
       ${list.map((x, i) => `<div class="chart-bar ${daily && x.words >= daily ? 'met' : ''} ${i === list.length - 1 ? 'today' : ''}" title="${x.date}: ${fmt(x.words)} words">
         <i style="height:${Math.max(x.words ? 3 : 0, x.words / max * 100)}%">${x.words ? `<em>${x.words >= 1000 ? (x.words / 1000).toFixed(1) + 'k' : x.words}</em>` : ''}</i><span>${x.label}</span></div>`).join('')}
@@ -3244,7 +3246,7 @@
         ${dial({ pct: daily ? week / (daily * 7) : 0, big: fmt(week), small: daily ? `of ${fmt(daily * 7)}` : 'words', label: 'This week', color: '#7a5cc7' })}
         ${dial({ pct: g.total ? total / g.total : 0, big: g.total ? Math.floor(total / g.total * 100) + '%' : fmt(total), small: g.total ? `${fmt(total)} / ${fmt(g.total)}` : 'words', label: 'Manuscript', color: '#c27a2c' })}
         <div class="stat-stack">
-          <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>day streak<br><small>best ${st.best}</small></span></div>
+          <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>${st.current ? `day streak<br><small>best ${st.best}</small>` : st.best ? `day streak<br><small>best ${st.best} · write today to start again</small>` : `day streak<br><small>write today to start one</small>`}</span></div>
           <button type="button" class="stat-card bolt" id="g-sprints" title="See every sprint"><span class="ic">${I.bolt}</span><b>${bestWpm || '–'}</b><span>best sprint wpm<br><small>${sprints.length} sprints${avgWpm ? ` · avg ${avgWpm}` : ''} ›</small></span></button>
         </div>
       </div>
@@ -3288,8 +3290,8 @@
         ${dial({ pct: daily ? todayW / daily : 0, big: fmt(todayW), small: daily ? `of ${fmt(daily)}` : 'words', label: 'Today', size: 120 })}
         ${dial({ pct: daily ? week / (daily * 7) : 0, big: fmt(week), small: daily ? `of ${fmt(daily * 7)}` : 'words', label: 'This week', color: '#7a5cc7', size: 120 })}
         <div class="stat-stack">
-          <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>day streak<br><small>best ${st.best}</small></span></div>
-          <div class="stat-card"><span class="ic">${I.book}</span><b>${fmt(totalWords)}</b><span>words in your manuscripts<br><small>≈ ${fmt(Math.round(totalWords / 280))} paperback pages</small></span></div>
+          <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>${st.current ? `day streak<br><small>best ${st.best}</small>` : st.best ? `day streak<br><small>best ${st.best} · write today to start again</small>` : `day streak<br><small>write today to start one</small>`}</span></div>
+          <div class="stat-card"><span class="ic">${I.book}</span><b>${fmt(totalWords)}</b><span>words in your manuscripts<br><small>${totalWords ? `≈ ${fmt(Math.max(1, Math.round(totalWords / 280)))} paperback page${Math.max(1, Math.round(totalWords / 280)) === 1 ? '' : 's'}` : 'your first page is waiting'}</small></span></div>
         </div>
         ${daily ? '' : `<button class="btn ghost small dash-setgoal" id="dash-setgoal">Set a daily goal</button>`}
       </div>
@@ -3360,7 +3362,7 @@
         <select id="sr-scope" title="Where to look"><option value="ms">Manuscript</option><option value="all">Everything (incl. notes &amp; sheets)</option></select>
       </div>
       <div class="srch-pane" data-p="search">
-        <div class="srch-row"><input type="text" id="sr-q" placeholder="Find in the whole project…" value="${esc(preset)}"><label class="check"><input type="checkbox" id="sr-case"> Match case</label><label class="check"><input type="checkbox" id="sr-word" checked> Whole words</label></div>
+        <div class="srch-row"><input type="text" id="sr-q" placeholder="Find in the whole book…" value="${esc(preset)}"><label class="check"><input type="checkbox" id="sr-case"> Match case</label><label class="check"><input type="checkbox" id="sr-word" checked> Whole words</label></div>
         <div class="srch-row"><input type="text" id="sr-r" placeholder="Replace with…"><button class="btn" id="sr-replace">Replace all</button></div>
         <div class="srch-results" id="sr-results"><p class="srch-empty">Type to search every chapter at once.</p></div>
       </div>
