@@ -77,11 +77,21 @@ window.UnwipDropboxImport = (function () {
   // ---- choosing the project: a small Dropbox browser, Scrivener projects marked
   async function list(path) {
     let r = await rpc('/files/list_folder', { path, recursive: false, include_deleted: false, limit: 2000 });
-    if (r.status === 401) { st = {}; await save(); throw new Error('NEEDS_SIGN_IN'); }
-    if (!r.ok) throw new Error('Dropbox couldn’t list that folder (' + r.status + ').');
+    if (!r.ok) throw await problem(r, 'list that folder');
     let j = await r.json(); const out = [...j.entries];
     while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) break; j = await r.json(); out.push(...j.entries); }
     return out;
+  }
+  // what Dropbox said was wrong, in words (and a fresh sign-in when that's the fix)
+  async function problem(r, what) {
+    let t = ''; try { t = await r.text(); } catch {}
+    let j = null; try { j = JSON.parse(t); } catch {}
+    const sum = (j && (j.error_summary || (j.error && j.error['.tag']))) || t || '';
+    console.warn('Dropbox import:', r.status, t.slice(0, 300));
+    if (/missing_scope|required scope/i.test(sum)) { st = {}; await save(); return new Error('Unwip’s Dropbox app is missing its read permissions. On dropbox.com/developers/apps › your Unwip Import app › Permissions, tick files.metadata.read and files.content.read and press Submit. Then import again (Dropbox will ask you to allow it once more).'); }
+    if (r.status === 401 || /invalid_access_token|expired_access_token|malformed/i.test(sum)) { st = {}; await save(); return new Error('NEEDS_SIGN_IN'); }
+    if (/disabled|app_id/i.test(sum)) return new Error('Dropbox says Unwip’s import app is turned off or not set up yet (' + sum.slice(0, 120) + ').');
+    return new Error(`Dropbox couldn’t ${what} (${r.status}${sum ? ': ' + String(sum).slice(0, 160) : ''}).`);
   }
   async function exists(path) { const r = await rpc('/files/get_metadata', { path }); return r.ok; }
   async function browse() {
@@ -92,7 +102,7 @@ window.UnwipDropboxImport = (function () {
     const draw = async () => {
       body.innerHTML = '<p class="hint">Looking in Dropbox…</p>';
       let items;
-      try { items = await list(path); } catch (e) { body.innerHTML = `<p class="hint">${esc(e.message === 'NEEDS_SIGN_IN' ? 'Dropbox needs you to sign in again.' : e.message)}</p>`; return; }
+      try { items = await list(path); } catch (e) { if (e.message === 'NEEDS_SIGN_IN') return resolveDone({ signIn: true }); body.innerHTML = `<p class="hint">${esc(e.message)}</p>`; return; }
       const folders = items.filter(e => e['.tag'] === 'folder').sort((a, b) => a.name.localeCompare(b.name));
       const projects = folders.filter(f => /\.scriv$/i.test(f.name)), others = folders.filter(f => !/\.scriv$/i.test(f.name));
       const crumbs = path.split('/').filter(Boolean);
@@ -115,14 +125,14 @@ window.UnwipDropboxImport = (function () {
     const U = window.__unwip;
     U.toast(`Fetching “${esc(pick.name.replace(/\.scriv$/i, ''))}” from Dropbox…`, '', 4000);
     const r = await call(CONTENT + '/files/download_zip', { method: 'POST', headers: { 'Dropbox-API-Arg': headerJSON({ path: pick.path }) } });
-    if (!r.ok) throw new Error(r.status === 409 ? 'Dropbox couldn’t pack that project (it may be too big, or still syncing). Try again in a minute.' : 'Dropbox download failed (' + r.status + ').');
+    if (!r.ok) throw r.status === 409 ? new Error('Dropbox couldn’t pack that project (it may be too big, or still syncing). Try again in a minute.') : await problem(r, 'download that project');
     return F.__readScrivZip(new Uint8Array(await r.arrayBuffer()), pick.name);
   }
   // the import's first step: returns the project's files, or null
   async function pickProject() {
     await load();
     if (!(await token())) { if (!(await signIn('scriv'))) return null; }
-    try { const pick = await browse(); return pick ? await fetchProject(pick) : null; }
+    try { const pick = await browse(); if (pick && pick.signIn) { if (await signIn('scriv')) return pickProject(); return null; } return pick ? await fetchProject(pick) : null; }
     catch (e) { if (e.message === 'NEEDS_SIGN_IN') { if (await signIn('scriv')) return pickProject(); return null; } throw e; }
   }
   async function forget() { await load(); try { await rpc('/auth/token/revoke', null); } catch {} st = {}; await save(); }

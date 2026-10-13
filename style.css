@@ -481,7 +481,7 @@ body.sprinting.writer .statusbar { opacity: .8; }
 .chart-bar span { font-size: 10px; color: var(--faint); height: 12px; }
 .chart-bar.today span { color: var(--accent); font-weight: 700; }
 .chart-goal { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--good); margin-bottom: 16px; pointer-events: none; z-index: 1; }
-.chart-goal span { position: absolute; right: 0; top: -15px; font-size: 10px; color: var(--good); background: var(--bg); padding: 0 3px; }
+.chart-goal span { position: absolute; right: 0; top: 3px; font-size: 10px; color: var(--good); background: var(--bg); padding: 0 3px; }
 
 /* ---------- library dashboard ---------- */
 .dash { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 28px; }
