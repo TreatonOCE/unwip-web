@@ -1515,6 +1515,7 @@ html.web .statusbar { padding-bottom: env(safe-area-inset-bottom); height: calc(
   .m-fs-list { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 4px 0 8px; }
   .m-fs-list button { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: left; border: 0; background: transparent; color: var(--text); padding: 11px 16px; font-size: 19px; }
   .m-fs-list button.on { background: var(--accent-soft); color: var(--accent); }
+  .m-fs-group { padding: 12px 16px 4px; font-family: var(--ui); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
   .m-fs-list button span { font-family: var(--ui); font-size: 15px; }
 
   /* side panels (Revise, comments) slide over the page */

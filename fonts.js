@@ -15,7 +15,8 @@ window.FolioFonts = (function () {
     // free look-alikes (same letter widths) of the standard fonts: files say the standard name, which every agent's computer has
     'tinos': 'Times New Roman', 'liberation serif': 'Times New Roman', 'times': 'Times New Roman',
     'cousine': 'Courier New', 'liberation mono': 'Courier New', 'courier': 'Courier New',
-    'arimo': 'Arial', 'liberation sans': 'Arial', 'carlito': 'Calibri', 'caladea': 'Cambria' };
+    'arimo': 'Arial', 'liberation sans': 'Arial', 'carlito': 'Calibri', 'caladea': 'Cambria',
+    'palatino': 'Palatino Linotype' };   // the iPhone's name for it; Word on a PC knows it as Palatino Linotype
   const alias = f => (f && !installedHas(f) && RENAMED[String(f).toLowerCase()]) || f;
   const external = f => (f && ORIGINAL[String(f).toLowerCase()]) || f;
   const installedHas = f => !!(installed && installed.has && installed.has(f));
@@ -103,6 +104,30 @@ window.FolioFonts = (function () {
     canvas.font = `40px '${family}', serif`; const d = canvas.measureText(sample).width;
     return a !== b || c !== d;
   }
+  // Fonts that come with iPhones, iPads and Macs (only the ones this device really has are shown)
+  const APPLE = ['American Typewriter', 'Athelas', 'Avenir', 'Avenir Next', 'Baskerville', 'Bodoni 72', 'Bodoni 72 Oldstyle', 'Bradley Hand',
+    'Chalkboard SE', 'Chalkduster', 'Charter', 'Cochin', 'Copperplate', 'Courier New', 'Didot', 'Futura', 'Georgia', 'Gill Sans', 'Helvetica',
+    'Helvetica Neue', 'Hoefler Text', 'Iowan Old Style', 'Marker Felt', 'Menlo', 'Noteworthy', 'Optima', 'Palatino', 'Papyrus', 'Rockwell',
+    'Savoye LET', 'Seravek', 'Snell Roundhand', 'Superclarendon', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'Zapfino', 'Arial'];
+  // the same font under its Windows and Apple names: the phone list shows the Apple one
+  const SAME = { 'Palatino Linotype': 'Palatino', 'Book Antiqua': 'Palatino' };
+  // fonts for this device's font list: Unwip's own, any you imported, then what the device has
+  function deviceFonts() {
+    const own = BUNDLED.slice(), imp = imported.map(i => i.family);
+    const here = [...new Set([...FAVOURITES, ...APPLE])].filter(f => !own.includes(f) && !imp.includes(f) && !SAME[f] && (installedHas(f) || measured(f)));
+    return { own, imp, here: here.sort((a, b) => a.localeCompare(b)) };
+  }
+  // Text set in Palatino on one device shows in Palatino on the other, even though Windows and Apple name it differently.
+  (function aliases() {
+    const pc = /Electron/.test(navigator.userAgent);
+    const face = (fam, w, st, names) => `@font-face{font-family:'${fam}';font-weight:${w};font-style:${st};src:${names.map(n => `local('${n}')`).join(',')}}`;
+    const css = pc
+      ? (measured('Palatino') ? '' : [face('Palatino', 400, 'normal', ['Palatino Linotype', 'PalatinoLinotype-Roman', 'Book Antiqua']), face('Palatino', 700, 'normal', ['Palatino Linotype Bold', 'PalatinoLinotype-Bold', 'Book Antiqua Bold']),
+         face('Palatino', 400, 'italic', ['Palatino Linotype Italic', 'PalatinoLinotype-Italic', 'Book Antiqua Italic']), face('Palatino', 700, 'italic', ['Palatino Linotype Bold Italic', 'PalatinoLinotype-BoldItalic', 'Book Antiqua Bold Italic'])].join(''))
+      : ['Palatino Linotype', 'Book Antiqua'].filter(f => !measured(f)).map(f => [face(f, 400, 'normal', ['Palatino-Roman', 'Palatino']), face(f, 700, 'normal', ['Palatino-Bold', 'Palatino Bold']),
+         face(f, 400, 'italic', ['Palatino-Italic', 'Palatino Italic']), face(f, 700, 'italic', ['Palatino-BoldItalic', 'Palatino Bold Italic'])].join('')).join('');
+    if (css) { const st = document.createElement('style'); st.textContent = css; (document.head || document.documentElement).appendChild(st); }
+  })();
   function isAvailable(family) {
     if (BUNDLED.includes(family)) return true;
     if (imported.some(i => i.family === family)) return true;
@@ -121,6 +146,7 @@ window.FolioFonts = (function () {
   return {
     FAVOURITES, BUNDLED, alias, external, loadInstalled, loadImported, isAvailable, docsCheck,
     canShow: f => BUNDLED.includes(f) || imported.some(i => i.family === f) || installedHas(f) || measured(f),
+    deviceFonts, SAME,
     get imported() { return imported; },
     get installed() { return installed; }
   };

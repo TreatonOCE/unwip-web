@@ -119,18 +119,23 @@ window.UnwipMobile = (function () {
   const curFont = () => { const v = ($('#sel-font') || {}).value; return v && v !== '__import' ? v : ''; };
   const curSize = () => parseFloat(($('#sel-size') || {}).value) || 12;
   const SIZES = [8, 9, 10, 10.5, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 36, 48, 60, 72];
-  function fontNames() {
-    const sel = $('#sel-font'); if (!sel) return [];
-    const seen = new Set(), out = [];
-    const F = window.FolioFonts, here = f => !F || !F.canShow || F.canShow(f);
-    for (const o of sel.options) if (o.value && o.value !== '__import' && !seen.has(o.value) && here(o.value)) { seen.add(o.value); out.push(o.value); }
-    const f = curFont(); if (f && !seen.has(f)) out.unshift(f);   // the font you're in, even if this device can't show it
-    return out;
+  // the phone's own list: your starred fonts, Unwip's fonts, imported ones, then the ones this iPhone or iPad has
+  function fontGroups() {
+    const F = window.FolioFonts; if (!F || !F.deviceFonts) return [];
+    const d = F.deviceFonts(), favs = ((S.settings || {}).fontFavs || []).filter(f => F.canShow(f) || F.SAME[f]).map(f => F.SAME[f] || f);
+    const g = [['★ Your favourites', [...new Set(favs)]], ['Unwip’s book fonts', d.own], ['Imported', d.imp], ['On this device', d.here]].filter(x => x[1].length);
+    const f = curFont(), shown = F.SAME[f] || f;
+    if (f && !g.some(x => x[1].includes(shown))) g.unshift(['', [f]]);   // the font you're in, even if this device can't show it
+    return g;
   }
   function drawFontSheet() {
     const f = curFont(), z = curSize();
     fsheet.innerHTML = `<div class="m-fs-size"><span>Size</span><button data-z="-1" aria-label="Smaller">A−</button><b>${z} pt</b><button data-z="1" aria-label="Bigger">A+</button><button data-z="x" class="m-fs-done">Done</button></div>
-      <div class="m-fs-list">${fontNames().map(n => `<button data-f="${U.esc(n)}" class="${n === f ? 'on' : ''}" style="font-family:'${U.esc(n)}'">${U.esc(n)}${n === f ? ` <span>${window.FolioFonts && window.FolioFonts.canShow && !window.FolioFonts.canShow(n) ? 'on your PC ' : ''}✓</span>` : ''}</button>`).join('')}</div>`;
+      <div class="m-fs-list">${fontGroups().map(([label, names]) => (label ? `<div class="m-fs-group">${U.esc(label)}</div>` : '') + names.map(n => {
+        const on = n === f || (window.FolioFonts.SAME[f] === n);
+        const away = on && n === f && !window.FolioFonts.canShow(n) && !window.FolioFonts.SAME[f];
+        return `<button data-f="${U.esc(n)}" class="${on ? 'on' : ''}" style="font-family:'${U.esc(n)}'">${U.esc(n)}${on ? ` <span>${away ? 'on your PC ' : ''}✓</span>` : ''}</button>`;
+      }).join('')).join('')}</div>`;
   }
   function setSel(id, v) { const el = $(id); if (!el) return; el.value = String(v); el.dispatchEvent(new Event('change', { bubbles: true })); }
   function toggleFontSheet(open) {
