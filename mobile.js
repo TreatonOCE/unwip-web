@@ -100,6 +100,7 @@ window.UnwipMobile = (function () {
     <button data-c="underline" aria-label="Underline"><u>U</u></button><button data-c="strikeThrough" aria-label="Strikethrough"><s>S</s></button>
     <span class="m-fsep"></span>
     <button data-b="p" class="m-fwide">Body</button><button data-b="h1" class="m-fwide">Title</button><button data-b="h2" class="m-fwide">H2</button>
+    <button data-x="font" class="m-fwide m-faa" aria-label="Font and size">Aa</button>
     <span class="m-fsep"></span>
     <button data-x="scene" aria-label="Scene break">${IC.scene}</button><button data-x="comment" aria-label="Add a comment">${IC.note}</button><button data-x="hide" aria-label="Hide keyboard">${IC.keyboard}</button>`;
   document.body.appendChild(fbar);
@@ -110,7 +111,45 @@ window.UnwipMobile = (function () {
     else if (b.dataset.x === 'scene') click('#btn-scene');
     else if (b.dataset.x === 'comment') click('#btn-comment');
     else if (b.dataset.x === 'hide') $('#m-done').click();
+    else if (b.dataset.x === 'font') toggleFontSheet();
   };
+  // Aa: font and size for the selected words (or what you type next), in a sheet above the keyboard row
+  const fsheet = document.createElement('div'); fsheet.className = 'm-fsheet'; fsheet.hidden = true;
+  document.body.appendChild(fsheet);
+  const curFont = () => { const v = ($('#sel-font') || {}).value; return v && v !== '__import' ? v : ''; };
+  const curSize = () => parseFloat(($('#sel-size') || {}).value) || 12;
+  const SIZES = [8, 9, 10, 10.5, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 36, 48, 60, 72];
+  function fontNames() {
+    const sel = $('#sel-font'); if (!sel) return [];
+    const seen = new Set(), out = [];
+    const F = window.FolioFonts, here = f => !F || !F.canShow || F.canShow(f);
+    for (const o of sel.options) if (o.value && o.value !== '__import' && !seen.has(o.value) && here(o.value)) { seen.add(o.value); out.push(o.value); }
+    const f = curFont(); if (f && !seen.has(f)) out.unshift(f);   // the font you're in, even if this device can't show it
+    return out;
+  }
+  function drawFontSheet() {
+    const f = curFont(), z = curSize();
+    fsheet.innerHTML = `<div class="m-fs-size"><span>Size</span><button data-z="-1" aria-label="Smaller">A−</button><b>${z} pt</b><button data-z="1" aria-label="Bigger">A+</button><button data-z="x" class="m-fs-done">Done</button></div>
+      <div class="m-fs-list">${fontNames().map(n => `<button data-f="${U.esc(n)}" class="${n === f ? 'on' : ''}" style="font-family:'${U.esc(n)}'">${U.esc(n)}${n === f ? ` <span>${window.FolioFonts && window.FolioFonts.canShow && !window.FolioFonts.canShow(n) ? 'on your PC ' : ''}✓</span>` : ''}</button>`).join('')}</div>`;
+  }
+  function setSel(id, v) { const el = $(id); if (!el) return; el.value = String(v); el.dispatchEvent(new Event('change', { bubbles: true })); }
+  function toggleFontSheet(open) {
+    open = open == null ? fsheet.hidden : open;
+    fsheet.hidden = !open; fbar.querySelector('.m-faa').classList.toggle('on', open);
+    if (open) { try { U.refreshToolbar(); } catch {} drawFontSheet(); const on = $('.m-fs-list .on', fsheet); if (on) on.scrollIntoView({ block: 'center' }); }
+  }
+  const sheetAct = b => {
+    if (b.dataset.f) { setSel('#sel-font', b.dataset.f); setTimeout(drawFontSheet, 30); }
+    else if (b.dataset.z === 'x') toggleFontSheet(false);
+    else if (b.dataset.z) { const z = curSize(); const i = SIZES.findIndex(v => v >= z); const n = b.dataset.z === '1' ? SIZES[Math.min(SIZES.length - 1, SIZES[i] > z ? i : i + 1)] : SIZES[Math.max(0, (i < 0 ? SIZES.length : i) - 1)]; setSel('#sel-size', n); setTimeout(drawFontSheet, 30); }
+  };
+  // like the row: a tap counts only if your finger didn't slide, and it never takes the cursor off the page
+  let sy = 0, smoved = false;
+  fsheet.addEventListener('touchstart', e => { sy = e.touches[0].clientY; smoved = false; }, { passive: true });
+  fsheet.addEventListener('touchmove', e => { if (Math.abs(e.touches[0].clientY - sy) > 8) smoved = true; }, { passive: true });
+  fsheet.addEventListener('touchend', e => { const b = e.target.closest('button'); if (b) e.preventDefault(); if (b && !smoved) sheetAct(b); }, { passive: false });
+  fsheet.addEventListener('mousedown', e => { e.preventDefault(); const b = e.target.closest('button'); if (b) sheetAct(b); });
+  document.addEventListener('selectionchange', () => { if (!fsheet.hidden) { clearTimeout(fsheet.t); fsheet.t = setTimeout(() => { try { U.refreshToolbar(); } catch {} drawFontSheet(); }, 150); } });
   // the row scrolls sideways (like Scrivener's), so a tap only counts if your finger didn't slide
   let tx = 0, moved = false;
   fbar.addEventListener('touchstart', e => { tx = e.touches[0].clientX; moved = false; }, { passive: true });
@@ -142,7 +181,7 @@ window.UnwipMobile = (function () {
   editor.addEventListener('focus', () => { if (Date.now() - tappedAt < 1500) startEditing(); });
   editor.addEventListener('pointerup', () => { if (document.activeElement === editor) startEditing(); });
   editor.addEventListener('keydown', startEditing);
-  editor.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== editor) mark('m-editing', false); }, 120));
+  editor.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== editor) { mark('m-editing', false); toggleFontSheet(false); } }, 120));
   editor.addEventListener('input', () => { if (phone.matches) refreshWords(); });
 
   // ------------------------------------------------------------------ moving between screens

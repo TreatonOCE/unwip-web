@@ -120,6 +120,7 @@ window.FolioFonts = (function () {
 
   return {
     FAVOURITES, BUNDLED, alias, external, loadInstalled, loadImported, isAvailable, docsCheck,
+    canShow: f => BUNDLED.includes(f) || imported.some(i => i.family === f) || installedHas(f) || measured(f),
     get imported() { return imported; },
     get installed() { return installed; }
   };

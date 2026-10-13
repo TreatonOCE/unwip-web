@@ -1505,6 +1505,17 @@ html.web .statusbar { padding-bottom: env(safe-area-inset-bottom); height: calc(
   .m-fbar button.m-fwide { padding: 0 10px; font-family: var(--ui); font-size: 14px; }
   .m-fbar button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   .m-fsep { width: 1px; height: 26px; background: var(--line); flex-shrink: 0; margin: 0 2px; }
+  .m-fsheet { position: fixed; left: 0; right: 0; bottom: calc(var(--m-kb, 0px) + 51px); z-index: 71; background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(0,0,0,.18); display: flex; flex-direction: column; max-height: min(46vh, 340px); }
+  .m-fsheet[hidden] { display: none; }
+  html:not(.m-editing) .m-fsheet { display: none; }
+  .m-fs-size { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-family: var(--ui); font-size: 14px; color: var(--muted); }
+  .m-fs-size b { min-width: 56px; text-align: center; color: var(--text); font-weight: 600; }
+  .m-fs-size button { height: 34px; min-width: 44px; border: 1px solid var(--line); background: var(--paper); color: var(--text); border-radius: 8px; font-size: 15px; }
+  .m-fs-size .m-fs-done { margin-left: auto; border: 0; background: transparent; color: var(--accent); font-weight: 600; }
+  .m-fs-list { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 4px 0 8px; }
+  .m-fs-list button { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: left; border: 0; background: transparent; color: var(--text); padding: 11px 16px; font-size: 19px; }
+  .m-fs-list button.on { background: var(--accent-soft); color: var(--accent); }
+  .m-fs-list button span { font-family: var(--ui); font-size: 15px; }
 
   /* side panels (Revise, comments) slide over the page */
   .revise-panel:not(.pl-side) { position: fixed; z-index: 90; right: 0; top: 0; bottom: 0; width: min(92vw, 380px); padding-top: env(safe-area-inset-top); box-shadow: 0 0 40px rgba(0,0,0,.18); }
