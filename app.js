@@ -476,6 +476,7 @@
       if (n.type === 'folder') {
         items.push({ label: 'New document inside', action: () => addNode('doc', n.id, true) });
         items.push({ label: 'New folder inside', action: () => addNode('folder', n.id, true) });
+        if (window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn lists in here into sheets…', action: () => { const ids = []; walkTree(n.children || [], c => { if (c.type === 'doc' && !c.map) ids.push(c.id); }); window.UnwipSheets.convert(ids); } });
       }
       if (!n.root) {
         items.push({ label: 'New document below', action: () => addNode('doc', n.id, false) });
@@ -494,7 +495,6 @@
       }
       if (n.type === 'doc') items.push({ label: 'Snapshots…', action: async () => { await openDoc(n.id); snapshotsDialog(); } });
       if (n.type === 'doc' && !n.map && window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn into separate sheets…', action: () => window.UnwipSheets.convert([n.id]) });
-      if (n.type === 'folder' && window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn lists in here into sheets…', action: () => { const ids = []; walkTree(n.children || [], c => { if (c.type === 'doc' && !c.map) ids.push(c.id); }); window.UnwipSheets.convert(ids); } });
       if (n.type === 'doc' || n.type === 'folder') items.push({ label: 'Remove empty lines…', action: () => tidyBlankLines(n.id) });
       if (n.type === 'doc' && n.id !== S.docId) items.push({ label: 'Open in split view', action: () => { if (S.view !== 'write') setView('write'); openSplit(n.id); } });
       { const fn = findNode(n.id); const nx = fn.list[fn.index + 1];
