@@ -217,6 +217,7 @@
           { label: 'Show in folder', action: () => api.revealProject(p.slug) },
           { label: 'Backups…', action: () => window.UnwipSync && window.UnwipSync.backupsDialog(p.slug, p.title) },
           { label: 'Save a full backup file…', action: async () => { const f = await api.backupExport(p.slug); if (f) toast('Full backup saved, including images and snapshots.'); } },
+          ...(api.moveProject ? [{ label: 'Move to…', action: () => moveBook(p) }] : []),
           { sep: true },
           { label: 'Delete…', danger: true, action: () => deleteBook(p) }
         ]);
@@ -236,6 +237,21 @@
     try { await api.deleteProject(p.slug, { how: +v.slice(1) }); } catch (e) { toast(`Couldn’t delete it: ${esc(e.message || e)}`, 'warn', 9000); }
     showLibrary();
     toast(`“${esc(p.title)}” is in Deleted books.`);
+  }
+  // ---- moving a book to another place (Dropbox, this device only…)
+  async function moveBook(p) {
+    const norm = x => String(x || '').replace(/[\\/]+$/, '').toLowerCase();
+    const places = (await api.projectPlaces().catch(() => [])).filter(x => norm(x.path) !== norm(p.placePath));
+    if (!places.length && !api.pickPlace) return toast('There’s nowhere else to move it to yet.');
+    const body = document.createElement('div');
+    body.innerHTML = `<p>“${esc(p.title)}” is in <b>${esc(p.place || 'your library')}</b>.</p><div class="field"><label>Move it to</label><select id="mv-place">${places.map((x, i) => `<option value="${i}">${esc(x.label)}${x.note ? ` (${esc(x.note)})` : ''}</option>`).join('')}${api.pickPlace ? '<option value="pick">Another folder…</option>' : ''}</select></div><p class="hint" id="mv-note"></p>`;
+    const note = () => { const v = $('#mv-place', body).value, x = places[+v]; $('#mv-note', body).textContent = x && x.note && /not synced/i.test(x.note) ? 'It will only be on this device from now on. Your other devices keep a copy in their Deleted books.' : x && /dropbox/i.test(x.label) ? 'It will sync to your other devices from now on.' : ''; };
+    const ok = await modal({ title: 'Move book', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Move', value: true, kind: 'primary' }], onOpen: () => { $('#mv-place', body).onchange = note; note(); } });
+    if (!ok) return;
+    const v = $('#mv-place', body).value, place = v === 'pick' ? await api.pickPlace() : (places[+v] || {}).path;
+    if (!place) return;
+    try { await api.moveProject(p.slug, place); toast(`Moved “${esc(p.title)}”.`); } catch (e) { toast(`Couldn’t move it: ${esc(e.message || e)}`, 'warn', 9000); }
+    showLibrary();
   }
   async function renderBin() {
     const el = $('#lib-bin'); if (!el) return;

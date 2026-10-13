@@ -330,11 +330,25 @@ window.UnwipDropbox = (function () {
   const inDropbox = slug => connected() && !st.localOnly.some(x => x.toLowerCase() === String(slug).toLowerCase());
   // on the main screen, books in Dropbox come first, then the ones kept on this device only
   const origList = F.listProjects;
-  F.listProjects = async () => (await origList()).map(p => ({ ...p, ...(inDropbox(p.slug) ? { place: 'Dropbox', placeRank: 0 } : { place: `This ${DEVICE}`, placeRank: 3 }) }));
+  F.listProjects = async () => (await origList()).map(p => ({ ...p, ...(inDropbox(p.slug) ? { place: 'Dropbox', placeRank: 0, placePath: 'dropbox' } : { place: `This ${DEVICE}`, placeRank: 3, placePath: 'local' }) }));
   F.projectPlaces = async () => connected() ? [{ path: 'dropbox', label: 'Dropbox', note: 'also on your PC and other devices', main: true }, { path: 'local', label: `This ${DEVICE} only`, note: 'not synced' }] : [];
   F.createProject = async (title, template, place) => {
     const slug = await origCreate(title, template);
     if (place === 'local' && connected()) { st.localOnly = [...new Set([...st.localOnly, slug])]; await persist(); }
+    return slug;
+  };
+  // moving a book in or out of Dropbox on this device
+  F.moveProject = async (slug, place) => {
+    if (!connected()) throw new Error('Connect Dropbox first.');
+    const low = String(slug).toLowerCase();
+    if (place === 'dropbox') { st.localOnly = st.localOnly.filter(x => x.toLowerCase() !== low); await persist(); await sync(); return slug; }
+    // out of Dropbox: keep it here only, and move Dropbox's copy to its Deleted books (so the PC has it there)
+    await sync().catch(() => {});
+    st.localOnly = [...new Set([...st.localOnly, slug])];
+    for (const k of Object.keys(st.records)) if (k.startsWith(low + '/')) delete st.records[k];
+    await persist();
+    const r = await rpc('/files/move_v2', { from_path: `${REMOTE}/${slug}`, to_path: `${REMOTE}/_Deleted/${Date.now()} ${slug}`, autorename: true, allow_ownership_transfer: false });
+    if (!r.ok && r.status !== 409) throw new Error('It’s kept on this device only now, but Dropbox couldn’t be told (' + r.status + ').');
     return slug;
   };
   F.deleteChoices = async slug => inDropbox(slug) ? { note: `It’s also in Dropbox. Delete it on this ${DEVICE} only (it stays on your PC and other devices), or everywhere (they keep it in their Deleted books).`, buttons: [`This ${DEVICE} only`, 'Everywhere'] } : null;

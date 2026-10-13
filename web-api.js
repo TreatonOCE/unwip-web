@@ -56,7 +56,8 @@
 
   const LIB = 'Unwip';
   const CONFLICT = /\s*\(([^()]*?)(?:['’]s)?\s*conflicted copy[^()]*\)/i;
-  const slugify = name => (name || 'Untitled').replace(/[<>:"/\\|?*\x00-\x1F]/g, '').trim().slice(0, 60) || 'Untitled';
+  // the same rules as the PC (main.js), so a book's folder is named the same on every device
+  const slugify = name => { let n = (name || 'Untitled').replace(/[<>:"/\\|?*\x00-\x1F]/g, '').trim().replace(/^[_@~.\s]+/, '').slice(0, 60).replace(/[. ]+$/, '').trim() || 'Untitled'; if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i.test(n)) n += ' book'; return n; };
   const safeId = id => String(id).replace(/[^a-zA-Z0-9_-]/g, '');
   const pdir = slug => `${LIB}/${String(slug).replace(/[/\\]/g, '')}`;
   const deviceName = (() => { const u = navigator.userAgent; return /iPad|Macintosh.*Mobile|Macintosh.*Touch/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac (browser)' : /Windows/.test(u) ? 'PC (browser)' : 'This browser'; })();
