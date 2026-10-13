@@ -83,7 +83,10 @@ window.UnwipAbout = (function () {
     body.innerHTML = `
       <div class="about-head"><b>Unwip</b> <span>version ${esc(v)}</span></div>
       <p class="about-slogan">Write to finish.</p>
-      <h4>Made without AI</h4><p>${NO_AI}</p>
+      <h4>From the developer</h4>
+      <div class="about-note"><p>I built Unwip, with the help of AI coding tools, to fix the headaches I kept running into as a writer: formatting that fell apart on the way between programs, syncing I couldn’t trust, and work that one app wouldn’t open properly in another.</p>
+        <p>At the same time, AI was being added to everything, including the places where we write. I wanted an app that gives you full control of your work and keeps it private. Unwip is that app.</p></div>
+      <h4>No AI inside</h4><p>${NO_AI}</p>
       <h4>Your writing stays yours</h4><p>Your books are saved on your device. If you connect Dropbox, they’re copied to <b>your own</b> Dropbox and nowhere else. Unwip has no account, no server of its own and no tracking. Reports you send with “Report a problem” contain no writing.</p>
       <h4>Thank you</h4>
       <p>Unwip is built with free and open-source fonts and software, used under their licences: the fonts EB Garamond, Crimson Pro, Cinzel and Oswald, Larkspur (our cut of Lora) and Bookhaven (our cut of Libre Baskerville)${api.web ? '' : ', the Harper grammar checker, and Electron and Chromium, which run the PC app'}. The full licence texts are under Open-source licences.</p>

@@ -1997,6 +1997,7 @@ button.stat-card:hover { border-color: var(--accent); }
 .about-slogan { margin: 2px 0 12px; font-style: italic; color: var(--muted); }
 .about h4 { margin: 16px 0 4px; font: 700 12px var(--ui); text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
 .about p { margin: 0; }
+.about-note { padding: 2px 0 2px 14px; border-left: 3px solid var(--accent, #c8553d); } .about-note p + p { margin-top: 8px; }
 .about-credits { margin: 4px 0 14px; padding-left: 18px; font-size: 13.5px; } .about-credits li { margin: 4px 0; }
 .rep textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 90px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 14px/1.4 var(--ui); background: var(--paper); color: var(--text); }
 .rep-details { margin-top: 10px; font-size: 13px; } .rep-details summary { cursor: pointer; color: var(--muted); }
