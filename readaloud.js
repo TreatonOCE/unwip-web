@@ -50,8 +50,30 @@ window.UnwipRead = (function () {
     const vs = synth().getVoices();
     return vs.find(v => v.name === voiceName) || vs.find(v => /^en[-_](AU|GB)/i.test(v.lang) && /natural|online|neural/i.test(v.name)) || vs.find(v => /^en/i.test(v.lang) && v.default) || vs.find(v => /^en/i.test(v.lang)) || vs[0] || null;
   }
+  // the optional natural voice (naturalvoice.js): each sentence is turned into sound, a few ahead of the one being read
+  const NV = () => window.UnwipVoice;
+  const natural = () => voiceName.startsWith('k:') && NV() && NV().installed;
+  let audioCtx = null, source = null; const made = new Map();
+  const soundFor = i => { const key = `${i}|${voiceName}|${rate}`; if (!made.has(key)) { const p = NV().speak(sents[i].text, voiceName.slice(2), rate); p.catch(() => {}); made.set(key, p); } return made.get(key); };
+  function halt() { try { synth() && synth().cancel(); } catch {} if (source) { try { source.onended = null; source.stop(); } catch {} source = null; } }
+  async function speakNatural(my) {
+    const s = sents[idx]; highlight(s); render();
+    const p = soundFor(idx); for (let j = 1; j <= 2 && idx + j < sents.length; j++) soundFor(idx + j);
+    let a; const wait = setTimeout(() => { if (my === token) waitNote(true); }, 250);
+    try { a = await p; } catch (e) { clearTimeout(wait); if (my !== token) return; waitNote(false); U.toast('The natural voice stopped: ' + esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 8000); stop(); return; }
+    clearTimeout(wait); waitNote(false);
+    if (my !== token || !playing) return;
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+    const buf = audioCtx.createBuffer(1, a.audio.length, a.rate); buf.copyToChannel(a.audio instanceof Float32Array ? a.audio : new Float32Array(a.audio), 0);
+    source = audioCtx.createBufferSource(); source.buffer = buf; source.connect(audioCtx.destination);
+    source.onended = () => { source = null; if (my !== token || !playing) return; for (const k of made.keys()) if (+k.split('|')[0] < idx - 1) made.delete(k); idx++; speak(); };
+    source.start();
+  }
+  const waitNote = on => { const w = bar && bar.querySelector('.ra-wait'); if (w) w.hidden = !on; };
   function speak() {
     const my = ++token;
+    if (natural() && idx < sents.length) return speakNatural(my);
     if (idx >= sents.length) { stop(); U.toast('That’s the end of the chapter.'); return; }
     const s = sents[idx];
     highlight(s);
@@ -70,22 +92,22 @@ window.UnwipRead = (function () {
   }
   function start(from) {
     if (!S.docId) { U.toast('Open a chapter first.'); return; }
-    if (!synth() || !window.SpeechSynthesisUtterance) { U.toast('This device doesn’t have a reading voice.', 'warn'); return; }
+    if (!natural() && (!synth() || !window.SpeechSynthesisUtterance)) { U.toast('This device doesn’t have a reading voice.', 'warn'); return; }
     sents = collect();
     if (!sents.length) { U.toast('Nothing to read in this chapter yet.'); return; }
     idx = from != null ? from : startIndex();
-    playing = true; synth().cancel(); showBar(); speak();
+    made.clear(); playing = true; halt(); showBar(); speak();
   }
-  function pause() { playing = false; token++; synth().cancel(); render(); }
-  function resume() { if (!sents.length) return start(); playing = true; synth().cancel(); speak(); }
+  function pause() { playing = false; token++; halt(); waitNote(false); render(); }
+  function resume() { if (!sents.length) return start(); playing = true; halt(); speak(); }
   function stop() {
-    playing = false; token++; try { synth().cancel(); } catch {}
+    playing = false; token++; halt(); made.clear();
     try { CSS.highlights.delete('unwip-read'); } catch {}
     if (bar) { bar.remove(); bar = null; }
     sents = [];
     const lb = document.getElementById('btn-listen'); if (lb) lb.classList.remove('on');
   }
-  const jump = d => { idx = Math.max(0, Math.min(sents.length - 1, idx + d)); if (playing) { synth().cancel(); speak(); } else { highlight(sents[idx]); render(); } };
+  const jump = d => { idx = Math.max(0, Math.min(sents.length - 1, idx + d)); if (playing) { halt(); speak(); } else { highlight(sents[idx]); render(); } };
   const toggle = () => bar ? (playing ? pause() : resume()) : start();
 
   // ---------------------------------------------------------------- the little player
@@ -100,23 +122,34 @@ window.UnwipRead = (function () {
     if (bar) return render();
     bar = document.createElement('div'); bar.className = 'ra-bar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'Read aloud');
     bar.innerHTML = `<button class="ra-b" data-a="prev" title="Previous sentence">${ICON.prev}</button><button class="ra-b ra-play" data-a="play"></button><button class="ra-b" data-a="next" title="Next sentence">${ICON.next}</button>
-      <span class="ra-pos"></span>
+      <span class="ra-pos"></span><span class="ra-wait" hidden>Preparing the voice…</span>
       <select class="ra-rate" title="Speed">${[0.8, 0.9, 1, 1.1, 1.25, 1.5].map(r => `<option value="${r}" ${r === rate ? 'selected' : ''}>${r}×</option>`).join('')}</select>
       <select class="ra-voice" title="Voice"></select>
       <button class="ra-b" data-a="stop" title="Stop reading (Esc)">${ICON.x}</button>`;
     document.body.appendChild(bar);
     bar.addEventListener('mousedown', e => { if (!e.target.closest('select')) e.preventDefault(); });
     bar.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b) return; ({ prev: () => jump(-1), next: () => jump(1), play: () => (playing ? pause() : resume()), stop })[b.dataset.a](); });
-    $('.ra-rate', bar).onchange = e => { rate = +e.target.value; SET('rate', rate); if (playing) { synth().cancel(); speak(); } };
-    $('.ra-voice', bar).onchange = e => { voiceName = e.target.value; SET('voice', voiceName); if (playing) { synth().cancel(); speak(); } };
+    $('.ra-rate', bar).onchange = e => { rate = +e.target.value; SET('rate', rate); if (playing) { halt(); speak(); } };
+    $('.ra-voice', bar).onchange = async e => {
+      if (e.target.value === 'k:get') { // set up the natural voice first
+        const was = playing; pause(); const ok = NV() && await NV().setup();
+        if (ok) { voiceName = 'k:bf_emma'; SET('voice', voiceName); } fillVoices(); if (ok && was) resume(); return;
+      }
+      voiceName = e.target.value; SET('voice', voiceName); if (playing) { halt(); speak(); }
+    };
     fillVoices(); render();
   }
   function fillVoices() {
     if (!bar) return;
-    const vs = synth().getVoices(), cur = voice(), sel = $('.ra-voice', bar);
+    const vs = synth() ? synth().getVoices() : [], cur = natural() ? null : voice(), sel = $('.ra-voice', bar);
     const en = vs.filter(v => /^en/i.test(v.lang)), list = en.length ? en : vs;
-    sel.innerHTML = list.map(v => `<option value="${esc(v.name)}" ${cur && v.name === cur.name ? 'selected' : ''}>${esc(v.name.replace(/^Microsoft\s+|\s+-\s+.*$|\s*\(.*\)$/g, ''))}</option>`).join('') || '<option>Default voice</option>';
-    sel.hidden = list.length < 2;
+    const own = list.map(v => `<option value="${esc(v.name)}" ${cur && v.name === cur.name ? 'selected' : ''}>${esc(v.name.replace(/^Microsoft\s+|\s+-\s+.*$|\s*\(.*\)$/g, ''))}</option>`).join('');
+    const nv = NV();
+    const nat = !nv ? '' : nv.installed
+      ? `<optgroup label="Natural voices (Kokoro)">${nv.VOICES.map(([id, n, acc]) => `<option value="k:${id}" ${voiceName === 'k:' + id ? 'selected' : ''}>${esc(n)} · ${esc(acc)}</option>`).join('')}</optgroup>`
+      : '<option value="k:get">Natural voice… (optional download)</option>';
+    sel.innerHTML = (own ? `<optgroup label="This device’s voices">${own}</optgroup>` : '<option value="">Default voice</option>') + nat;
+    sel.hidden = false;
   }
   if (window.speechSynthesis) speechSynthesis.addEventListener && speechSynthesis.addEventListener('voiceschanged', fillVoices);
   function render() {

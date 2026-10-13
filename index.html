@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data: blob:; img-src 'self' data: blob:; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; manifest-src 'self'; connect-src 'self' data: blob: https://api.dropboxapi.com https://content.dropboxapi.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data: blob:; img-src 'self' data: blob:; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; manifest-src 'self'; connect-src 'self' data: blob: https://api.dropboxapi.com https://content.dropboxapi.com https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -94,7 +94,7 @@
       <button class="tb-btn tb-detailed" id="btn-comment" title="Comment on the selected words (Ctrl+Alt+M)" data-icon="comment"></button>
       <button class="tb-btn tb-detailed" id="btn-scene" title="Insert scene break" data-icon="scene"></button>
       <button class="tb-btn" id="btn-listen" title="Read aloud: hear the chapter in the computer’s voice, from the cursor (F8)" data-icon="speaker"></button>
-      <button class="tb-btn tb-cmdk" id="btn-cmdk" data-tip="Find anything · Ctrl+K" aria-label="Find anything (Ctrl+K)"></button>
+      <button class="tb-btn tb-cmdk" id="btn-cmdk" data-tip="Find anything, or words in your writing · Ctrl+K (Ctrl+F: this chapter only)" aria-label="Find anything (Ctrl+K)"></button>
       <!-- tools that appear on the selection bar (and in Ctrl+K); kept here so their shortcuts and code still work -->
       <span class="tb-tucked" id="tb-tucked" hidden>
         <button class="tb-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
@@ -246,6 +246,7 @@
 <div id="modal-root"></div>
 <div id="toasts" class="toasts"></div>
 
+<script src="kokoro-files.js"></script>
 <script src="icons.js"></script>
 <script src="clipboard.js"></script>
 <script src="rtf.js"></script>
@@ -277,6 +278,7 @@
 <script src="selbar.js"></script>
 <script src="track.js"></script>
 <script src="reader.js"></script>
+<script src="naturalvoice.js"></script>
 <script src="readaloud.js"></script>
 <script src="dialogue.js"></script>
 <script src="history.js"></script>

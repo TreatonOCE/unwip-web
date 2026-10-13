@@ -66,6 +66,7 @@ window.UnwipCommand = (function () {
     ['Narration view: only the narration', 'description prose without dialogue dim quotes', '', () => window.UnwipDialogue && window.UnwipDialogue.toggle('narration'), needDoc],
     ['Your world’s calendar', 'calendar months moons seasons week days year era fantasy dates reckoning timeline', '', async () => { if (window.UnwipCalendar && await window.UnwipCalendar.setup() && U.refreshPlanView) U.refreshPlanView(); }, () => inProject() && !!window.UnwipCalendar],
     ['Turn a list into separate sheets', 'split characters cast list into sheets one per character scrivener import convert names npc places races', '', () => window.UnwipSheets && window.UnwipSheets.convert(U.S.docId ? [U.S.docId] : []), () => inProject() && !!window.UnwipSheets && !!U.S.docId],
+    ['Natural voice for Read aloud', 'kokoro tts voice read aloud natural speech download text to speech', '', () => window.UnwipVoice && window.UnwipVoice.setup(), () => !!window.UnwipVoice],
     ['Connections web', 'relationships relations family tree links connected rival ally sibling map of characters places items graph web', '', () => window.UnwipLinks && window.UnwipLinks.web(), () => inProject() && !!window.UnwipLinks],
     ['Connect this sheet to another', 'relationship link rival ally sibling member of lives in born in owns connection', '', () => window.UnwipLinks && window.UnwipLinks.connect(U.S.docId), () => { if (!inProject() || !window.UnwipLinks || !U.S.docId) return false; const r = U.rootOf(U.S.docId) || {}; return ['characters', 'places', 'items'].includes(r.kind) || !!r.custom; }],
     ['Series bible', 'series sequel book 2 shared characters places items share across books trilogy', '', () => window.UnwipSeries && window.UnwipSeries.open(), () => inProject() && !!window.UnwipSeries],
@@ -121,7 +122,9 @@ window.UnwipCommand = (function () {
         txt.push({ label: `Find “${raw}” in this chapter`, sub: n ? `${n} match${n === 1 ? '' : 'es'}` : 'No matches in this chapter', run: () => { U.openFind(); const fi = document.getElementById('find-input'); if (fi) { fi.value = raw; fi.dispatchEvent(new Event('input', { bubbles: true })); } }, ic: 'find' });
       }
       txt.push({ label: `Search the whole book for “${raw}”`, sub: 'Every chapter, with find and replace', run: () => U.openSearch('search', raw), ic: 'find' });
-      groups.push(['Your writing', txt]);
+      // a word that isn't an action or a chapter name: looking for it in your writing comes first
+      const best = Math.max(0, ...acts.map(a => a.s), ...((groups.find(g => g[0] === 'Chapters & sheets') || [0, []])[1].map(d => d.s)));
+      if (best < 10) groups.unshift(['Your writing', txt]); else groups.push(['Your writing', txt]);
     }
     if (q && window.UnwipHelp) {
       const help = window.UnwipHelp.TOPICS.map(t => ({ s: score(q, t[1], `${t[0]} ${t[2]}`), label: t[1], sub: t[2].length > 70 ? t[2].slice(0, 68) + '…' : t[2], run: () => window.UnwipHelp.open(t[1]), ic: 'help' })).filter(x => x.s > 0);
@@ -145,9 +148,9 @@ window.UnwipCommand = (function () {
     back = document.createElement('div'); back.className = 'cmdk-back';
     back.innerHTML = `<div class="cmdk" role="dialog" aria-label="Find anything">
       <label class="cmdk-in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input type="text" id="cmdk-q" placeholder="Find an action, a chapter or help…" autocomplete="off" spellcheck="false" value="${esc(preset)}"><kbd>Esc</kbd></label>
+        <input type="text" id="cmdk-q" placeholder="Find an action, a chapter, help, or words in your writing…" autocomplete="off" spellcheck="false" value="${esc(preset)}"><kbd>Esc</kbd></label>
       <div class="cmdk-list" id="cmdk-list" role="listbox"></div>
-      <div class="cmdk-foot"><span>↑ ↓ to move</span><span>Enter to run</span><span class="cmdk-try">Try “epub”, “map”, “goal” or a chapter name</span></div></div>`;
+      <div class="cmdk-foot"><span>↑ ↓ to move</span><span>Enter to run</span><span class="cmdk-try">Try “epub”, “map”, a chapter name, or any word to find it in your book</span></div></div>`;
     document.body.appendChild(back);
     const q = $('#cmdk-q', back), list = $('#cmdk-list', back);
     const draw = () => {

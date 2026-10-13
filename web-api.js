@@ -232,8 +232,54 @@
   const LISTENERS = {};
   const on = name => cb => { (LISTENERS[name] = LISTENERS[name] || []).push(cb); };
 
+  // ---- the optional natural voice (Kokoro): downloaded on request into this browser's storage, then run
+  // in a background worker. Files are checked against their fingerprints (kokoro-files.js) before they're kept.
+  const VC = 'unwip-kokoro', VKEY = 'https://unwip.kokoro/';
+  const voiceProg = [];
+  let vWorker = null, vReady = null, vSeq = 0; const vWait = new Map();
+  const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  async function voiceHave() {
+    if (!window.caches || !window.UNWIP_KOKORO) return false;
+    try { const c = await caches.open(VC); for (const [f] of UNWIP_KOKORO.FILES) if (!(await c.match(VKEY + f))) return false; return true; } catch { return false; }
+  }
+  function voiceWorker() {
+    if (vReady) return vReady;
+    vWorker = new Worker('kokoro-worker.js');
+    vReady = new Promise((res, rej) => vWait.set('ready', { res, rej }));
+    vWorker.onmessage = e => { const m = e.data || {}; const w = vWait.get(m.id); vWait.delete(m.id); if (w) (m.error ? w.rej(new Error(m.error)) : w.res(m)); };
+    vWorker.onerror = e => { const err = new Error(e.message || 'The voice stopped.'); for (const [, w] of vWait) w.rej(err); vWait.clear(); vWorker = null; vReady = null; };
+    return vReady;
+  }
+  const voiceApi = {
+    async voiceStatus() { return { installed: await voiceHave(), bytes: window.UNWIP_KOKORO ? UNWIP_KOKORO.TOTAL : 0, running: !!vWorker, web: true }; },
+    onVoiceProgress: cb => voiceProg.push(cb),
+    async voiceInstall() {
+      const c = await caches.open(VC), K = UNWIP_KOKORO, mirror = window.UNWIP_KOKORO_MIRROR;
+      try { navigator.storage && navigator.storage.persist && await navigator.storage.persist(); } catch {}
+      let done = 0;
+      for (const [file, url, sha, size] of K.FILES) {
+        const have = await c.match(VKEY + file); if (have) { done += size; voiceProg.forEach(cb => cb({ done, total: K.TOTAL, file })); continue; }
+        const res = await fetch(mirror ? mirror + file : url); if (!res.ok) throw new Error(`Couldn’t download ${file} (${res.status}).`);
+        const reader = res.body.getReader(), parts = []; let got = 0, last = 0;
+        for (;;) { const { done: end, value } = await reader.read(); if (end) break; parts.push(value); got += value.length; if (Date.now() - last > 200) { last = Date.now(); voiceProg.forEach(cb => cb({ done: done + got, total: K.TOTAL, file })); } }
+        const blob = new Blob(parts), buf = await blob.arrayBuffer();
+        if (got !== size || hex(await crypto.subtle.digest('SHA-256', buf)) !== sha) throw new Error(`${file} didn’t match the expected file, so it wasn’t kept. Try again later.`);
+        await c.put(VKEY + file, new Response(blob, { headers: { 'Content-Type': /\.(m?js)$/.test(file) ? 'text/javascript' : /\.wasm$/.test(file) ? 'application/wasm' : 'application/octet-stream', 'Content-Length': String(size) } }));
+        done += size; voiceProg.forEach(cb => cb({ done, total: K.TOTAL, file }));
+      }
+      return { installed: await voiceHave() };
+    },
+    async voiceRemove() { if (vWorker) vWorker.terminate(); vWorker = null; vReady = null; await caches.delete(VC).catch(() => {}); await caches.delete('kokoro-voices').catch(() => {}); return true; },
+    async voiceWarm() { return (await voiceHave()) ? voiceWorker() : null; },
+    async voiceSpeak(text, voice, speed) {
+      await voiceWorker(); const id = ++vSeq;
+      return new Promise((res, rej) => { vWait.set(id, { res, rej }); vWorker.postMessage({ id, text, voice, speed }); });
+    }
+  };
+
   window.folio = {
     web: true,
+    ...voiceApi,
     listProjects,
     async createProject(title, template) {
       const slug = await uniqueSlug(title);
