@@ -18,6 +18,14 @@ window.UnwipScriv = (function () {
   async function start() {
     // ---- 1. scan
     let data;
+    // a phone or iPad can't pick a .scriv folder, only a zip of it
+    const touch = api.web && (/iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
+    if (touch) {
+      const go = await U.modal({ title: 'Import from Scrivener', body: `<p>On an iPhone or iPad, Unwip reads a <b>zip</b> of your Scrivener project (Apple doesn’t let web apps open the .scriv folder itself).</p>
+        <ol class="sim-steps"><li>Open the <b>Files</b> app and find your project (in Dropbox › Apps › Scrivener, or wherever it is).</li><li>Press and hold the <b>.scriv</b> project and choose <b>Compress</b>. A .zip appears beside it.</li><li>Come back here, tap <b>Choose the zip</b> and pick it.</li></ol>
+        <p class="sim-small">Your Scrivener project isn’t changed. You can delete the .zip afterwards.</p>`, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Choose the zip…', value: true, kind: 'primary' }] });
+      if (!go) return;
+    }
     try { data = await api.importScrivener(); } catch (e) { return U.toast(esc(errText(e) || 'Could not open that project.'), 'warn', 7000); }
     if (!data) return;
     if (data.mobilePending) U.toast('This project has changes from Scrivener on an iPhone or iPad that Scrivener on your computer hasn’t taken in yet, so they won’t come across. To include them, open the project in Scrivener on your computer first, close it, then import again.', 'warn', 14000);

@@ -120,6 +120,33 @@
     const out = new Response(new Blob([data]).stream().pipeThrough(ds));
     return new Uint8Array(await out.arrayBuffer());
   }
+  // a Scrivener project from its files (from a picked folder, or a zip): the binder and each document's text
+  async function readScrivEntries(list) {
+    const scrivx = list.filter(f => /\.scrivx$/i.test(f.path) && !/\/(Files|Mobile|Settings)\//.test(f.path)).sort((a, b) => a.path.split('/').length - b.path.split('/').length)[0];
+    if (!scrivx) throw new Error('That isn’t a Scrivener project (there’s no .scrivx file inside). Pick the .scriv project, or a zip of it.');
+    const root = scrivx.path.split('/').slice(0, -1).join('/');
+    const rel = f => root ? (f.path.startsWith(root + '/') ? f.path.slice(root.length + 1) : null) : f.path;
+    const at = p => list.find(f => rel(f) === p);
+    let xml = await scrivx.text(); const mob = at('Mobile/binder.mob');
+    const stub = /MobileStub\s*=\s*"Yes"/i.test(xml) || !/<Binder[\s>]/.test(xml);
+    if (stub && !mob) throw new Error('This project was made in Scrivener on an iPhone or iPad, and its writing isn’t in the folder yet (Dropbox may still be downloading it). Open it once in Scrivener, then try again.');
+    if (stub) xml = await mob.text();
+    const dataRoot = stub ? 'Mobile' : 'Files';
+    const files = {};
+    for (const f of list) {
+      const p = rel(f); if (!p) continue; let m;
+      if (p.startsWith(dataRoot + '/Data/') && (m = p.match(/^(?:Files|Mobile)\/Data\/([^/]+)\/(content\.rtf|synopsis\.txt|notes\.rtf|content\.(png|jpe?g|gif|webp))$/i))) {
+        const e = files[m[1]] = files[m[1]] || {};
+        if (/^content\.rtf$/i.test(m[2])) e.content = await f.text(); else if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else e.image = await f.dataURL();
+      } else if ((m = p.match(/^Files\/Docs\/(\d+)(_synopsis\.txt|_notes\.rtf|\.rtf|\.(png|jpe?g|gif|webp))$/i))) {
+        const e = files[m[1]] = files[m[1]] || {};
+        if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else if (/\.rtf$/i.test(m[2])) e.content = await f.text(); else e.image = await f.dataURL();
+      }
+    }
+    const spares = []; for (const n of ['binder.autosave', 'binder.backup']) { const f = at('Files/' + n); if (f) { const t = await f.text(); if (/<Binder[\s>]/.test(t)) spares.push({ name: n, xml: t, at: f.at || 0 }); } }
+    const name = ((root.split('/').pop() || list.zipName || scrivx.path.split('/').pop()) + '').replace(/\.zip$/i, '').replace(/\.scriv$/i, '').replace(/\.scrivx$/i, '') || 'Scrivener project';
+    return { name, scrivx: xml, files, mobile: stub, mobilePending: !stub && !!mob, spares };
+  }
   async function unzip(buf) {
     const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
     let eocd = -1;
@@ -443,40 +470,32 @@
     snapDelete: async (slug, id, ts) => { const dir = `${pdir(slug)}/snapshots/${safeId(id)}`; await FS.write(`${dir}/snapshots.json`, JSON.stringify((await FS.json(`${dir}/snapshots.json`, [])).filter(m => m.ts !== Number(ts)))); await FS.remove(`${dir}/${Number(ts)}.html`); return true; },
     snapRename: async (slug, id, ts, label) => { const dir = `${pdir(slug)}/snapshots/${safeId(id)}`; const meta = await FS.json(`${dir}/snapshots.json`, []); const m = meta.find(x => x.ts === Number(ts)); if (m) { m.label = label; m.auto = false; } await FS.write(`${dir}/snapshots.json`, JSON.stringify(meta)); return true; },
     // imports: pick files from the iPad's Files app (Dropbox shows up there too)
-    // a browser can read a whole folder: pick the .scriv folder (on a computer; phones can't pick folders)
+    // On a computer the browser can read a whole .scriv folder. A phone or iPad can't pick folders, so there it's a
+    // zip of the project: in the Files app, press and hold the .scriv › Compress, then pick the .zip here.
     importScrivener() {
+      const touch = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
       return new Promise((resolve, reject) => {
-        const inp = document.createElement('input'); inp.type = 'file'; inp.webkitdirectory = true; inp.multiple = true; inp.style.display = 'none';
+        const inp = document.createElement('input'); inp.type = 'file'; inp.style.display = 'none';
+        if (touch) inp.accept = '.zip,application/zip'; else { inp.webkitdirectory = true; inp.multiple = true; }
         document.body.appendChild(inp);
         inp.onchange = async () => {
           try {
             const list = [...inp.files]; inp.remove();
             if (!list.length) return resolve(null);
-            const scrivx = list.find(f => /\.scrivx$/i.test(f.name));
-            if (!scrivx) return reject(new Error('That folder isn’t a Scrivener project (there’s no .scrivx file inside). Choose the folder whose name ends in .scriv.'));
-            const root = scrivx.webkitRelativePath.split('/').slice(0, -1).join('/');
-            const rel = f => f.webkitRelativePath.slice(root.length + 1);
-            const pic = f => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(f); });
-            // made in Scrivener on iPhone or iPad and not yet opened on a computer: the binder is Mobile/binder.mob
-            // and the writing is in Mobile/Data
-            let xml = await scrivx.text(); const mob = list.find(f => rel(f) === 'Mobile/binder.mob');
-            const stub = /MobileStub\s*=\s*"Yes"/i.test(xml) || !/<Binder[\s>]/.test(xml);
-            if (stub && !mob) return reject(new Error('This project was made in Scrivener on an iPhone or iPad, and its writing isn’t in the folder yet (Dropbox may still be downloading it). Open it once in Scrivener, then try again.'));
-            if (stub) xml = await mob.text();
-            const dataRoot = stub ? 'Mobile' : 'Files';
-            const files = {};
-            for (const f of list) {
-              const p = rel(f); let m;
-              if (p.startsWith(dataRoot + '/Data/') && (m = p.match(/^(?:Files|Mobile)\/Data\/([^/]+)\/(content\.rtf|synopsis\.txt|notes\.rtf|content\.(png|jpe?g|gif|webp))$/i))) {
-                const e = files[m[1]] = files[m[1]] || {};
-                if (/^content\.rtf$/i.test(m[2])) e.content = await f.text(); else if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else e.image = await pic(f);
-              } else if ((m = p.match(/^Files\/Docs\/(\d+)(_synopsis\.txt|_notes\.rtf|\.rtf|\.(png|jpe?g|gif|webp))$/i))) {
-                const e = files[m[1]] = files[m[1]] || {};
-                if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else if (/\.rtf$/i.test(m[2])) e.content = await f.text(); else e.image = await pic(f);
-              }
+            let entries;
+            if (list.length === 1 && !list[0].webkitRelativePath) {
+              // a zip (or a project the phone handed over as one)
+              const buf = new Uint8Array(await list[0].arrayBuffer());
+              if (!(buf[0] === 0x50 && buf[1] === 0x4b)) return reject(new Error('Pick the .zip of your Scrivener project. To make one: in the Files app, press and hold the .scriv project, choose Compress, then pick the .zip here.'));
+              let files; try { files = await unzip(buf); } catch { return reject(new Error('That zip couldn’t be opened. Try compressing the .scriv project again in the Files app.')); }
+              const types = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+              entries = files.filter(f => !/(^|\/)__MACOSX\//.test(f.name)).map(f => ({ path: f.name, text: async () => new TextDecoder().decode(f.data), dataURL: async () => { let b = ''; for (let i = 0; i < f.data.length; i += 0x8000) b += String.fromCharCode.apply(null, f.data.subarray(i, i + 0x8000)); return `data:${types[(f.name.split('.').pop() || '').toLowerCase()] || 'application/octet-stream'};base64,${btoa(b)}`; }, at: 0 }));
+              entries.zipName = list[0].name;
+            } else {
+              const pic = f => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(f); });
+              entries = list.map(f => ({ path: f.webkitRelativePath || f.name, text: () => f.text(), dataURL: () => pic(f), at: f.lastModified || 0 }));
             }
-            const spares = []; for (const n of ['binder.autosave', 'binder.backup']) { const f = list.find(x => rel(x) === 'Files/' + n); if (f) { const t = await f.text(); if (/<Binder[\s>]/.test(t)) spares.push({ name: n, xml: t, at: f.lastModified || 0 }); } }
-            resolve({ name: (root.split('/').pop() || scrivx.name).replace(/\.scriv$/i, '').replace(/\.scrivx$/i, ''), scrivx: xml, files, mobile: stub, mobilePending: !stub && !!mob, spares });
+            resolve(await readScrivEntries(entries));
           } catch (e) { reject(e); }
         };
         inp.addEventListener('cancel', () => { inp.remove(); resolve(null); });
