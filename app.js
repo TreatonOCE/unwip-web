@@ -4041,7 +4041,7 @@
   });
   $('#sp-doc').onclick = spPicker;
   $('#sp-close').onclick = closeSplit;
-  $('#sp-open').onclick = async () => { const id = S.splitId; await closeSplit(); openDoc(id); };
+  $('#sp-open').onclick = async () => { const id = S.splitId; await closeSplit(); if (S.view !== 'write') setView('write'); openDoc(id); };
   $('#btn-split').onclick = () => S.splitId ? closeSplit() : openSplit(null);
 
   // ================================================================== QUOTES
