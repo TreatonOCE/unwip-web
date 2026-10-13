@@ -50,7 +50,8 @@ window.UnwipTitles = (function () {
   }
   function apply(hits, how) {
     if (how === 'leave') return 0;
-    for (const h of hits) { h.newHTML = h.found.html; if (how === 'typed') h.node.title = h.found.typed; }
+    // remember what it was, so taking the book back to Scrivener can put it back (scrivexport.js)
+    for (const h of hits) { h.newHTML = h.found.html; h.node.tt = { line: h.found.line, was: h.node.title }; if (how === 'typed') h.node.title = h.found.typed; }
     return hits.length;
   }
 
@@ -78,7 +79,7 @@ window.UnwipTitles = (function () {
     }
     U.scheduleMeta(); U.renderBinder(); U.refreshPlanView && U.refreshPlanView();
     U.toastAction(`Tidied ${hits.length} chapter title${hits.length === 1 ? '' : 's'}.`, 'Undo', async () => {
-      for (const b of before) { b.node.title = b.title; await api.saveDoc(S.slug, b.node.id, b.html); if (b.node.id === S.docId) { U.editor.innerHTML = b.html; $('#doc-title').value = b.title; } }
+      for (const b of before) { b.node.title = b.title; delete b.node.tt; await api.saveDoc(S.slug, b.node.id, b.html); if (b.node.id === S.docId) { U.editor.innerHTML = b.html; $('#doc-title').value = b.title; } }
       U.scheduleMeta(); U.renderBinder(); U.toast('Chapter titles put back.');
     }, 15000);
   }

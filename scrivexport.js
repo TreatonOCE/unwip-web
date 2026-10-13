@@ -72,6 +72,7 @@ window.UnwipNoHardFeelings = (function () {
   const plainRTF = text => `{\\rtf1\\ansi\\ansicpg1252\\uc1\\deff0{\\fonttbl{\\f0\\fswiss\\fcharset0 Helvetica;}}\\pard\\plain\\f0\\fs24 ${rtfText(text)}\\par}`;
 
   // ------------------------------------------------------------------ building the .scriv folder
+  const FRONT = /^\s*(title|title page|half[- ]title|front matter|copyright|dedication|epigraph|contents)\s*$/i;
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); })).toUpperCase();
   const xml = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   function stamp(t) {
@@ -80,9 +81,10 @@ window.UnwipNoHardFeelings = (function () {
   }
   const rgb01 = c => { const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(c || '') || /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c || ''); if (!m) return '0.749996 0.910002 0.979995'; const v = m[0].startsWith('rgb') ? [m[1], m[2], m[3]].map(Number) : [m[1], m[2], m[3]].map(x => parseInt(x, 16)); return v.map(x => (x / 255).toFixed(6)).join(' '); };
 
-  async function buildScriv(name, onStep) {
+  async function buildScriv(name, onStep, opts = {}) {
     const P = S.project, files = [], docsOut = [];
-    let nextId = 3; const stamped = stamp();
+    const stamped = stamp();
+    let anyTT = false; U.walkTree(P.binder, n => { if (n.tt) anyTT = true; });
     // statuses and labels
     const statuses = (P.statuses && P.statuses.length ? P.statuses : [{ id: 'todo', name: 'To Do' }, { id: 'draft', name: 'First Draft' }, { id: 'revised', name: 'Revised Draft' }, { id: 'final', name: 'Final Draft' }]);
     const statusId = new Map(statuses.map((s, i) => [s.id, i]));
@@ -90,7 +92,7 @@ window.UnwipNoHardFeelings = (function () {
     const labelId = new Map(labels.map((l, i) => [l.n, i]));
     let mapsSkipped = 0, pics = 0;
     async function item(n, inDraft, depth) {
-      const id = nextId++, isFolder = n.type === 'folder';
+      const id = uuid(), isFolder = n.type === 'folder';
       const meta = [];
       if (n.label && labelId.has(n.label.n)) meta.push(`<LabelID>${labelId.get(n.label.n)}</LabelID>`);
       if (n.status && statusId.has(n.status)) meta.push(`<StatusID>${statusId.get(n.status)}</StatusID>`);
@@ -100,36 +102,40 @@ window.UnwipNoHardFeelings = (function () {
       if (n.map) {
         // a map comes across as a picture of it
         const pic = window.UnwipMaps && window.UnwipMaps.pictures ? await window.UnwipMaps.pictures(n.id).catch(() => []) : [];
-        if (pic.length) { const b64 = pic[0].canvas.toDataURL('image/png').split(',')[1]; const bin = atob(b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); files.push({ name: `Files/Docs/${id}.png`, data: arr }); type = 'Image'; pics++; }
+        if (pic.length) { const b64 = pic[0].canvas.toDataURL('image/png').split(',')[1]; const bin = atob(b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); files.push({ name: `Files/Data/${id}/content.png`, data: arr }); type = 'Image'; pics++; }
         else { mapsSkipped++; return ''; }
       } else if (!isFolder) {
         const html = n.id === S.docId ? U.editor.innerHTML : await U.api.loadDoc(S.slug, n.id).catch(() => '');
-        files.push({ name: `Files/Docs/${id}.rtf`, data: htmlToRTF(html, P.style) });
+        // a chapter whose title was typed into its text in Scrivener gets that line back (see titles.js)
+        // remembered typed titles go back exactly; a book with none remembered gets each chapter's name typed in
+        const line = !opts.restore || !inDraft ? '' : n.tt && n.tt.line ? n.tt.line : (anyTT || FRONT.test(n.title || '') ? '' : (n.title || ''));
+        const typed = line ? `<p style="text-align: center"><b>${esc(line)}</b></p><p><br></p>` : '';
+        files.push({ name: `Files/Data/${id}/content.rtf`, data: htmlToRTF(typed + html, P.style) });
         docsOut.push(n.title); if (onStep) onStep(docsOut.length);
       }
-      if (n.synopsis) files.push({ name: `Files/Docs/${id}_synopsis.txt`, data: n.synopsis });
+      if (n.synopsis) files.push({ name: `Files/Data/${id}/synopsis.txt`, data: n.synopsis });
       if (isFolder) for (const c of n.children || []) kids += await item(c, inDraft, depth + 1);
       const pad = '    '.repeat(depth + 2);
-      return `${pad}<BinderItem ID="${id}" UUID="${uuid()}" Created="${stamp(n.created || P.created)}" Modified="${stamp(n.mod)}" Type="${type}">\n${pad}    <Title>${xml(n.title || 'Untitled')}</Title>\n${pad}    ${meta.length ? `<MetaData>${meta.join('')}</MetaData>` : '<MetaData/>'}\n${kids ? `${pad}    <Children>\n${kids}${pad}    </Children>\n` : ''}${pad}</BinderItem>\n`;
+      const title = opts.restore && inDraft && n.tt && n.tt.was ? n.tt.was : (n.title || 'Untitled');
+      return `${pad}<BinderItem UUID="${id}" Type="${type}" Created="${stamp(n.created || P.created)}" Modified="${stamp(n.mod)}">\n${pad}    <Title>${xml(title)}</Title>\n${pad}    ${meta.length ? `<MetaData>${meta.join('')}</MetaData>` : '<MetaData/>'}\n${kids ? `${pad}    <Children>\n${kids}${pad}    </Children>\n` : ''}${pad}</BinderItem>\n`;
     }
     const root = k => P.binder.find(r => r.kind === k) || { children: [] };
     const sect = async (r, type, id, inDraft, title) => {
       let kids = ''; for (const c of r.children || []) kids += await item(c, inDraft, 1);
-      return `        <BinderItem ID="${id}" UUID="${uuid()}" Created="${stamped}" Modified="${stamped}" Type="${type}">\n            <Title>${xml(title)}</Title>\n            <MetaData/>\n${kids ? `            <Children>\n${kids}            </Children>\n` : ''}        </BinderItem>\n`;
+      return `        <BinderItem UUID="${uuid()}" Type="${type}" Created="${stamped}" Modified="${stamped}">\n            <Title>${xml(title)}</Title>\n            <MetaData/>\n${kids ? `            <Children>\n${kids}            </Children>\n` : ''}        </BinderItem>\n`;
     };
     let binder = await sect(root('manuscript'), 'DraftFolder', 0, true, 'Draft');
     // everything else in the order of your binder, each section as a top-level folder
     for (const r of P.binder) {
       if (['manuscript', 'research', 'trash'].includes(r.kind)) continue;
       if (!(r.children || []).length) continue;
-      const id = nextId++;
       let kids = ''; for (const c of r.children) kids += await item(c, false, 1);
-      binder += `        <BinderItem ID="${id}" UUID="${uuid()}" Created="${stamped}" Modified="${stamped}" Type="Folder">\n            <Title>${xml(r.title)}</Title>\n            <MetaData/>\n            <Children>\n${kids}            </Children>\n        </BinderItem>\n`;
+      binder += `        <BinderItem UUID="${uuid()}" Type="Folder" Created="${stamped}" Modified="${stamped}">\n            <Title>${xml(r.title)}</Title>\n            <MetaData/>\n            <Children>\n${kids}            </Children>\n        </BinderItem>\n`;
     }
     binder += await sect(root('research'), 'ResearchFolder', 1, false, 'Research');
     binder += await sect(root('trash'), 'TrashFolder', 2, false, 'Trash');
     const scrivx = `<?xml version="1.0" encoding="UTF-8"?>
-<ScrivenerProject Template="No" Version="1.5" Creator="Unwip" Device="Unwip" Modified="${stamped}" ModID="${uuid()}">
+<ScrivenerProject Template="No" Version="2.0" Identifier="${uuid()}" Creator="Unwip" Device="Unwip" Modified="${stamped}" ModID="${uuid()}">
     <Binder>
 ${binder}    </Binder>
     <LabelSettings>
@@ -157,12 +163,9 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
     // the other files Scrivener expects in a project: its settings, a styles list and a fingerprint of each document
     const bookTitle = (P.book && P.book.title) || P.title || name, author = (P.book && P.book.author) || (S.settings && S.settings.author) || '';
     const ini = s => String(s || '').replace(/[\r\n]+/g, ' ');
-    const sums = [];
-    for (const f of files) { const m = /^Files\/Docs\/(\d+\.rtf)$/.exec(f.name); if (!m) continue; const bytes = typeof f.data === 'string' ? new TextEncoder().encode(f.data) : f.data; const h = await crypto.subtle.digest('SHA-1', bytes); sums.push(`${m[1]}=${[...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('')}`); }
     files.unshift(
-      { name: `${name}.scrivx`, data: scrivx }, { name: 'Files/version.txt', data: '18' },
+      { name: `${name}.scrivx`, data: scrivx }, { name: 'Files/version.txt', data: '23' },
       { name: 'Files/styles.xml', data: '<?xml version="1.0" encoding="UTF-8"?>\n<Styles>\n</Styles>\n' },
-      { name: 'Files/Docs/docs.checksum', data: sums.join('\n') + '\n' },
       { name: 'Snapshots/', dir: true, data: new Uint8Array(0) },
       { name: 'Settings/ui.ini', data: '[General]\nexpandedBinderItems=\nfirstEditorSource=\nsecondEditorSource=\ninspectorMode=0\n\n[Inspector]\nmode=0\n' },
       { name: 'Settings/compile.ini', data: `[General]\noutputType=-1\n\n[Content]\nDocumentSet=0\n\n[MetaData]\ntitle=${ini(bookTitle)}\nauthors=${ini(author)}\nlanguageCode=en\n` });
@@ -173,6 +176,7 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
   async function open() {
     if (!S.project) return U.toast('Open the book you want to take with you first.');
     await U.flushSave();
+    let hasTyped = S.project.importedFrom === 'Scrivener'; U.walkTree(S.project.binder, n => { if (n.tt) hasTyped = true; });
     const body = document.createElement('div'); body.className = 'nhf';
     const title = S.project.title || 'My book';
     body.innerHTML = `
@@ -181,6 +185,7 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
       <label class="nhf-opt"><input type="radio" name="nhf" value="docx"><span><b>A folder of Word files</b><small>One per chapter, in folders like your binder. For Word, Google Docs, Ulysses, Atticus, Vellum and almost anything else.</small></span></label>
       <label class="nhf-opt"><input type="radio" name="nhf" value="md"><span><b>A folder of Markdown files</b><small>For Obsidian, iA Writer, Bear, Notion and plain-text apps.</small></span></label>
       <label class="nhf-opt"><input type="radio" name="nhf" value="backup"><span><b>A full Unwip backup</b><small>Everything exactly as it is here, in one file, in case you ever come back.</small></span></label>
+      ${hasTyped ? `<label class="check nhf-tt"><input type="checkbox" id="nhf-tt" checked><span>Type each chapter’s title at the top of its text, as it was in Scrivener<small>Unwip shows chapter names as headings by itself; Scrivener needs them in the text. Where Unwip tidied a typed title, the original line and binder name go back.</small></span></label>` : ''}
       <p class="sim-small">Not carried over to Scrivener: comments, tracked changes (suggested deletions are left out, additions kept), connections, the timeline, your calendar and mood boards. Those stay safe here.</p>`;
     const ok = await U.modal({ title: 'No hard feelings: take your book with you', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Pack it up', value: true, kind: 'primary' }] });
     if (!ok) return;
@@ -190,7 +195,7 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
     const safe = (title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').trim() || 'My book').slice(0, 80);
     U.toast('Packing it up…', '', 3000);
     let res;
-    try { res = await buildScriv(safe); } catch (e) { return U.toast('Couldn’t make the Scrivener project: ' + esc(String(e.message || e)), 'warn', 8000); }
+    try { res = await buildScriv(safe, null, { restore: !!(body.querySelector('#nhf-tt') || {}).checked }); } catch (e) { return U.toast('Couldn’t make the Scrivener project: ' + esc(String(e.message || e)), 'warn', 8000); }
     try {
       let where;
       if (api.exportScriv) where = await api.exportScriv(safe, res.files);

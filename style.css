@@ -2171,3 +2171,4 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 /* six side-panel tabs: wrap onto two lines rather than hide any */
 .side-tabs { flex-wrap: wrap; overflow: visible; row-gap: 2px; padding-right: 36px; position: relative; }
 .side-tabs .side-x { position: absolute; right: 6px; top: 8px; margin: 0; }
+.nhf-tt { display: flex; gap: 8px; align-items: flex-start; margin: 10px 2px; font-size: 14px; } .nhf-tt small { display: block; color: var(--muted); font-size: 12.5px; }
