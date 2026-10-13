@@ -35,7 +35,7 @@ window.UnwipScriv = (function () {
     for (;;) {
       const v = await mapScreen(data, scan, conv, rows);
       if (!v) return;
-      if (v.preview) { await previewScreen(data, conv); continue; }
+      if (v.preview) { await previewScreen(data, conv, rows.titles); continue; }
       return importNow(data, rows, v);
     }
   }
@@ -90,7 +90,8 @@ window.UnwipScriv = (function () {
   }
 
   // the same chapter as Scrivener had it, and as it will look in Unwip
-  async function previewScreen(data, conv) {
+  // shows a chapter with the choices made on the list applied: typed titles and empty lines
+  async function previewScreen(data, conv, titles) {
     const chapters = [];
     U.walkTree(conv.roots.manuscript || [], n => { if (n.type === 'doc' && conv.docs[n.id] && htmlText(conv.docs[n.id]).trim()) chapters.push(n); });
     if (!chapters.length) { U.toast('There are no chapters with text to show.'); return; }
@@ -100,8 +101,9 @@ window.UnwipScriv = (function () {
       <div class="field"><label>Chapter</label><select id="simp-ch">${chapters.map((c, i) => `<option value="${i}">${esc(c.title || 'Untitled')}</option>`).join('')}</select></div>
       <div class="simp-cols">
         <div><div class="simp-h">Before: as Scrivener had it</div><div class="simp-page simp-before"></div></div>
-        <div><div class="simp-h">After: in Unwip (${esc(font)} ${size}pt)</div><div class="simp-page simp-after" style="font-family:'${esc(font)}', Georgia, serif; font-size:${size}pt"></div></div>
+        <div><div class="simp-h">After: in Unwip (${esc(font)} ${size}pt)</div><div class="simp-page simp-after" style="font-family:'${esc(font)}', Georgia, serif; font-size:${size}pt${conv.layout && conv.layout.lineHeight ? `; line-height:${conv.layout.lineHeight}` : ''}"></div></div>
       </div>
+      <p class="sim-small simp-note"></p>
       <p class="sim-small">${blankChoice === 'tidy' ? 'Empty lines used as spacing are removed (the space between paragraphs comes from Manuscript style), and leftover' : 'Empty lines stay where you typed them. Leftover'} fonts are folded into one main font. Bold, italics, scene breaks and pictures stay.</p>`;
     // start on a real chapter rather than a title page
     const firstReal = Math.max(0, chapters.findIndex(c => U.countWords(htmlText(conv.docs[c.id])) > 300));
@@ -109,7 +111,15 @@ window.UnwipScriv = (function () {
       const n = chapters[+$('#simp-ch', body).value];
       const f = data.files[n._key] || {};
       $('.simp-before', body).innerHTML = f.content ? window.FolioRTF.toHTML(f.content) : conv.docs[n.id];
-      $('.simp-after', body).innerHTML = `<h1>${esc(n.title || '')}</h1>` + (blankChoice === 'tidy' ? Clip.dropBlankLines(conv.docs[n.id]).html : conv.docs[n.id]);
+      // the same steps the import takes, in the same order: typed titles first, then empty lines
+      let html = conv.docs[n.id], heading = n.title || '', note = '';
+      const found = window.UnwipTitles ? window.UnwipTitles.find(n.title, html) : null;
+      if (found && titles === 'typed') { html = found.html; heading = found.typed; note = `The typed title “${found.line}” becomes the chapter’s name and comes out of the text.`; }
+      else if (found && titles === 'binder') { html = found.html; note = `The typed title “${found.line}” comes out of the text; the chapter keeps its binder name.`; }
+      else if (found) note = 'Typed titles are left as they are, so this chapter shows its title twice: once as its name, once in the text.';
+      if (blankChoice === 'tidy') html = Clip.dropBlankLines(html).html;
+      $('.simp-after', body).innerHTML = `<h1 class="simp-title">${esc(heading)}</h1>` + html;
+      $('.simp-note', body).textContent = note;
       $('.simp-before', body).scrollTop = 0; $('.simp-after', body).scrollTop = 0;
     };
     await U.modal({ title: 'Before and after', body, wide: true, onOpen: () => { $('#simp-ch', body).value = String(firstReal); $('#simp-ch', body).onchange = show; show(); }, buttons: [{ label: 'Back to the list', value: true, kind: 'primary' }] });
