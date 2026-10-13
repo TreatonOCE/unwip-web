@@ -2330,6 +2330,9 @@
     t.style.setProperty('--t-font', q(h1.font)); t.style.setProperty('--t-size', h1.size + 'pt');
     t.style.setProperty('--t-weight', h1.bold ? 700 : 400); t.style.setProperty('--t-style', h1.italic ? 'italic' : 'normal');
     t.style.setProperty('--t-align', h1.align);
+    // the book font (bookfont.js) can also be used for synopses, cards and split view
+    document.body.classList.toggle('book-font', !!st.displayFont);
+    if (st.displayFont) document.body.style.setProperty('--book-font', q(st.displayFont)); else document.body.style.removeProperty('--book-font');
   }
 
   function langName(code) {
@@ -2427,6 +2430,7 @@
         <div class="field"><label>Theme and colours</label><button class="btn" id="s-themes" type="button">Themes &amp; colours…</button></div>
         <div class="field"><label>Typing feel</label><button class="btn" id="s-typing" type="button">Typewriter &amp; animations…</button></div>
         <div class="field"><label>Fonts</label><button class="btn" id="s-import" type="button">Import font files…</button></div>
+        <div class="field"><label>One font for a whole book (or all of them)</label><button class="btn" id="s-bookfont" type="button">Font for the whole book…</button></div>
         <div class="section-label">Name suggestions</div>
         <label class="check"><input type="checkbox" id="s-ac" ${acPrefs().on ? 'checked' : ''}> Suggest character, place and item names as I type</label>
         <div class="field"><label>Start suggesting after</label><select id="s-acmin">${opt([[2, '2 letters'], [3, '3 letters'], [4, '4 letters']], acPrefs().min)}</select></div>
@@ -2448,6 +2452,7 @@
         <div class="field full" id="s-extra"></div>
       </div>`;
     $('#s-import', body).onclick = importFonts;
+    $('#s-bookfont', body).onclick = () => { if (!S.project) return toast('Open a book first, then choose its font here (you can apply it to every book from there).'); body.closest('.modal-back').remove(); window.UnwipBookFont && window.UnwipBookFont.open(); };
     $('#s-themes', body).onclick = () => window.UnwipLook && window.UnwipLook.openThemes();
     $('#s-typing', body).onclick = () => window.UnwipLook && window.UnwipLook.openTyping();
     $('#s-dict', body).onclick = dictionaryDialog;
@@ -3974,20 +3979,51 @@
   $('#btn-split').innerHTML = I.columns;
   $('#sp-open').innerHTML = I.export;
   let spTimer = null;
-  // the same folders and order as the binder: folders as headings you can't pick, documents indented under them
-  function splitOptions() {
-    const groups = [], pad = d => '\u00a0\u00a0\u00a0\u00a0'.repeat(d);
-    for (const r of S.project.binder) {
-      if (r.kind === 'trash') continue;
-      const rows = []; let docs = 0;
-      const walk = (l, d) => l.forEach(n => {
-        if (n.type === 'doc') { docs++; rows.push(`<option value="${n.id}" ${n.id === S.splitId ? 'selected' : ''}>${pad(d)}${n.map ? '🗺️ ' : ''}${esc(n.title || 'Untitled')}</option>`); }
-        else if (n.children && n.children.length) { rows.push(`<option disabled>${pad(d)}📁 ${esc(n.title || 'Folder')}</option>`); walk(n.children, d + 1); }
+  // ---- choosing the document beside your chapter: the binder's own folders, which open and close like the binder
+  const spOpenFolders = new Set();
+  function spLabel() { const f = S.splitId && findNode(S.splitId); $('.sp-pick-t', $('#sp-doc')).textContent = f ? (f.node.map ? '🗺️ ' : '') + (f.node.title || 'Untitled') : 'Choose a document'; }
+  function spPicker() {
+    const old = document.querySelector('.sp-menu'); if (old) { old.remove(); return; }
+    const btn = $('#sp-doc'), r = btn.getBoundingClientRect();
+    const menu = document.createElement('div'); menu.className = 'sp-menu'; menu.setAttribute('role', 'listbox');
+    menu.style.left = r.left + 'px'; menu.style.top = (r.bottom + 4) + 'px'; menu.style.width = Math.max(r.width, 300) + 'px';
+    // the folders holding the split document and your chapter start open
+    for (const id of [S.splitId, S.docId]) { let f = id && findNode(id); while (f && f.parent) { spOpenFolders.add(f.parent.id); f = findNode(f.parent.id); } }
+    menu.innerHTML = `<input type="text" class="sp-menu-q" placeholder="Type to find a document…" spellcheck="false"><div class="sp-menu-list"></div>`;
+    const list = $('.sp-menu-list', menu), q = $('.sp-menu-q', menu);
+    const draw = () => {
+      const term = q.value.trim().toLowerCase(), rows = [];
+      const row = (n, d, kind) => {
+        if (kind === 'doc') rows.push(`<button type="button" class="sp-mi doc ${n.id === S.splitId ? 'on' : ''} ${n.id === S.docId ? 'cur' : ''}" data-id="${n.id}" style="--d:${d}">${n.map ? '🗺️ ' : ''}${esc(n.title || 'Untitled')}${n.id === S.docId ? ' <small>(open on the left)</small>' : ''}</button>`);
+        else rows.push(`<button type="button" class="sp-mi ${kind}" data-f="${n.id}" style="--d:${d}"><span class="sp-chev ${spOpenFolders.has(n.id) || term ? 'open' : ''}">${I.chevron}</span>${kind === 'root' ? `<b>${esc(n.title)}</b>` : esc(n.title || 'Folder')}</button>`);
+      };
+      const hit = n => n.type === 'doc' ? (n.title || '').toLowerCase().includes(term) : (n.children || []).some(hit);
+      const walk = (ns, d) => ns.forEach(n => {
+        if (term && !hit(n)) return;
+        if (n.type === 'doc') return row(n, d, 'doc');
+        if (!(n.children || []).length) return;
+        row(n, d, 'folder'); if (term || spOpenFolders.has(n.id)) walk(n.children, d + 1);
       });
-      if (r.root) walk(r.children || [], 0); else if (r.type === 'doc') { docs++; rows.push(`<option value="${r.id}">${esc(r.title || 'Untitled')}</option>`); }
-      if (docs) groups.push(`<optgroup label="${esc(r.root ? r.title : 'Unsorted')}">${rows.join('')}</optgroup>`);
-    }
-    return groups.join('');
+      for (const rt of S.project.binder) {
+        if (rt.kind === 'trash' || !rt.root || !(rt.children || []).length || (term && !hit(rt))) continue;
+        if (!spOpenFolders.has(rt.id) && !term && !spOpenFolders.has('seen:' + rt.id)) { spOpenFolders.add('seen:' + rt.id); if (rt.kind === 'manuscript' || rt.kind === rootOf(S.splitId || '')?.kind) spOpenFolders.add(rt.id); }
+        row(rt, 0, 'root'); if (term || spOpenFolders.has(rt.id)) walk(rt.children, 1);
+      }
+      list.innerHTML = rows.join('') || '<p class="sp-menu-none">No document by that name.</p>';
+    };
+    list.addEventListener('click', e => {
+      const b = e.target.closest('.sp-mi'); if (!b) return;
+      if (b.dataset.f) { const id = b.dataset.f; spOpenFolders.has(id) ? spOpenFolders.delete(id) : spOpenFolders.add(id); draw(); q.focus(); return; }
+      close(); openSplit(b.dataset.id);
+    });
+    q.addEventListener('input', draw);
+    const close = () => { menu.remove(); document.removeEventListener('mousedown', away, true); document.removeEventListener('keydown', key, true); };
+    const away = e => { if (!menu.contains(e.target) && !btn.contains(e.target)) close(); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } else if (e.key === 'Enter' && document.activeElement === q) { const first = list.querySelector('.sp-mi.doc'); if (first) { e.preventDefault(); close(); openSplit(first.dataset.id); } } };
+    document.addEventListener('mousedown', away, true); document.addEventListener('keydown', key, true);
+    document.body.appendChild(menu); draw(); q.focus();
+    const mr = menu.getBoundingClientRect(); if (mr.right > innerWidth - 8) menu.style.left = Math.max(8, innerWidth - 8 - mr.width) + 'px';
+    const on = list.querySelector('.sp-mi.on'); if (on) on.scrollIntoView({ block: 'center' });
   }
   async function openSplit(id) {
     await flushSplit();
@@ -4000,7 +4036,7 @@
     S.splitId = id; S.project.splitId = id; scheduleMeta();
     $('#split-pane').classList.remove('hidden');
     $('#btn-split').classList.add('on');
-    $('#sp-doc').innerHTML = splitOptions();
+    spLabel();
     const fn = findNode(id);
     if (fn && fn.node.map) {   // a map: show its picture (edit it by opening it)
       spEd.contentEditable = 'false'; spEd.classList.add('sp-map'); spEd.classList.remove('sheet-like');
@@ -4040,7 +4076,7 @@
     const html = e.clipboardData.getData('text/html'), text = e.clipboardData.getData('text/plain');
     document.execCommand('insertHTML', false, html ? Clip.cleanPaste(html, { docFont: S.project.style.font, docSize: S.project.style.size }) : Clip.textToHTML(text));
   });
-  $('#sp-doc').onchange = e => openSplit(e.target.value);
+  $('#sp-doc').onclick = spPicker;
   $('#sp-close').onclick = closeSplit;
   $('#sp-open').onclick = async () => { const id = S.splitId; await closeSplit(); openDoc(id); };
   $('#btn-split').onclick = () => S.splitId ? closeSplit() : openSplit(null);
@@ -4132,7 +4168,7 @@
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,
     reloadProjectMeta, showLibrary, openProject, leaveProject: () => leaveProject(), importScrivener: () => importScrivener(), DEFAULT_STYLE, setMode, setView: v => setView(v), importWordProject: () => importWordProject(), newProjectTemplate: () => newProjectTemplate(), ROOTS,
-    tidyBlankLines, sectionDialog, sheetFor, scheduleNames, templateGallery, continueWriting, noteLastPlace, caretOffset,
+    tidyBlankLines, sectionDialog, sheetFor, scheduleNames, fontOptionsHTML, applyStyle, markScenes, templateGallery, continueWriting, noteLastPlace, caretOffset,
     openPreview, snapshotsDialog, openSettings, goalsDialog, writtenOn, dayKey, streaks, dial, manuscriptWords, openFind, openSearch, splitAtCursor, setMode, restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
   };
 })();

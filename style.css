@@ -769,7 +769,21 @@ body.in-mood .editor-wrap { overflow: hidden; }
 /* ---------- split view ---------- */
 .split-pane { width: 40%; min-width: 300px; max-width: 620px; flex-shrink: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--paper); }
 .sp-head { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
-.sp-head select { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); padding: 5px 8px; font-weight: 600; }
+.sp-head select, .sp-pick { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); padding: 5px 8px; font-weight: 600; }
+.sp-pick { display: flex; align-items: center; gap: 6px; text-align: left; cursor: pointer; font: 600 14px var(--ui); color: var(--text); }
+.sp-pick .sp-pick-t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-head .sp-pick svg { transform: none; flex: none; color: var(--muted); }
+.sp-menu { position: fixed; z-index: 400; max-height: min(70vh, 560px); display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 6px; }
+.sp-menu-q { border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; margin-bottom: 6px; background: var(--bg); outline: none; font: 14px var(--ui); }
+.sp-menu-q:focus { border-color: var(--accent); }
+.sp-menu-list { overflow: auto; }
+.sp-mi { display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; border: 0; background: none; padding: 5px 8px 5px calc(8px + var(--d) * 16px); border-radius: 6px; font: 14px var(--ui); color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-mi:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.sp-mi.on { background: var(--accent); color: #fff; } .sp-mi.cur { opacity: .55; } .sp-mi small { color: inherit; opacity: .8; }
+.sp-mi.folder, .sp-mi.root { color: var(--muted); } .sp-mi.root { margin-top: 4px; text-transform: uppercase; font-size: 12px; letter-spacing: .4px; }
+.sp-mi.doc { padding-left: calc(30px + var(--d) * 16px); }
+.sp-chev { display: inline-flex; width: 16px; height: 16px; transition: transform .12s; } .sp-chev svg { width: 14px; height: 14px; transform: none !important; } .sp-chev.open { transform: rotate(90deg); }
+.sp-menu-none { color: var(--muted); padding: 8px; margin: 0; }
 .sp-head svg { width: 16px; height: 16px; transform: rotate(-90deg); }
 .sp-scroll { flex: 1; overflow: auto; padding: 22px 28px 60px; }
 .sp-editor { outline: none; font: 15px/1.6 Georgia, 'Times New Roman', serif; color: var(--text); min-height: 60vh; }
@@ -2108,3 +2122,10 @@ button.stat-card:hover { border-color: var(--accent); }
 .nv-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; } .nv-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
 .nv-pt { font-size: 12.5px; color: var(--muted); }
 .ra-wait { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* the book font, when it's also used for synopses, cards and split view */
+body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, body.book-font .sp-editor { font-family: var(--book-font), Georgia, serif; }
+.bf-prev { margin: 10px 0 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 17px; line-height: 1.5; background: var(--paper); }
+.bf-prev b { display: block; font-size: 21px; margin-bottom: 4px; }
+.bf .check { display: flex; gap: 8px; align-items: flex-start; margin: 7px 0; font-size: 14px; } .bf .check small { display: block; color: var(--muted); font-size: 12.5px; }
+.bf-scope { display: grid; gap: 4px; margin-top: 6px; }
