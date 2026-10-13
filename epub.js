@@ -93,7 +93,7 @@ window.FolioEPUB = (function () {
   function openerXHTML(ch, T) {
     if (!T) return '';
     const t = T.t;
-    const num = ch.numbered && t.number !== 'none' ? `${t.label ? t.label + ' ' : ''}${t.number === 'words' ? words(ch.n) : String(ch.n)}` : '';
+    const num = ch.numbered && t.number !== 'none' ? `${t.label ? t.label + ' ' : ''}${window.UnwipTypeset ? window.UnwipTypeset.numberText(ch.n, t) : words(ch.n)}` : '';
     const title = ch.hidden ? '' : (ch.title || (!num ? ch.raw || '' : ''));
     if (!num && !title) return '';
     return `<div class="opener">${num ? `<p class="num">${x(num)}</p>` : ''}${t.orn ? `<p class="orn">${x(t.orn)}</p>` : ''}<h1${!title ? ' class="hidden-title"' : ''}>${x(title || num)}</h1></div>\n`;
@@ -180,7 +180,7 @@ a.noteref { text-decoration: none; } a.noteref sup { font-size: .7em; line-heigh
     let chapters;
     if (T) {
       // numbered chapters, parts as their own short sections, back matter after the story
-      chapters = window.UnwipTypeset.chaptersFrom(blocks).map(c => c.kind === 'part' ? { title: c.title, blocks: [], part: true } : { ...c, nav: c.title ? (c.numbered && T.t.number !== 'none' ? `${words(c.n)}: ${c.title}` : c.title) : (c.numbered && T.t.number !== 'none' ? `Chapter ${words(c.n)}` : c.raw || c.tocTitle || title) });
+      chapters = window.UnwipTypeset.chaptersFrom(blocks).map(c => c.kind === 'part' ? { title: c.title, blocks: [], part: true } : { ...c, nav: c.title ? (c.numbered && T.t.number !== 'none' ? `${window.UnwipTypeset.numberText(c.n, T.t)}: ${c.title}` : c.title) : (c.numbered && T.t.number !== 'none' ? `${T.t.label || 'Chapter'} ${window.UnwipTypeset.numberText(c.n, T.t)}` : c.raw || c.tocTitle || title) });
       const B = T.d.back, sec = (name, text) => { if (String(text || '').trim()) chapters.push({ title: name, section: true, numbered: false, blocks: text.split(/\n\s*\n/).map(p => ({ tag: 'p', runs: [{ text: p.trim() }] })), raw: name }); };
       if (B.acknowledgements) sec('Acknowledgements', book.acknowledgements);
       if (B.about) sec('About the Author', book.about);

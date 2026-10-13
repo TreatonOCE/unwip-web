@@ -136,6 +136,7 @@ select, input { font: inherit; color: inherit; }
 .tree-row:hover { background: var(--panel-2); }
 .tree-row.selected { background: var(--accent-soft); color: var(--accent); }
 .tree-row.selected .tr-icon { color: var(--accent); }
+.tree-row.no-book .tr-title { opacity: .5; font-style: italic; }
 .tree-row .tr-chev { width: 16px; height: 16px; display: inline-grid; place-items: center; color: var(--faint); flex-shrink: 0; transition: transform .12s; }
 .tree-row .tr-chev svg { width: 13px; height: 13px; }
 .tree-row .tr-chev.open { transform: rotate(90deg); }
@@ -250,6 +251,7 @@ body:not(.writer) .writer-exit { display: none; }
 .toast-btn { border: 0; border-radius: 6px; padding: 5px 10px; background: var(--accent); color: var(--accent-text); cursor: pointer; font-weight: 600; white-space: nowrap; }
 .toast-x { border: 0; background: transparent; color: inherit; opacity: .6; cursor: pointer; padding: 2px 4px; }
 .toast-x:hover { opacity: 1; }
+@media (max-width: 560px) { .toasts { width: calc(100vw - 24px); } .toast { max-width: 100%; } .toast.with-action { flex-wrap: wrap; row-gap: 8px; } .toast.with-action > span { flex: 1 1 100%; } .toast.with-action .toast-btn { margin-left: auto; } }
 
 /* "Move to" destination list */
 .dest-list { display: flex; flex-direction: column; gap: 2px; max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: var(--bg); }
@@ -2192,3 +2194,10 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .ug-list li { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--line); }
 .ug-list li span { flex: 1; } .ug-list li b { font-variant-numeric: tabular-nums; } .ug-list li small { color: var(--muted); font-size: 12px; min-width: 70px; text-align: right; }
 .ug-never { list-style: none; padding-left: 0; color: var(--muted); }
+
+/* conflicted copy bar */
+.chg-bar.cq-bar { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: start; background: color-mix(in srgb, #c9892b 12%, var(--paper, #fffef9)); border-color: color-mix(in srgb, #c9892b 45%, transparent); color: inherit; }
+.cq-bar .chg-sw { background: #c9892b; margin-top: 4px; }
+.chg-bar.cq-bar > .cq-acts { grid-column: 2; display: flex; flex-direction: row; gap: 6px; flex-wrap: wrap; flex: none; }
+.cq-bar .cq-acts .btn { width: auto; }
+:root[data-theme="dark"] .chg-bar.cq-bar { background: #3a2c17; color: #f0d9b5; }

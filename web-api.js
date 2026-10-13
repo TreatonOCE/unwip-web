@@ -55,6 +55,7 @@
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
 
   const LIB = 'Unwip';
+  const CONFLICT = /\s*\(([^()]*?)(?:['’]s)?\s*conflicted copy[^()]*\)/i;
   const slugify = name => (name || 'Untitled').replace(/[<>:"/\\|?*\x00-\x1F]/g, '').trim().slice(0, 60) || 'Untitled';
   const safeId = id => String(id).replace(/[^a-zA-Z0-9_-]/g, '');
   const pdir = slug => `${LIB}/${String(slug).replace(/[/\\]/g, '')}`;
@@ -302,14 +303,17 @@
     revealProject: async () => '',
     loadDoc: async (slug, id) => (await FS.text(`${pdir(slug)}/docs/${safeId(id)}.html`)) || '',
     saveDoc: async (slug, id, html) => { await FS.write(`${pdir(slug)}/docs/${safeId(id)}.html`, html); return true; },
-    // automatic backups inside the browser (the last 20)
+    // automatic backups inside the browser (the last 20, plus one a day for two weeks)
     async backup(slug) {
       const dir = pdir(slug), b = `${dir}/backups`;
       const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       await FS.write(`${b}/${stamp}/project.json`, (await FS.text(`${dir}/project.json`)) || '{}');
       for (const f of (await FS.list(`${dir}/docs`)).files) if (f.endsWith('.html')) await FS.write(`${b}/${stamp}/docs/${f}`, await FS.text(`${dir}/docs/${f}`));
       const all = (await FS.list(b)).dirs.filter(f => /^\d{4}-/.test(f)).sort();
-      while (all.length > 20) await FS.removeTree(`${b}/${all.shift()}`);
+      // the newest 20 are kept, and of anything older, the last one of each day for two weeks
+      const keep = new Set(all.slice(-20)), days = new Set();
+      for (const f of all.slice(0, -20).reverse()) { const d = f.slice(0, 10); if (!days.has(d) && days.size < 14) { days.add(d); keep.add(f); } }
+      for (const f of all) if (!keep.has(f)) await FS.removeTree(`${b}/${f}`);
       return stamp;
     },
     async clipboardWrite(html, text) {
@@ -341,8 +345,23 @@
     async imagePick() { const [f] = await pickFiles({ accept: 'image/*' }); return f ? { name: f.name, type: f.type || 'image/png', bytes: await bytesOf(f) } : null; },
     libraryInfo: async () => ({ web: true, path: `In this browser on your ${deviceName}`, kind: 'browser', places: [{ kind: 'browser', label: `On this ${deviceName}`, path: 'Saved in the browser', exists: true }], parentMissing: false, device: deviceName }),
     libraryPick: async () => null, libraryMove: async () => { throw new Error('Not available in the web version yet.'); },
-    presence: async () => true, othersOpen: async () => [], conflicts: async () => [],
-    readConflict: async () => '', archiveConflict: async () => true, watchProject: async () => true,
+    presence: async () => true, othersOpen: async () => [],
+    // copies of a chapter (or the binder) changed on two devices at once, "name (iPad's conflicted copy DATE)", same
+    // as Dropbox makes on a PC. dropbox.js writes them here; the app puts chapters into the Conflicted copies section
+    async conflicts(slug) {
+      const out = [];
+      for (const [sub, kind] of [['', 'project'], ['docs', 'doc']]) {
+        for (const f of (await FS.list(sub ? `${pdir(slug)}/${sub}` : pdir(slug))).files) { const m = CONFLICT.exec(f); if (!m) continue; out.push({ file: sub ? `${sub}/${f}` : f, kind, device: m[1].trim() || 'another device', original: f.replace(CONFLICT, '') }); }
+      }
+      return out.filter(c => c.kind === 'doc' ? /\.html$/.test(c.original) : c.original === 'project.json');
+    },
+    async readConflict(slug, file) { if (!CONFLICT.test(file) || /\.\./.test(file)) throw new Error('Bad file'); return (await FS.text(`${pdir(slug)}/${file}`)) || ''; },
+    async archiveConflict(slug, file) {
+      if (!CONFLICT.test(file) || /\.\./.test(file)) throw new Error('Bad file');
+      const v = await FS.read(`${pdir(slug)}/${file}`); if (v != null) await FS.write(`${pdir(slug)}/backups/sync-conflicts/${Date.now()} ${file.split('/').pop()}`, v);
+      await FS.remove(`${pdir(slug)}/${file}`); return true;
+    },
+    watchProject: async () => true,
     onExternalChange: on('external'),
     // for dropbox.js (web only): the file store, and a way to tell the app something changed
     __fs: FS, __emit: (name, data) => (LISTENERS[name] || []).forEach(cb => { try { cb(data); } catch (e) { console.warn(e); } }), __device: deviceName,

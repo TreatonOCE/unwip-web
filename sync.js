@@ -172,7 +172,7 @@ window.UnwipSync = (function () {
     }
     api.seenSave(S.slug, id, editor.innerHTML);
   }
-  U.on('doc', id => { clearHighlights(); showChanges(id); });
+  U.on('doc', id => { clearHighlights(); showChanges(id); quarantineBar(id); });
   U.on('saved', (id, html) => api.seenSave(S.slug, id, html));
   U.on('leave', clearHighlights);
 
@@ -212,8 +212,75 @@ window.UnwipSync = (function () {
   });
 
   // ================================================================== DROPBOX CONFLICTED COPIES
+  // ================================================================== CONFLICTED COPIES (quarantine)
+  // Like Scrivener: when two places changed the same chapter, the other version goes into a "Conflicted copies"
+  // section at the bottom of the binder, out of the way of the book, until you decide. Nothing is lost. The section
+  // only appears while it has something in it, and it's never exported.
+  function quarantineRoot(create) {
+    let r = S.project.binder.find(n => n.root && n.kind === 'conflicts');
+    if (!r && create) {
+      r = { id: 'root-conflicts', type: 'folder', kind: 'conflicts', title: 'Conflicted copies', root: true, open: true, children: [], icon: '⚠️' };
+      const t = S.project.binder.findIndex(n => n.root && n.kind === 'trash'); S.project.binder.splice(t < 0 ? S.project.binder.length : t, 0, r);
+    }
+    return r;
+  }
+  function tidyQuarantine() { const r = quarantineRoot(false); if (r && !(r.children || []).length) S.project.binder.splice(S.project.binder.indexOf(r), 1); }
+  const stamp = t => new Date(t).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  async function quarantine(list) {
+    const r = quarantineRoot(true); let added = 0;
+    for (const c of list) {
+      try {
+        const id = c.original.replace(/\.html$/, ''), html = await api.readConflict(S.slug, c.file), f = U.findNode(id);
+        // compared with the saved version (the one Dropbox kept), and with what's on screen
+        const mine = f ? await api.loadDoc(S.slug, id).catch(() => null) : null, onScreen = f && id === S.docId ? U.editor.innerHTML : null;
+        if (mine != null && mine === html && (onScreen == null || onScreen === html)) { await api.archiveConflict(S.slug, c.file); continue; }   // the same as yours: nothing to decide
+        const node = { id: U.uid(), type: 'doc', title: `${f ? f.node.title || 'Untitled' : 'A deleted chapter'} (${c.device}’s version)`, words: U.countWords(html.replace(/<[^>]+>/g, ' ')), conflictOf: f ? id : null, conflictFrom: c.device, conflictAt: Date.now() };
+        await api.saveDoc(S.slug, node.id, html);
+        r.children.push(node); added++;
+        await api.archiveConflict(S.slug, c.file);   // the original conflicted file is also kept, in the project's backups folder
+      } catch (e) { console.warn('conflict', e); }
+    }
+    tidyQuarantine(); U.scheduleMeta(); U.renderBinder();
+    if (added) U.toastAction(`${added === 1 ? 'A chapter was' : `${added} chapters were`} changed in two places at once. The other version${added === 1 ? ' is' : 's are'} in <b>Conflicted copies</b> at the bottom of the binder. Nothing is lost.`, 'Show me', () => { const q = quarantineRoot(false); if (q && q.children[0]) U.openDoc(q.children[0].id); }, 20000);
+  }
+  // what to do with one conflicted copy
+  async function resolve(id, how) {
+    const f = U.findNode(id); if (!f) return; const n = f.node, orig = n.conflictOf && U.findNode(n.conflictOf);
+    await U.flushSave();
+    const toTrash = () => { const t = S.project.binder.find(x => x.root && x.kind === 'trash'); f.list.splice(f.list.indexOf(n), 1); delete n.conflictOf; if (t) t.children.push(n); };
+    if (how === 'use' && orig) {
+      const theirs = await api.loadDoc(S.slug, id), mine = orig.node.id === S.docId ? U.editor.innerHTML : await api.loadDoc(S.slug, orig.node.id);
+      await api.snapSave(S.slug, orig.node.id, mine, `Before using ${n.conflictFrom || 'the other'}’s version`, false).catch(() => {});
+      await api.saveDoc(S.slug, orig.node.id, theirs);
+      toTrash(); tidyQuarantine(); U.scheduleMeta(); U.renderBinder();
+      await U.openDoc(orig.node.id);
+      U.toast(`Now using ${esc(n.conflictFrom || 'the other')}’s version. Yours is in Snapshots, and the copy is in the Trash.`, '', 8000);
+    } else if (how === 'both') {
+      f.list.splice(f.list.indexOf(n), 1); delete n.conflictOf;
+      if (orig) orig.list.splice(orig.index + 1, 0, n); else U.findNode('root-manuscript').node.children.push(n);
+      tidyQuarantine(); U.scheduleMeta(); U.renderBinder(); U.openDoc(n.id);
+      U.toast('Kept as its own chapter, right under the original.');
+    } else if (how === 'drop') {
+      toTrash(); tidyQuarantine(); U.scheduleMeta(); U.renderBinder();
+      if (orig) await U.openDoc(orig.node.id); else U.showEmpty && U.showEmpty(true);
+      U.toast('Moved to the Trash (you can still get it back from there).');
+    } else if (how === 'compare' && orig) { U.openSplit(orig.node.id); }
+  }
+  function quarantineBar(id) {
+    const old = $('#cq-bar'); if (old) old.remove();
+    const f = U.findNode(id); if (!f || !('conflictOf' in f.node)) return;
+    const n = f.node, orig = n.conflictOf && U.findNode(n.conflictOf);
+    const bar = document.createElement('div'); bar.id = 'cq-bar'; bar.className = 'chg-bar cq-bar';
+    bar.innerHTML = `<span class="chg-sw"></span><div><b>Conflicted copy from ${esc(n.conflictFrom || 'another device')}</b><span>${orig ? `The same chapter, “${esc(orig.node.title || 'Untitled')}”, was changed in two places at once. This is the other version.` : 'The chapter it came from has since been deleted.'}</span></div>
+      <div class="cq-acts">${orig ? '<button class="btn small" data-q="compare">Compare side by side</button><button class="btn small" data-q="use">Use this version</button>' : ''}<button class="btn small" data-q="both">Keep both</button><button class="btn small ghost" data-q="drop">Not needed</button></div>`;
+    $('#page').prepend(bar);
+    bar.querySelectorAll('[data-q]').forEach(b => b.onclick = () => resolve(id, b.dataset.q));
+  }
   async function checkConflicts() {
     let list = []; try { list = await api.conflicts(S.slug); } catch { return; }
+    // chapters go into the Conflicted copies section; the binder (project file) still gets the compare window
+    const docs = list.filter(c => c.kind === 'doc'); if (docs.length) await quarantine(docs);
+    list = list.filter(c => c.kind !== 'doc');
     if (!list.length) return;
     const titleOf = c => { if (c.kind !== 'doc') return 'The binder (project file)'; const id = c.original.replace(/\.html$/, ''); const f = U.findNode(id); return f ? f.node.title : 'A deleted document'; };
     const body = document.createElement('div');
@@ -315,7 +382,7 @@ window.UnwipSync = (function () {
     const list = await api.backupList(slug);
     const when = st => { const d = new Date(st.slice(0, 10) + 'T' + st.slice(11, 19).replace(/-/g, ':') + 'Z'); return isNaN(d) ? st : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); };
     const body = document.createElement('div');
-    body.innerHTML = `<p>Unwip backs up <b>${esc(title)}</b> automatically when you open it, every 10 minutes while you write, and when you close it. The last 20 are kept, and images are backed up too.</p>
+    body.innerHTML = `<p>Unwip backs up <b>${esc(title)}</b> automatically when you open it, every 10 minutes while you write, and when you close it. The last 20 are kept, plus one from each of the 14 days before that, and images are backed up too.</p>
       ${list.length ? `<div class="sy-list">${list.map(b => `<div class="sy-row"><div><b>${esc(when(b.stamp))}</b><span>${b.docs} documents${b.words ? ` · ${fmt(b.words)} words in the manuscript` : ''}</span></div><button class="btn small" data-stamp="${esc(b.stamp)}">Restore as a copy</button></div>`).join('')}</div>` : '<p class="np-empty">No backups yet. One is made the next time you open the project.</p>'}
       <p class="rp-note">Restoring makes a separate project next to this one, so nothing current is overwritten. For a backup you can keep anywhere, use “Save a full backup file…” on the project’s menu.</p>`;
     U.modal({ title: 'Backups', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }],
@@ -346,5 +413,5 @@ window.UnwipSync = (function () {
   });
 
   const rb = $('#btn-recent'); if (rb) { rb.innerHTML = U.I.history; rb.onclick = () => recentDialog(false); }
-  return { settingsSection, backupsDialog, checkConflicts, beforeOpen, recentDialog, highlightChanges };
+  return { settingsSection, backupsDialog, checkConflicts, beforeOpen, recentDialog, highlightChanges, resolveConflict: resolve };
 })();

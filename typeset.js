@@ -117,6 +117,10 @@ window.UnwipTypeset = (function () {
       if (c.kind !== 'chapter') continue;
       if (UNNUMBERED.test(c.title)) { c.numbered = false; continue; }
       c.raw = c.title;
+      // a title that starts with its own number ("116 - The market", "12. Home") has the number taken off, since the
+      // book numbers its chapters itself; "104 - Interlude: …" then counts as an interlude
+      const bare = /^\s*\d{1,3}\s*[-–—.:)]\s+(\S.*)$/.exec(c.title);
+      if (bare) { c.title = bare[1].trim(); if (UNNUMBERED.test(c.title)) { c.numbered = false; continue; } }
       const m = CH_TITLE.exec(c.title);
       if (m) { c.title = m[3].trim(); }
       else if (/^\s*(\d+|[ivxlc]+)\s*\.?\s*$/i.test(c.title)) c.title = '';
@@ -423,5 +427,5 @@ ${fontFaceCSS(fontBase())}${extraFontCSS}${book.css}
   }
   function ensureStyle(book) { measureBox(book.css); }
 
-  return { THEMES, TRIMS, SCENES, DEFAULT, design, resolved, build, documentHTML, pageHTML, fill, ensureStyle, fontFaceCSS, chaptersFrom, FONTS: FONTS.map(f => f[0]) };
+  return { THEMES, TRIMS, SCENES, DEFAULT, design, resolved, build, documentHTML, pageHTML, fill, ensureStyle, fontFaceCSS, chaptersFrom, numberText, FONTS: FONTS.map(f => f[0]) };
 })();

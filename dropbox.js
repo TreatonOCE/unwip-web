@@ -220,11 +220,10 @@ window.UnwipDropbox = (function () {
         lb = asBytes(await FS.read(LOCAL + L.rel)); lh = await contentHash(lb);
       }
       if (R && L) {
-        if (lh === R.hash) { st.records[k] = { rev: R.rev, hash: lh }; continue; }
+        if (lh === R.hash) { st.records[k] = { rev: R.rev, hash: lh, ...shapeOf(k, lb) }; continue; }
         const remoteChanged = !rec || rec.rev !== R.rev, localChanged = !rec || rec.hash !== lh;
         if (localChanged && !remoteChanged) { await push(k, L.rel, lb, lh, rec.rev); continue; }
-        if (localChanged && remoteChanged) await keepMine(L.rel, lb);
-        await pull(k, R, touched);
+        await pull(k, R, touched, localChanged && remoteChanged ? lb : null);
       } else if (R && !L) {
         if (rec && rec.rev === R.rev) { await remove(R.rel); delete st.records[k]; }      // deleted here: delete there too (Dropbox keeps it 30 days)
         else await pull(k, R, touched);
@@ -241,30 +240,40 @@ window.UnwipDropbox = (function () {
     if (progress) progress.up++;
     const res = await upload(rel, bytes, rev);
     if (res.conflict) { st.records[k] = { rev: 'conflict', hash: '' }; running && (running.again = true); dirty.add(k); return; }
-    st.records[k] = { rev: res.rev, hash: res.content_hash || hash };
+    st.records[k] = { rev: res.rev, hash: res.content_hash || hash, ...shapeOf(k, bytes) };
   }
-  async function pull(k, R, touched) {
+  // for a project file, remember how its binder looked when last in step with Dropbox
+  const shapeOf = (k, bytes) => /^[^/]+\/project\.json$/.test(k) ? { shape: binderShape(new TextDecoder().decode(bytes)) } : {};
+  async function pull(k, R, touched, mine) {
     if (progress) progress.down++;
     const b = await download(R.lower);
     const localRel = R.rel;   // Dropbox's spelling of the name
+    if (mine) await keepMine(localRel, mine, b);
+    // saved here while this sync was busy fetching it: keep that version too rather than writing over it
+    if (dirty.has(k)) { const now = await FS.read(LOCAL + localRel); if (now != null && (!mine || await contentHash(asBytes(now)) !== await contentHash(mine))) await keepMine(localRel, asBytes(now), b); }
     await rawWrite(LOCAL + localRel, isText(localRel) ? new TextDecoder().decode(b) : b);
-    st.records[k] = { rev: R.rev, hash: R.hash };
+    st.records[k] = { rev: R.rev, hash: R.hash, ...shapeOf(k, b) };
     touched.add(localRel);
   }
-  // both devices changed the same file: Dropbox's version wins, this device's is kept as a snapshot
-  async function keepMine(rel, bytes) {
-    const m = /^([^/]+)\/docs\/([\w-]+)\.html$/.exec(rel);
-    const ts = Date.now();
-    if (m) {
-      const dir = `${LOCAL}${m[1]}/snapshots/${m[2]}`;
-      await FS.write(`${dir}/${ts}.html`, new TextDecoder().decode(bytes));
-      const meta = await FS.json(`${dir}/snapshots.json`, []);
-      meta.push({ ts, label: `My ${DEVICE} version (changed on two devices)`, auto: false });
-      await FS.write(`${dir}/snapshots.json`, JSON.stringify(meta));
-      conflicts.push({ slug: m[1], id: m[2] });
-    } else {
-      await rawWrite(`${LOCAL}${rel.replace(/\/[^/]+$/, '')}/backups/sync-conflicts/${ts} ${rel.split('/').pop()}`, isText(rel) ? new TextDecoder().decode(bytes) : bytes);
+  // both devices changed the same file: Dropbox's version wins, and this device's is kept beside it as
+  // "name (iPad's conflicted copy DATE)", the way Dropbox does it on a PC. Chapters then show up in the project's
+  // Conflicted copies section (on every device, once it syncs), and a binder clash gets the compare window.
+  // the parts of a binder a person would notice: what's in it, in what order, with which names and notes
+  const binderShape = json => { try { const p = JSON.parse(json); const walk = l => (l || []).map(n => [n.id, n.type, n.title || '', n.synopsis || '', n.status || '', n.label ? n.label.n : '', n.icon || '', n.noBook ? 1 : 0, n.type === 'folder' ? walk(n.children) : 0]); return JSON.stringify([p.title, walk(p.binder)]); } catch { return null; } };
+  async function keepMine(rel, bytes, theirs) {
+    // two devices both saving the project file is normal (it also holds where each was reading, word counts and the
+    // like); only a real difference in the binder is worth asking about
+    if (/^[^/]+\/project\.json$/.test(rel) && theirs) {
+      const a = binderShape(new TextDecoder().decode(bytes)), b = binderShape(new TextDecoder().decode(theirs)), rec = st.records[rel.toLowerCase()];
+      if (a && (a === b || (rec && rec.shape && a === rec.shape))) return;   // the same binder, or this device didn't change it since the last sync
     }
+    const ts = Date.now(), day = new Date(ts).toLocaleDateString('en-CA');
+    const m = /^(.*\/)?([^/]+?)(\.[^./]+)$/.exec(rel);
+    let name = `${m[1] || ''}${m[2]} (${DEVICE.replace(/[()]/g, '')}'s conflicted copy ${day})${m[3]}`;
+    if (await FS.exists(LOCAL + name)) name = name.replace(/\)(\.[^./]+)$/, ` ${ts})$1`);
+    await rawWrite(LOCAL + name, isText(rel) ? new TextDecoder().decode(bytes) : bytes);
+    const d = /^([^/]+)\/(docs\/[\w-]+\.html|project\.json)$/.exec(rel);
+    if (d) conflicts.push({ slug: d[1] });
   }
   const conflicts = [];
   // let the open project know what arrived (reloads the chapter or binder, same as on the PC)
@@ -275,8 +284,8 @@ window.UnwipDropbox = (function () {
     }
     try { const U = window.__unwip; if (U && !U.S.slug && !document.getElementById('library').classList.contains('hidden')) U.showLibrary(); } catch {}
     if (conflicts.length) {
-      const n = conflicts.length; conflicts.length = 0;
-      try { window.__unwip.toast(`${n === 1 ? 'A chapter was' : n + ' chapters were'} changed on two devices. Dropbox’s version is showing; yours is saved in Snapshots.`, 'warn', 12000); } catch {}
+      const slugs = [...new Set(conflicts.map(c => c.slug))]; conflicts.length = 0;
+      for (const slug of slugs) emit('external', { slug, file: 'conflict', id: null });   // the open project sorts them out
     }
   }
 
@@ -445,7 +454,22 @@ window.UnwipDropbox = (function () {
     setInterval(() => { if (connected() && !document.hidden) sync({ quiet: true }); else render(); }, 60000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden && connected()) sync({ quiet: true }); });
     window.addEventListener('online', () => { if (connected()) sync({ quiet: true }); });
+    setTimeout(safariWarning, 5000);
   })();
+
+  // Safari on an iPhone or iPad clears a website's saved data after 7 days without a visit (a Home Screen app is
+  // exempt). With no Dropbox copy that would be the whole library, so say so, now and then, until one is set up.
+  async function safariWarning() {
+    try {
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+      if (!ios || standalone() || connected()) return;
+      const last = +(localStorage.getItem('unwip-safari-warned') || 0); if (Date.now() - last < 14 * 86400000) return;
+      if (!(await F.listProjects()).length) return;
+      localStorage.setItem('unwip-safari-warned', String(Date.now()));
+      const U = window.__unwip, msg = `Safari can clear what a website has saved if it isn’t opened for 7 days, and your books are saved in Safari. To keep them safe, add Unwip to your Home Screen (the Share button, then “Add to Home Screen”)${KEY ? ' or connect Dropbox' : ''}.`;
+      if (KEY) U.toastAction(msg, 'Connect Dropbox', () => connect(), 20000); else U.toast(msg, 'warn', 20000);
+    } catch {}
+  }
 
   return { connect, disconnect, sync, render, fillCard, connected: () => connected(), get state() { return st; }, get lastError() { return lastError; }, hasKey: !!KEY };
 })();

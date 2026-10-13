@@ -278,6 +278,9 @@ window.FolioImport = (function () {
 
   function scrivener(data, uid, opts = {}) {
     const xml = binderOf(data).xml;
+    // Scrivener only writes <IncludeInCompile>Yes</IncludeInCompile> on what goes in the book, so in a project that uses
+    // it, a manuscript item without it was unticked there and is left out of the book here too
+    const usesInclude = [...xml.querySelectorAll('IncludeInCompile')].some(e => /^yes$/i.test(e.textContent.trim()));
     const report = { documents: 0, folders: 0, skipped: [], empty: 0, withNotes: 0, missing: [], unreadable: [] };
     const docs = {};
     const noteDocs = [];
@@ -340,12 +343,16 @@ window.FolioImport = (function () {
       const labelId = meta && meta.querySelector('LabelID') ? meta.querySelector('LabelID').textContent.trim() : null;
       if (labelId && labels[labelId] && !/^no label$/i.test(labels[labelId]) && labelId !== '-1') extra.label = { n: labels[labelId], c: labelColor[labelId] || '#9b968d' };
       if (iconM && [...iconM[1]].length <= 4) extra.icon = iconM[1];
+      if (usesInclude && type !== 'DraftFolder' && item.parentElement && item.parentElement.closest('BinderItem[Type="DraftFolder"]')) {
+        const inc = meta && meta.querySelector(':scope > IncludeInCompile');
+        if (!inc || !/^yes$/i.test(inc.textContent.trim())) { extra.noBook = true; report.leftOutOfBook = (report.leftOutOfBook || 0) + 1; }
+      }
       const sv = look ? { sv: look } : {};
       if (notesHTML && textOf(notesHTML)) { const nid = uid(); docs[nid] = notesHTML; noteDocs.push({ id: nid, type: 'doc', title: `${title} (notes)`, words: 0 }); report.withNotes++; }
       if (isFolder) {
         report.folders++;
         const node = { id: uid(), type: 'folder', title, open: false, children, ...extra };
-        if (hasText) { const id = uid(); docs[id] = bodyHTML; node.children.unshift({ node: { id, type: 'doc', title, words: 0, ...sv }, type: 'Text' }); report.documents++; }
+        if (hasText) { const id = uid(); docs[id] = bodyHTML; node.children.unshift({ node: { id, type: 'doc', title, words: 0, ...sv, ...(extra.noBook ? { noBook: true } : {}) }, type: 'Text' }); report.documents++; }
         return { node, type };
       }
       const id = uid();

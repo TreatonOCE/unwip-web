@@ -102,7 +102,7 @@ window.UnwipNoHardFeelings = (function () {
       const meta = [];
       if (n.label && labelId.has(n.label.n)) meta.push(`<LabelID>${labelId.get(n.label.n)}</LabelID>`);
       if (n.status && statusId.has(n.status)) meta.push(`<StatusID>${statusId.get(n.status)}</StatusID>`);
-      if (inDraft) meta.push('<IncludeInCompile>Yes</IncludeInCompile>');
+      if (inDraft && !n.noBook) meta.push('<IncludeInCompile>Yes</IncludeInCompile>');   // left out of the book: unticked in Scrivener
       if (n.icon && !/^[a-z]+$/i.test(n.icon)) meta.push(`<IconFileName>{${xml(n.icon)}}</IconFileName>`);
       let type = isFolder ? 'Folder' : 'Text', kids = '';
       if (n.map) {
@@ -140,7 +140,7 @@ window.UnwipNoHardFeelings = (function () {
     let binder = await sect(root('manuscript'), 'DraftFolder', 0, true, 'Draft');
     // everything else in the order of your binder, each section as a top-level folder
     for (const r of P.binder) {
-      if (['manuscript', 'research', 'trash'].includes(r.kind)) continue;
+      if (['manuscript', 'research', 'trash', 'conflicts'].includes(r.kind)) continue;
       if (!(r.children || []).length) continue;
       let kids = ''; for (const c of r.children) kids += await item(c, false, 1);
       binder += `        <BinderItem UUID="${uuid()}" Type="Folder" Created="${stamped}" Modified="${stamped}">\n            <Title>${xml(r.title)}</Title>\n            <MetaData/>\n            <Children>\n${kids}            </Children>\n        </BinderItem>\n`;

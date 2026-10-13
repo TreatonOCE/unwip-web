@@ -133,7 +133,7 @@ window.UnwipExportFolder = (function () {
     if (!S.project) return U.toast('Open a book first.');
     await U.flushSave();
     const body = document.createElement('div'); body.className = 'efx';
-    const sections = S.project.binder.filter(r => r.kind !== 'trash' && (r.children || []).length);
+    const sections = S.project.binder.filter(r => r.kind !== 'trash' && r.kind !== 'conflicts' && (r.children || []).length);
     body.innerHTML = `
       <p class="hint">Saves your book as a folder of ordinary files, one per chapter, in folders that match your binder. Each name starts with a number (“01 - Chapter One”) so they stay in order in every app. Word, Google Docs, Scrivener (File › Import › Files), Obsidian and iA Writer can open them. Opening them in apps other than Word should work, but that’s not yet tested by beta testers.</p>
       <div class="form-grid">

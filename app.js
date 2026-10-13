@@ -426,7 +426,8 @@
     const ms = S.project.binder.find(r => r.kind === 'manuscript');
     const build = (n, depth) => {
       const row = document.createElement('div');
-      row.className = 'tree-row' + (n.root ? ' root' : '') + (n.id === S.selectedId ? ' selected' : '');
+      row.className = 'tree-row' + (n.root ? ' root' : '') + (n.id === S.selectedId ? ' selected' : '') + (n.noBook ? ' no-book' : '');
+      if (n.noBook) row.title = 'Left out of the book (it isn’t in the preview or exports)';
       if (n.type === 'folder') row.dataset.folder = '1';
       row.dataset.id = n.id;
       row.style.paddingLeft = (6 + depth * 16) + 'px';
@@ -434,7 +435,7 @@
       const icon = n.root ? rootIcon(n) : iconHTML(n, n.type === 'folder' ? (n.open ? I.folderOpen : I.folder) : I.doc);
       const showCount = n.id === ms.id || isInside(n.id, ms);
       const count = showCount ? folderWords(n) : 0;
-      row.innerHTML = `<span class="tr-chev ${n.open ? 'open' : ''} ${n.type === 'folder' && (hasKids || n.root) ? '' : 'none'}">${I.chevron}</span><span class="tr-icon">${icon}</span><span class="tr-title">${esc(n.title || 'Untitled')}</span>${n.series && S.project.series ? `<span class="tr-series" title="Shared with the series “${esc(S.project.series)}”">${I.series}</span>` : ''}${n.fav ? `<span class="tr-fav" title="Favourite">★</span>` : ''}${n.type === 'doc' && statusOf(n.status) && S.mode === 'detailed' ? `<span class="st-dot" style="--st:${statusColor(n.status)}" title="${esc(statusName(n.status))}"></span>` : ''}${showCount && count ? `<span class="tr-count">${fmt(count)}</span>` : ''}${n.root && n.kind !== 'trash' ? `<button class="tr-add" title="Add a new ${n.kind === 'manuscript' ? 'chapter' : newTitleFor(n).replace(/^New /, '')} to ${esc(n.title)}">+</button>` : ''}`;
+      row.innerHTML = `<span class="tr-chev ${n.open ? 'open' : ''} ${n.type === 'folder' && (hasKids || n.root) ? '' : 'none'}">${I.chevron}</span><span class="tr-icon">${icon}</span><span class="tr-title">${esc(n.title || 'Untitled')}</span>${n.series && S.project.series ? `<span class="tr-series" title="Shared with the series “${esc(S.project.series)}”">${I.series}</span>` : ''}${n.fav ? `<span class="tr-fav" title="Favourite">★</span>` : ''}${n.type === 'doc' && statusOf(n.status) && S.mode === 'detailed' ? `<span class="st-dot" style="--st:${statusColor(n.status)}" title="${esc(statusName(n.status))}"></span>` : ''}${showCount && count ? `<span class="tr-count">${fmt(count)}</span>` : ''}${n.root && n.kind !== 'trash' && n.kind !== 'conflicts' ? `<button class="tr-add" title="Add a new ${n.kind === 'manuscript' ? 'chapter' : newTitleFor(n).replace(/^New /, '')} to ${esc(n.title)}">+</button>` : ''}`;
       row.draggable = !n.root;
       tree.appendChild(row);
       if (n.type === 'folder' && n.open) for (const c of n.children || []) build(c, depth + 1);
@@ -535,11 +536,25 @@
         items.push({ label: 'New folder below', action: () => addNode('folder', n.id, false) });
       }
     }
-    if (n.root && n.kind !== 'trash') items.push({ sep: true }, { label: 'Rename section', hint: 'Double-click', action: () => startRename($(`.tree-row[data-id="${n.id}"]`), n) });
+    if ('conflictOf' in n && window.UnwipSync) {
+      const R = window.UnwipSync.resolveConflict;
+      if (n.conflictOf) items.push({ label: 'Compare side by side', action: () => { openDoc(n.id); R(n.id, 'compare'); } }, { label: 'Use this version', action: () => R(n.id, 'use') });
+      items.push({ label: 'Keep both', action: () => R(n.id, 'both') }, { label: 'Not needed (to Trash)', action: () => R(n.id, 'drop') }, { sep: true });
+    }
+    if (n.root && n.kind !== 'trash' && n.kind !== 'conflicts') items.push({ sep: true }, { label: 'Rename section', hint: 'Double-click', action: () => startRename($(`.tree-row[data-id="${n.id}"]`), n) });
     if (!n.root) {
       items.push({ sep: true });
       items.push({ label: n.fav ? '☆ Remove from favourites' : '★ Add to favourites', hint: 'Ctrl+D', action: () => toggleFav(n.id) });
       items.push({ label: 'Change icon…', action: () => iconPicker(n.id) });
+      if (root.kind === 'manuscript') {
+        const all = [n]; if (n.type === 'folder') walkTree(n.children || [], c => all.push(c));
+        const out = all.some(c => c.noBook);
+        items.push({ label: out ? 'Put back in the book' : n.type === 'folder' ? 'Leave out of the book (with everything in it)' : 'Leave out of the book', action: () => {
+          for (const c of all) { if (out) delete c.noBook; else c.noBook = true; }
+          scheduleMeta(); renderBinder();
+          toast(out ? `“${esc(n.title)}” is back in the book.` : `“${esc(n.title)}” stays here but is left out of the preview and exports. Right-click it again to put it back.`);
+        } });
+      }
       items.push({ label: 'Rename', hint: 'Double-click', action: () => startRename($(`.tree-row[data-id="${n.id}"]`), n) });
       if (n.type === 'doc') items.push({ label: 'Copy for Docs', action: () => copyDocForDocs(n.id) });
       if (n.type === 'doc' && !n.map && window.UnwipSeries && ['characters', 'places', 'items'].concat(S.project.binder.filter(r => r.custom).map(r => r.kind)).includes(root.kind)) {
@@ -1037,14 +1052,15 @@
   async function deleteForever(id) {
     const f = findNode(id);
     if (!(await confirmBox('Delete forever?', `"${esc(f.node.title)}" will be removed from this project. This can't be undone (your automatic backups still have it).`, 'Delete', true))) return;
+    if (id === S.docId || isInside(S.docId, f.node)) { await flushSave(); await api.backup(S.slug).catch(() => {}); S.docId = null; showEmpty(true); }   // its last words reach the backups first
     f.list.splice(f.index, 1);
-    if (id === S.docId) { S.docId = null; showEmpty(true); }
     scheduleMeta(); renderBinder();
   }
   async function emptyTrash() {
     if (!(await confirmBox('Empty Trash?', 'Everything in the Trash will be removed from this project. Your automatic backups still keep a copy.', 'Empty Trash', true))) return;
     const t = findNode('root-trash').node;
-    if (S.docId && isInside(S.docId, t)) { S.docId = null; showEmpty(true); }
+    if (S.docId && isInside(S.docId, t)) { await flushSave(); S.docId = null; showEmpty(true); }
+    await api.backup(S.slug).catch(() => {});   // the automatic backups keep what was in the Trash, as the message promises
     t.children = [];
     scheduleMeta(); renderBinder();
   }
@@ -1156,7 +1172,7 @@
     synopsis.value = f.node.synopsis || ''; requestAnimationFrame(fitSynopsis);
     $('#snap-count').textContent = ''; refreshSnapCount();
     const kind = rootOf(id).kind;
-    editor.classList.toggle('sheet', kind !== 'manuscript' && kind !== 'trash');
+    editor.classList.toggle('sheet', kind !== 'manuscript' && kind !== 'trash' && kind !== 'conflicts');
     markScenes(editor);
     renderBinder();
     editorWrap.scrollTop = 0;
@@ -1920,6 +1936,8 @@
     async function walk(nodes, level, parentHolds) {
       let prevWasScene = false;
       for (const n of nodes) {
+        if (n.noBook && n.type !== 'folder') continue;   // left out of the book
+        if (n.type === 'folder' && n.noBook) { await walk(n.children || [], level + 1, folderHolds(n)); continue; }
         if (n.type === 'folder') {
           const holds = folderHolds(n);
           if (holds === 'scenes') {
@@ -2370,7 +2388,7 @@
           btn.disabled = false; return;
         }
         btn.disabled = true; const was = btn.textContent; btn.textContent = 'Making the PDF…';
-        try { const r = await api.exportPDF(html, name, size, { raw: true }); if (r) toast(`Print PDF saved (${fmt(r.pages)} pages, ${esc(PV.book.design.trim)}).`, '', 6000); }
+        try { const r = await api.exportPDF(html, name, size, { raw: true }); if (r) toast(`Print PDF saved (${fmt(r.pages)} page${r.pages === 1 ? "" : "s"}, ${esc(PV.book.design.trim)}).`, '', 6000); }
         finally { btn.disabled = false; btn.textContent = was; }
         return;
       }
@@ -2386,7 +2404,7 @@
           btn.disabled = false; return;
         }
         const r = await api.exportPDF(pageDoc(g), name, { width: g.w, height: g.h }, opts);
-        if (r) toast(`PDF saved (${fmt(r.pages)} pages).`);
+        if (r) toast(`PDF saved (${fmt(r.pages)} page${r.pages === 1 ? "" : "s"}).`);
       } else if (kind === 'epub') {
         const lang = ((await api.spellSettings().catch(() => ({ current: ['en'] }))).current[0]) || 'en';
         if (!S.project.epubId) { S.project.epubId = 'urn:uuid:' + crypto.randomUUID(); scheduleMeta(); }
@@ -3196,7 +3214,7 @@
 
   // ================================================================== SEARCH & WORD ANALYSIS
   const Ana = window.FolioAnalysis;
-  const htmlText = html => { const d = document.createElement('div'); d.innerHTML = html; d.querySelectorAll('del.tc-del').forEach(x => x.remove()); return [...d.querySelectorAll('p,h1,h2,h3,blockquote,li')].filter(e => !e.querySelector('p,h1,h2,h3')).map(e => e.textContent).join('\n') || d.textContent; };
+  const htmlText = html => { const d = document.createElement('div'); d.innerHTML = html; d.querySelectorAll('del.tc-del').forEach(x => x.remove()); d.querySelectorAll('br').forEach(x => x.replaceWith('\n')); d.querySelectorAll('sup.fn').forEach(x => x.replaceWith(' ')); return [...d.querySelectorAll('p,h1,h2,h3,blockquote,li')].filter(e => !e.querySelector('p,h1,h2,h3')).map(e => e.textContent).join('\n') || d.textContent; };
   function docsIn(kinds) {
     const out = [];
     for (const r of S.project.binder) {
@@ -3342,37 +3360,90 @@
     await p;
   }
 
+  // Replace inside one document's HTML (a detached element). Works paragraph by paragraph on the text as it reads, so a
+  // word split by formatting ("Gr<i>eg</i>") is found and replaced too; the replacement takes the formatting of where the
+  // word starts. Text deleted with tracked changes is left alone, and line breaks and footnote marks separate words.
+  function replaceInTree(root, re, rep, opts) {
+    const fix = m => opts.matchCase || !rep ? rep : m.length > 1 && m === m.toUpperCase() && m !== m.toLowerCase() ? rep.toUpperCase() : /^\p{Lu}/u.test(m) ? rep[0].toUpperCase() + rep.slice(1) : rep;   // GREG → BOB, Greg → Bob
+    const BLOCK = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,td,th,pre,div';
+    const groups = new Map();
+    const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, { acceptNode: n => n.nodeType === 1 && (n.matches('del.tc-del, sup.fn, [contenteditable="false"]')) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+    const groupOf = n => { const b = n.parentElement; const blk = b && b.closest(BLOCK); return blk && root.contains(blk) ? blk : root; };
+    let t;
+    while ((t = tw.nextNode())) {
+      const g = groupOf(t); if (!groups.has(g)) groups.set(g, []);
+      if (t.nodeType === 3) groups.get(g).push({ node: t, text: t.nodeValue });
+      else if (t.tagName === 'BR' || t.tagName === 'IMG') groups.get(g).push({ node: null, text: '\n' });
+    }
+    // footnote marks and other locked bits were skipped above: put a separator where they sit, so "Greg¹" still matches
+    for (const el of root.querySelectorAll('sup.fn, [contenteditable="false"]')) { const g = groupOf(el); const list = groups.get(g); if (!list) continue;
+      const after = list.findIndex(x => x.node && (el.compareDocumentPosition(x.node) & Node.DOCUMENT_POSITION_FOLLOWING));
+      list.splice(after < 0 ? list.length : after, 0, { node: null, text: '\n' }); }
+    let count = 0;
+    for (const segs of groups.values()) {
+      let full = ''; const at = []; for (const sg of segs) { at.push(full.length); full += sg.text; }
+      const hits = []; let m; re.lastIndex = 0;
+      while ((m = re.exec(full))) { if (!m[0].length) { re.lastIndex++; continue; } hits.push([m.index, m.index + m[0].length, m[0]]); }
+      // from the end, so earlier positions stay right
+      for (const [a, b, word] of hits.reverse()) {
+        const si = segs.findIndex((sg, k) => sg.node && a >= at[k] && a < at[k] + sg.text.length);
+        if (si < 0) continue;
+        if (segs.slice(si, segs.length).some((sg, k) => !sg.node && at[si + k] < b)) continue;   // runs across a line break: leave it
+        let ei = si; while (ei < segs.length - 1 && at[ei] + segs[ei].text.length < b) ei++;
+        const s0 = segs[si], e0 = segs[ei];
+        const head = s0.text.slice(0, a - at[si]), tail = e0.text.slice(b - at[ei]);
+        if (si === ei) s0.text = head + fix(word) + tail;
+        else { s0.text = head + fix(word); for (let k = si + 1; k < ei; k++) segs[k].text = ''; e0.text = tail; }
+        count++;
+      }
+      for (const sg of segs) if (sg.node && sg.node.nodeValue !== sg.text) {
+        if (sg.text) { sg.node.nodeValue = sg.text; continue; }
+        // a bit of text emptied by a replace goes, and so does formatting left holding nothing ("<i></i>")
+        let el = sg.node.parentElement; sg.node.remove();
+        while (el && el !== root && el.matches('i,b,em,strong,u,s,span,sup,sub,mark,font') && !el.childNodes.length) { const up = el.parentElement; el.remove(); el = up; }
+      }
+    }
+    return count;
+  }
   // Replace across documents, text only (formatting is kept). Takes a snapshot of every changed document first.
   async function replaceAll(q, rep, opts, kinds) {
-    await flushSave();
+    await flushSave(); await flushSplit();
     const re = searchRegex(q, opts);
     const changed = [];
     let count = 0;
+    const current = id => id === S.docId ? editor.innerHTML : id === S.splitId ? spEd.innerHTML : null;
     for (const d of docsIn(kinds)) {
-      const html = d.id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, d.id);
+      const html = current(d.id) ?? await api.loadDoc(S.slug, d.id);
       const div = document.createElement('div'); div.innerHTML = html;
-      let n = 0;
-      const tw = document.createTreeWalker(div, NodeFilter.SHOW_TEXT); let t; const nodes = [];
-      while ((t = tw.nextNode())) nodes.push(t);
-      for (const node of nodes) {
-        re.lastIndex = 0;
-        const v = node.nodeValue.replace(re, m => { n++; return /^\p{Lu}/u.test(m) && !opts.matchCase && rep ? rep[0].toUpperCase() + rep.slice(1) : rep; });
-        if (n && v !== node.nodeValue) node.nodeValue = v;
-      }
+      const n = replaceInTree(div, re, rep, opts);
       if (n) { changed.push({ d, before: html, after: div.innerHTML }); count += n; }
     }
     if (!count) { toast('Nothing to replace.'); return 0; }
     if (!(await confirmBox('Replace all?', `Replace <b>${fmt(count)}</b> use${count === 1 ? '' : 's'} of “${esc(q)}” with “${esc(rep)}” in ${changed.length} document${changed.length === 1 ? '' : 's'}?<br><br>Unwip saves a snapshot of each document first, so you can undo this.`, 'Replace all'))) return null;
+    await flushSave(); await flushSplit();
+    const show = (id, html) => {
+      if (id === S.docId) { editor.innerHTML = html; resyncWords(); markScenes(editor); S.loadedHTML = editor.innerHTML; }
+      if (id === S.splitId) { spEd.innerHTML = html; S.splitDirty = false; spFoot(); }
+    };
     for (const c of changed) {
       await api.snapSave(S.slug, c.d.id, c.before, `Before replacing “${q}” with “${rep}”`, true);
       await api.saveDoc(S.slug, c.d.id, c.after);
       c.d.words = countWords(htmlText(c.after));
-      if (c.d.id === S.docId) { editor.innerHTML = c.after; resyncWords(); markScenes(editor); }
+      show(c.d.id, c.after);
+      c.saved = c.d.id === S.docId ? editor.innerHTML : c.after;   // how it reads back, to tell later whether it was changed again
     }
     scheduleMeta(); renderBinder(); updateStatus(); refreshSnapCount();
     toastAction(`Replaced ${fmt(count)} in ${changed.length} document${changed.length === 1 ? '' : 's'}.`, 'Undo', async () => {
-      for (const c of changed) { await api.saveDoc(S.slug, c.d.id, c.before); c.d.words = countWords(htmlText(c.before)); if (c.d.id === S.docId) { editor.innerHTML = c.before; resyncWords(); } }
-      scheduleMeta(); renderBinder(); updateStatus(); toast('Replace undone.');
+      await flushSave(); await flushSplit();
+      // a document written in since the replace keeps that writing: it isn't put back (its snapshot still has the old version)
+      let kept = 0;
+      for (const c of changed) {
+        const now = current(c.d.id) ?? await api.loadDoc(S.slug, c.d.id);
+        if (now !== c.saved && now !== c.after) { kept++; continue; }
+        await api.saveDoc(S.slug, c.d.id, c.before); c.d.words = countWords(htmlText(c.before)); show(c.d.id, c.before);
+      }
+      scheduleMeta(); renderBinder(); updateStatus();
+      toast(kept ? `Replace undone, except in ${kept} document${kept === 1 ? '' : 's'} you’ve written in since (to undo there, open Snapshots: the version from before the replace is saved).` : 'Replace undone.', kept ? 'warn' : '', kept ? 9000 : undefined);
     }, 15000);
     return count;
   }
