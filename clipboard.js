@@ -252,9 +252,9 @@
       if (r.italic) h = `<i>${h}</i>`;
       if (r.bold) h = `<b>${h}</b>`;
       const css = [];
-      if (r.font && !opts.dropFonts && r.font !== opts.docFont) css.push(`font-family: ${quoteFamily(r.font)}`);
-      if (r.size && !opts.dropFonts && r.size !== opts.docSize) css.push(`font-size: ${r.size}pt`);
-      if (r.color && !opts.dropColors) css.push(`color: ${r.color}`);
+      if (r.font && !opts.dropFonts && !opts.plainRuns && r.font !== opts.docFont) css.push(`font-family: ${quoteFamily(r.font)}`);
+      if (r.size && !opts.dropFonts && !opts.plainRuns && r.size !== opts.docSize) css.push(`font-size: ${r.size}pt`);
+      if (r.color && !opts.dropColors && !opts.plainRuns) css.push(`color: ${r.color}`);
       if (r.bg && !opts.dropColors) css.push(`background-color: ${r.bg}`);
       if (css.length) h = `<span style="${escAttr(css.join('; '))}">${h}</span>`;
       if (r.cmt) for (const k of r.cmt) h = `<span class="cmt" data-cid="${escAttr(k.id)}" data-note="${escAttr(k.note)}" data-at="${escAttr(k.at)}"${k.by ? ` data-by="${escAttr(k.by)}"` : ''}>${h}</span>`;
@@ -334,15 +334,15 @@
         if (r.img) return `<img src="${r.img}" alt="" style="width: ${r.pct || 60}%; max-width: 100%; height: auto; vertical-align: bottom"${r.w ? ` width="${Math.round((r.pct || 60) * 6)}"` : ''}>`;
         if (r.fn !== undefined) { if (opts.notes === false) return ''; notes.push(r.fn); return `<span style="${escAttr(`font-family: ${quoteFamily(font)}; font-size: ${Math.round(size * 0.75)}pt; vertical-align: super; color: #000000`)}">${notes.length}</span>`; }
         const rc = [
-          `font-family: ${quoteFamily(r.font || font)}`,
-          `font-size: ${r.size || size}pt`,
+          `font-family: ${quoteFamily((!opts.plainRuns && r.font) || font)}`,
+          `font-size: ${(!opts.plainRuns && r.size) || size}pt`,
           `font-weight: ${r.bold || (hs && hs.bold) ? 700 : 400}`,
           `font-style: ${r.italic || (hs && hs.italic) ? 'italic' : 'normal'}`,
           `text-decoration: ${[r.underline && 'underline', r.strike && 'line-through'].filter(Boolean).join(' ') || 'none'}`,
-          `color: ${r.color || '#000000'}`,
+          `color: ${(!opts.plainRuns && r.color) || '#000000'}`,
           `vertical-align: ${r.sup ? 'super' : r.sub ? 'sub' : 'baseline'}`
         ];
-        if (r.bg) rc.push(`background-color: ${r.bg}`);
+        if (r.bg && !opts.plainRuns) rc.push(`background-color: ${r.bg}`);
         return `<span style="${escAttr(rc.join('; '))}">${esc(r.text)}</span>`;
       }).join('');
       // Blank lines: Google Docs throws away empty paragraphs, so give them a non-breaking space

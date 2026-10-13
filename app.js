@@ -1859,7 +1859,7 @@
   const TS = window.UnwipTypeset;
   const bookDesign = () => TS ? TS.design(S.project) : {};
   function setDesignQuiet(patch) { S.project.design = { ...bookDesign(), ...patch }; PV.trim = S.project.design.trim; scheduleMeta(); }
-  const PV = { smf: false, format: 'paperback', trim: '5.5 × 8.5 in', bookSize: 11, bookLine: 1.3, device: 'Kindle Paperwhite', ebookSize: 12, docPage: 'A4', scope: 'ms', page: 0, pages: 1, blocks: [], counts: {} };
+  const PV = { smf: false, smfFont: 'Times New Roman', format: 'paperback', trim: '5.5 × 8.5 in', bookSize: 11, bookLine: 1.3, device: 'Kindle Paperwhite', ebookSize: 12, docPage: 'A4', scope: 'ms', page: 0, pages: 1, blocks: [], counts: {} };
 
   function bookStyle() {
     const st = JSON.parse(JSON.stringify(S.project.style));
@@ -1871,10 +1871,11 @@
   // Standard manuscript format (what agents and editors ask for)
   function smfStyle() {
     const st = JSON.parse(JSON.stringify(S.project.style));
-    Object.assign(st, { font: 'Times New Roman', size: 12, lineHeight: 2, indent: 0.5, paraSpacing: 0, justify: false, noIndentFirst: false });
-    st.headings.h1 = { font: 'Times New Roman', size: 12, bold: false, italic: false, align: 'center', spaceBefore: 200, spaceAfter: 24 };
-    st.headings.h2 = { ...st.headings.h2, font: 'Times New Roman', size: 12 };
-    st.headings.h3 = { ...st.headings.h3, font: 'Times New Roman', size: 12 };
+    const F = PV.smfFont === 'Courier New' ? 'Courier New' : 'Times New Roman';
+    Object.assign(st, { font: F, size: 12, lineHeight: 2, indent: 0.5, paraSpacing: 0, justify: false, noIndentFirst: false });
+    st.headings.h1 = { font: F, size: 12, bold: false, italic: false, align: 'center', spaceBefore: 200, spaceAfter: 24 };
+    st.headings.h2 = { ...st.headings.h2, font: F, size: 12 };
+    st.headings.h3 = { ...st.headings.h3, font: F, size: 12 };
     return st;
   }
   function ebookStyle() {
@@ -2090,10 +2091,11 @@
         note.textContent = 'E-books have no fixed pages: readers pick their own font and size. This shows a typical screen. The EPUB works with Kindle (Send to Kindle or upload to KDP), Apple Books, Kobo and Google Play. Open it in Amazon’s free Kindle Previewer to see exactly how Kindle shows it.';
       } else {
         o.innerHTML = `<label class="check pv-smf"><input type="checkbox" id="pv-smf" ${PV.smf ? 'checked' : ''}><span>Standard manuscript format <span class="star">★</span></span><small>For agents and publishers. Overrides your Manuscript style.</small></label>` +
+          (PV.smf ? sel('pv-smffont', ['Times New Roman', 'Courier New'], PV.smfFont, 'Font') : '') +
           sel('pv-docpage', Object.keys(DOC_PAGES), PV.docPage, 'Paper size', ['A4', 'Letter']);
         a.innerHTML = `<button class="btn primary" data-a="copy">Copy for Google Docs</button><button class="btn" data-a="docx">Export Word (.docx)</button><button class="btn" data-a="docpdf">Export manuscript PDF</button>`;
         note.textContent = PV.smf
-          ? 'Standard manuscript format: Times New Roman 12 pt, double-spaced, every paragraph indented half an inch, chapters starting a third of the way down a new page, # for scene breaks. The PDF adds your surname, the title and the page number at the top right. US agents usually want Letter paper; UK and Australian agents A4.'
+          ? `Standard manuscript format: ${PV.smfFont} 12 pt throughout (the file names the standard font, which every agent’s computer has), double-spaced, every paragraph indented half an inch, chapters starting a third of the way down a new page, # for scene breaks. The PDF adds your surname, the title and the page number at the top right. US agents usually want Letter paper; UK and Australian agents A4.`
           : 'Uses your Manuscript style (font, spacing, indents) on standard pages with 1 inch margins, like a fresh Google Doc or Word file.';
       }
       const on = (id, fn) => { const el = $('#' + id, back); if (el) el.onchange = fn; };
@@ -2119,6 +2121,7 @@
       on('pv-esize', e => { PV.ebookSize = { Small: 10, Medium: 12, Large: 14 }[e.target.value]; relayout(true); });
       on('pv-docpage', e => { PV.docPage = e.target.value; relayout(true); });
       on('pv-smf', e => { PV.smf = e.target.checked; renderOptions(); relayout(true); });
+      on('pv-smffont', e => { PV.smfFont = e.target.value; renderOptions(); relayout(true); });
       $$('[data-a]', a).forEach(b => b.onclick = () => doExport(b.dataset.a, b));
     }
     function setFormat(f) {
@@ -2238,7 +2241,7 @@
         const p = await api.exportBinary(bytes, name, 'epub', 'EPUB e-book');
         if (p) toast(`EPUB saved with ${chapters} chapter${chapters === 1 ? '' : 's'}.${settings.author ? '' : ' Tip: add your author name in Settings.'}`, '', 6000);
       } else if (kind === 'copy') {
-        const out = Clip.exportFromBlocks(PV.blocks, PV.smf ? smfStyle() : exportSettings(), { pageBreaks: true });
+        const out = Clip.exportFromBlocks(PV.blocks, PV.smf ? smfStyle() : exportSettings(), { pageBreaks: true, plainRuns: PV.smf });
         await api.clipboardWrite(out.html, out.text);
         toast('Copied. Paste into Google Docs or Word with Ctrl+V.');
         warnDocsFonts(PV.blocks, async map => { const o = Clip.exportFromBlocks(PV.blocks, exportSettings(), { pageBreaks: true, fontMap: map }); await api.clipboardWrite(o.html, o.text); toast('Copied with Docs-friendly fonts.'); });

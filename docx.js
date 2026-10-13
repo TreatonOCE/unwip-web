@@ -20,12 +20,12 @@ window.FolioDOCX = (function () {
     if (r.img) return base.picture ? base.picture(r) : '';
     if (r.fn !== undefined) { if (!base.notes) return ''; base.notes.push(r.fn); return `<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:footnoteReference w:id="${base.notes.length}"/></w:r>`; }
     const p = [];
-    if (r.font && r.font !== base.font) p.push(fonts(r.font));
+    if (r.font && r.font !== base.font && !base.smf) p.push(fonts(r.font));            // standard manuscript format: one font throughout
     if (r.bold) p.push('<w:b/>');
     if (r.italic) p.push('<w:i/>');
     if (r.strike) p.push('<w:strike/>');
-    const col = hex(r.color); if (col && col !== '000000') p.push(`<w:color w:val="${col}"/>`);
-    if (r.size && r.size !== base.size) p.push(`<w:sz w:val="${Math.round(r.size * 2)}"/><w:szCs w:val="${Math.round(r.size * 2)}"/>`);
+    const col = hex(r.color); if (col && col !== '000000' && !base.smf) p.push(`<w:color w:val="${col}"/>`);
+    if (r.size && r.size !== base.size && !base.smf) p.push(`<w:sz w:val="${Math.round(r.size * 2)}"/><w:szCs w:val="${Math.round(r.size * 2)}"/>`);
     if (r.underline) p.push('<w:u w:val="single"/>');
     if (r.sup) p.push('<w:vertAlign w:val="superscript"/>'); else if (r.sub) p.push('<w:vertAlign w:val="subscript"/>');
     const run = `<w:r>${p.length ? `<w:rPr>${p.join('')}</w:rPr>` : ''}<w:t xml:space="preserve">${x(r.text)}</w:t></w:r>`;
@@ -70,7 +70,7 @@ window.FolioDOCX = (function () {
       const hasPic = b.runs.some(r => r.img);
       if (hasPic && !align) pPr.push('<w:jc w:val="center"/>');
       if (!heading && b.tag === 'p' && (hasPic || scene || (S.noIndentFirst && afterBreak) || align === 'center' || align === 'right')) pPr.push('<w:ind w:firstLine="0"/>');
-      const runs = scene ? `<w:r><w:t>${opts.smf ? '#' : x(text.trim())}</w:t></w:r>` : b.runs.map(r => runXML(r, { font: heading ? null : S.font, size: heading ? null : S.size, notes, picture })).join('');
+      const runs = scene ? `<w:r><w:t>${opts.smf ? '#' : x(text.trim())}</w:t></w:r>` : b.runs.map(r => runXML(r, { font: heading ? null : S.font, size: heading ? null : S.size, notes, picture, smf: !!opts.smf })).join('');
       // a hidden marker on each chapter heading, so a reader's copy can be matched back to the right chapter
       const bm = b.anchor ? (n => `<w:bookmarkStart w:id="${n}" w:name="unwip_${String(b.anchor).replace(/[^A-Za-z0-9_]/g, '').slice(0, 34)}"/><w:bookmarkEnd w:id="${n}"/>`)(5000 + (BM_ID++)) : '';
       body.push(`<w:p>${pPr.length ? `<w:pPr>${pPr.join('')}</w:pPr>` : ''}${bm}${runs}</w:p>`);

@@ -11,7 +11,11 @@ window.FolioFonts = (function () {
   // the licence reserves those names for the untouched originals, so modified copies must carry other names.
   const BUNDLED = ['EB Garamond', 'Larkspur', 'Bookhaven', 'Crimson Pro', 'Cinzel', 'Oswald'];
   const RENAMED = { 'lora': 'Larkspur', 'libre baskerville': 'Bookhaven' };                 // settings saved before the rename
-  const ORIGINAL = { 'larkspur': 'Lora', 'bookhaven': 'Libre Baskerville' };                // what Word and Google Docs know them as
+  const ORIGINAL = { 'larkspur': 'Lora', 'bookhaven': 'Libre Baskerville',                  // what Word and Google Docs know them as
+    // free look-alikes (same letter widths) of the standard fonts: files say the standard name, which every agent's computer has
+    'tinos': 'Times New Roman', 'liberation serif': 'Times New Roman', 'times': 'Times New Roman',
+    'cousine': 'Courier New', 'liberation mono': 'Courier New', 'courier': 'Courier New',
+    'arimo': 'Arial', 'liberation sans': 'Arial', 'carlito': 'Calibri', 'caladea': 'Cambria' };
   const alias = f => (f && !installedHas(f) && RENAMED[String(f).toLowerCase()]) || f;
   const external = f => (f && ORIGINAL[String(f).toLowerCase()]) || f;
   const installedHas = f => !!(installed && installed.has && installed.has(f));
