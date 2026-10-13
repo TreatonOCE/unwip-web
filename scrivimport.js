@@ -14,11 +14,13 @@ window.UnwipScriv = (function () {
   const htmlText = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return d.textContent || ''; };
   const errText = e => String((e && e.message) || e || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
+  let blankChoice = 'keep';
   async function start() {
     // ---- 1. scan
     let data;
     try { data = await api.importScrivener(); } catch (e) { return U.toast(esc(errText(e) || 'Could not open that project.'), 'warn', 7000); }
     if (!data) return;
+    if (data.mobilePending) U.toast('This project has changes from Scrivener on an iPhone or iPad that Scrivener on your computer hasn’t taken in yet, so they won’t come across. To include them, open the project in Scrivener on your computer first, close it, then import again.', 'warn', 14000);
     let scan, conv;
     try {
       scan = FI.scrivenerScan(data);
@@ -66,9 +68,11 @@ window.UnwipScriv = (function () {
       ${titleHits.length && window.UnwipTitles ? window.UnwipTitles.choiceHTML(titleHits, titleTotal, 'sim-tt') : ''}
       <div class="sim-foot">
         <div class="field"><label>New project name</label><input type="text" id="sim-name" value="${esc(data.name)}"></div>
+        <div class="field"><label>Empty lines between paragraphs</label><select id="sim-blank"><option value="keep">Keep them where they are, as in Scrivener</option><option value="tidy">Take them out (Unwip spaces paragraphs itself; two or more in a row become a scene break)</option></select></div>
         <label class="check"><input type="checkbox" id="sim-mem" checked><span>Remember these choices for folders with the same names</span></label>
         <p class="sim-small">Comes across: text with its formatting, folders and order, synopses, document notes, ${scan.labels.length ? 'labels, ' : ''}${scan.statuses.length ? 'status, ' : ''}icons and pictures${conv.docFont ? `, and your main font (${esc(conv.docFont)}${conv.docSize ? ' ' + conv.docSize + 'pt' : ''})` : ''}.</p>
       </div>`;
+    $('#sim-blank', body).value = rows.blank || 'keep';
     if (rows.titles) { const r = body.querySelector(`[name="sim-tt"][value="${rows.titles}"]`); if (r) r.checked = true; }
     body.querySelectorAll('[data-on]').forEach(c => c.onchange = () => { const r = rows[+c.dataset.on]; r.on = c.checked; c.closest('.sim-l').classList.toggle('off', !r.on); body.querySelector(`[data-t="${c.dataset.on}"]`).disabled = !r.on; });
     body.querySelectorAll('[data-t]').forEach(s => s.onchange = () => { rows[+s.dataset.t].target = s.value; });
@@ -80,8 +84,9 @@ window.UnwipScriv = (function () {
     if (!v) return null;
     const name = $('#sim-name', body).value.trim() || data.name, mem = $('#sim-mem', body).checked;
     const tt = body.querySelector('[name="sim-tt"]:checked'); rows.titles = tt ? tt.value : 'leave';
+    rows.blank = blankChoice = $('#sim-blank', body).value;
     if (v === 'preview') return { preview: true };
-    return { name, mem, titles: rows.titles };
+    return { name, mem, titles: rows.titles, blank: rows.blank };
   }
 
   // the same chapter as Scrivener had it, and as it will look in Unwip
@@ -97,14 +102,14 @@ window.UnwipScriv = (function () {
         <div><div class="simp-h">Before: as Scrivener had it</div><div class="simp-page simp-before"></div></div>
         <div><div class="simp-h">After: in Unwip (${esc(font)} ${size}pt)</div><div class="simp-page simp-after" style="font-family:'${esc(font)}', Georgia, serif; font-size:${size}pt"></div></div>
       </div>
-      <p class="sim-small">Empty lines used as spacing are removed (the space between paragraphs comes from Manuscript style), and leftover fonts are folded into one main font. Bold, italics, scene breaks and pictures stay.</p>`;
+      <p class="sim-small">${blankChoice === 'tidy' ? 'Empty lines used as spacing are removed (the space between paragraphs comes from Manuscript style), and leftover' : 'Empty lines stay where you typed them. Leftover'} fonts are folded into one main font. Bold, italics, scene breaks and pictures stay.</p>`;
     // start on a real chapter rather than a title page
     const firstReal = Math.max(0, chapters.findIndex(c => U.countWords(htmlText(conv.docs[c.id])) > 300));
     const show = () => {
       const n = chapters[+$('#simp-ch', body).value];
       const f = data.files[n._key] || {};
       $('.simp-before', body).innerHTML = f.content ? window.FolioRTF.toHTML(f.content) : conv.docs[n.id];
-      $('.simp-after', body).innerHTML = `<h1>${esc(n.title || '')}</h1>` + Clip.dropBlankLines(conv.docs[n.id]).html;
+      $('.simp-after', body).innerHTML = `<h1>${esc(n.title || '')}</h1>` + (blankChoice === 'tidy' ? Clip.dropBlankLines(conv.docs[n.id]).html : conv.docs[n.id]);
       $('.simp-before', body).scrollTop = 0; $('.simp-after', body).scrollTop = 0;
     };
     await U.modal({ title: 'Before and after', body, wide: true, onOpen: () => { $('#simp-ch', body).value = String(firstReal); $('#simp-ch', body).onchange = show; show(); }, buttons: [{ label: 'Back to the list', value: true, kind: 'primary' }] });
@@ -133,10 +138,16 @@ window.UnwipScriv = (function () {
       tpl.binder.splice(tpl.binder.findIndex(x => x.kind === 'trash'), 0, { id: 'root-' + k, type: 'folder', kind: k, root: true, custom: true, open: false, children: ns.children, title: t, singular: t.replace(/ies$/i, 'y').replace(/(?<!s)s$/i, ''), fields: ['Name', 'Aliases'], sections: ['Description', 'Notes'], icon: '🗂️' });
     }
     tpl.importedFrom = 'Scrivener';
+    tpl.style = { ...(tpl.style || {}), blankLines: v.blank === 'tidy' ? 'tidy' : 'keep' };
     // the book's own title and author from Scrivener, for the title page
     { const sc = FI.scrivenerScan(data); if (sc.projectTitle || sc.author) tpl.book = { ...(tpl.book || {}), ...(sc.projectTitle ? { title: sc.projectTitle } : {}), ...(sc.author ? { author: sc.author } : {}) }; }
     if (res.statusList && res.statusList.length) tpl.statuses = res.statusList;
     if (res.docFont || res.docSize) tpl.style = { ...(tpl.style || {}), ...(res.docFont ? { font: res.docFont } : {}), ...(res.docSize ? { size: res.docSize } : {}) };
+    // Scrivener's line spacing and first-line indent too, and remembered as they were, so going back puts them back
+    const L = res.layout || {};
+    if (L.lineHeight >= 1 && L.lineHeight <= 3) tpl.style = { ...(tpl.style || {}), lineHeight: L.lineHeight };
+    if (L.indent >= 0 && L.indent <= 1.5) tpl.style = { ...(tpl.style || {}), indent: L.indent };
+    if (Object.keys(L).length) tpl.scrivLayout = L;
     const slug = await api.createProject(v.name, tpl);
     const project = await api.openProject(slug);
     const ids = Object.keys(res.docs);
@@ -148,7 +159,7 @@ window.UnwipScriv = (function () {
     }
     // empty lines used as spacing go (but a title page keeps its own spacing)
     const front = new Set(); U.walkTree(Object.values(res.roots).flat(), n => { if (n.type === 'doc' && /^\s*(title|title page|half[- ]title|front matter|copyright|dedication)\s*$/i.test(n.title || '')) front.add(n.id); });
-    for (const id of ids) if (!front.has(id)) res.docs[id] = Clip.dropBlankLines(res.docs[id]).html;
+    if (v.blank === 'tidy') for (const id of ids) if (!front.has(id)) res.docs[id] = Clip.dropBlankLines(res.docs[id]).html;
     for (const id of ids) await api.saveDoc(slug, id, res.docs[id]);
     U.walkTree(project.binder, n => { delete n._key; if (n.type === 'doc' && res.docs[n.id]) n.words = U.countWords(htmlText(res.docs[n.id])); });
     project.totalWords = 0;

@@ -188,7 +188,42 @@ window.FolioImport = (function () {
     if (/character|cast|people/.test(t)) return 'characters';
     if (/place|location|setting|world/.test(t)) return 'places';
     if (/^items?$|objects|artifacts|artefacts/.test(t)) return 'items';
-    return 'notes';
+    if (/note|idea|scrap|misc|to ?do|plan|outline|brainstorm|inbox/.test(t)) return 'notes';
+    // any other top-level folder ("Skills & Abilities", "Magic System") is the writer's own: it keeps its own section
+    return type === 'Folder' ? 'new' : 'notes';
+  }
+  // A short fingerprint of a paragraph's words, so the empty lines that followed it in Scrivener can be put back
+  // after the same paragraph when the book goes back to Scrivener, even if other paragraphs have changed since.
+  function paraKey(text) {
+    const t = String(text || '').replace(/[\u00a0\u200b]/g, ' ').replace(/\s+/g, ' ').trim(); if (!t) return '';
+    let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(36);
+  }
+  // what a Scrivener document looked like before Unwip tidied it: the first line's size, weight and alignment
+  // (a typed chapter title, usually), and which paragraphs had empty lines after them
+  function rawLook(html) {
+    if (!html) return null;
+    const d = document.createElement('div'); d.innerHTML = html;
+    const blocks = [...d.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote')].filter(b => !b.querySelector('p, li'));
+    const full = b => !!((b.textContent || '').replace(/[\u00a0\u200b]/g, ' ').trim() || b.querySelector('img'));
+    const out = {}, gaps = {};
+    const first = blocks.findIndex(full);
+    if (first >= 0) {
+      const b = blocks[first], spans = [...b.querySelectorAll('[style*="font-size"]')];
+      const size = Math.max(0, ...spans.map(x => parseFloat(x.style.fontSize) * (/px$/.test(x.style.fontSize) ? 0.75 : 1)).filter(x => x > 0));
+      const txt = b.textContent.trim(), boldTxt = [...b.querySelectorAll('b, strong')].map(x => x.textContent).join('').trim();
+      out.t = { s: size || 0, b: boldTxt.length >= txt.length * 0.8 ? 1 : 0, a: (b.style.textAlign || '').slice(0, 1) || 'l' };
+      let n = 0; for (let j = first + 1; j < blocks.length && !full(blocks[j]); j++) n++;
+      out.t.n = n;
+    }
+    for (let i = 0; i < blocks.length; i++) {
+      if (!full(blocks[i])) continue;
+      let n = 0, j = i + 1; for (; j < blocks.length && !full(blocks[j]); j++) n++;
+      if (n && j < blocks.length) { const k = paraKey(blocks[i].textContent); if (k) gaps[k] = Math.max(gaps[k] || 0, n); }
+    }
+    const g = Object.entries(gaps).map(([k, n]) => n > 1 ? `${k}:${n}` : k);
+    if (g.length) out.g = g;
+    return out.t || out.g ? out : null;
   }
   // step 1 of importing: read the structure only (nothing is converted or changed) for the preview screen
   function scrivenerScan(data) {
@@ -234,6 +269,10 @@ window.FolioImport = (function () {
 
     const roots = { manuscript: [], characters: [], places: [], items: [], notes: [], research: [], trash: [] };
     const rtfToHTML = rtf => rtf ? window.FolioRTF.toHTML(rtf) : '';
+    // Scrivener's paragraph layout, from the RTF itself: line spacing (\\slN\\slmult1, in 240ths of a line) and the
+    // first-line indent (\\fiN, in twips), whichever is used most
+    const lsCount = {}, fiCount = {};
+    const layoutOf = rtf => { for (const m of rtf.matchAll(/\\sl(\d+)\\slmult1/g)) lsCount[m[1]] = (lsCount[m[1]] || 0) + 1; for (const m of rtf.matchAll(/\\fi(\d+)/g)) fiCount[m[1]] = (fiCount[m[1]] || 0) + 1; };
     const clean = html => html ? window.FolioClip.cleanPaste(html, {}) : '';
     const clean2 = (html, docFont, docSize) => html ? window.FolioClip.cleanPaste(html, { docFont, docSize }) : '';
     const textOf = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent.trim(); };
@@ -259,6 +298,8 @@ window.FolioImport = (function () {
       }
       if (['Image', 'PDF', 'WebArchive', 'Media'].includes(type)) { report.skipped.push(`${title} (${type === 'WebArchive' ? 'web page' : type.toLowerCase()})`); return null; }
       const bodyHTML = rtfToHTML(f.content);   // cleaned at the end, once the project's main font is known
+      if (f.content) layoutOf(f.content);
+      const look = rawLook(bodyHTML);
       const hasText = !!textOf(bodyHTML);
       const isFolder = /Folder/.test(type) || (children.length > 0);
       const extra = {};
@@ -267,18 +308,19 @@ window.FolioImport = (function () {
       const labelId = meta && meta.querySelector('LabelID') ? meta.querySelector('LabelID').textContent.trim() : null;
       if (labelId && labels[labelId] && !/^no label$/i.test(labels[labelId]) && labelId !== '-1') extra.label = { n: labels[labelId], c: labelColor[labelId] || '#9b968d' };
       if (iconM && [...iconM[1]].length <= 4) extra.icon = iconM[1];
+      const sv = look ? { sv: look } : {};
       if (notesHTML && textOf(notesHTML)) { const nid = uid(); docs[nid] = notesHTML; noteDocs.push({ id: nid, type: 'doc', title: `${title} (notes)`, words: 0 }); report.withNotes++; }
       if (isFolder) {
         report.folders++;
         const node = { id: uid(), type: 'folder', title, open: false, children, ...extra };
-        if (hasText) { const id = uid(); docs[id] = bodyHTML; node.children.unshift({ node: { id, type: 'doc', title, words: 0 }, type: 'Text' }); report.documents++; }
+        if (hasText) { const id = uid(); docs[id] = bodyHTML; node.children.unshift({ node: { id, type: 'doc', title, words: 0, ...sv }, type: 'Text' }); report.documents++; }
         return { node, type };
       }
       const id = uid();
       docs[id] = bodyHTML || '<p><br></p>';
       if (!hasText) report.empty++;
       report.documents++;
-      return { node: { id, type: 'doc', title, words: 0, ...extra, ...(opts.keepKeys ? { _key: key } : {}) }, type };
+      return { node: { id, type: 'doc', title, words: 0, ...extra, ...sv, ...(opts.keepKeys ? { _key: key } : {}) }, type };
     }
     // unwrap {node, type} recursively
     const unwrap = r => { if (!r) return null; const n = r.node; if (n.children) n.children = n.children.map(unwrap).filter(Boolean); return n; };
@@ -298,7 +340,7 @@ window.FolioImport = (function () {
       if (target === 'new') newSections.push({ title, children: inner });
       // the special folders (and folders whose name says what they hold) give their contents; anything else keeps its folder
       else if (['manuscript', 'research', 'trash'].includes(target) && /Folder$/.test(type) && type !== 'Folder') roots[target].push(...inner);
-      else if (['characters', 'places', 'items'].includes(target) || (['manuscript', 'research'].includes(target) && guessTarget(type, title) === target)) roots[target].push(...inner);
+      else if (['characters', 'places', 'items'].includes(target) || (['manuscript', 'research'].includes(target) && guessTarget(type, title) === target) || (target === 'notes' && /^notes?$/i.test(title))) roots[target].push(...inner);
       else roots[target].push(node);
     }
     report.placed = placed;
@@ -315,8 +357,11 @@ window.FolioImport = (function () {
     const top1 = o => Object.entries(o).sort((a, b) => b[1] - a[1])[0];
     const docFont = (top1(tally) || [])[0] || null, docSize = top1(sizes) ? +top1(sizes)[0] : null;
     for (const id of Object.keys(docs)) docs[id] = clean2(docs[id], docFont, docSize) || '<p><br></p>';
-    return { roots, docs, report, labels, statuses, statusList, docFont, docSize, newSections };
+    const most = o => { const e = Object.entries(o).sort((a, b) => b[1] - a[1])[0]; return e ? +e[0] : null; };
+    const sl = most(lsCount), fi = most(fiCount);
+    const layout = { ...(docSize ? { size: docSize } : {}), ...(sl ? { lineHeight: Math.round(sl / 240 * 100) / 100 } : {}), ...(fi != null ? { indent: Math.round(fi / 1440 * 100) / 100 } : {}) };
+    return { roots, docs, report, labels, statuses, statusList, docFont, docSize, newSections, layout };
   }
 
-  return { docxToHTML, splitChapters, scrivener, scrivenerScan, guessTarget, unzip };
+  return { docxToHTML, splitChapters, scrivener, scrivenerScan, guessTarget, unzip, paraKey, rawLook };
 })();

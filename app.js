@@ -402,6 +402,8 @@
   function rootIcon(n) { if (n.icon) return iconHTML(n, ''); const r = ROOTS.find(x => x.kind === n.kind); return r ? I[r.icon] : I.tag; }
   function renderBinder() {
     const tree = $('#binder-tree');
+    // a rename box is open: redrawing now would throw it away (the "flicker" on double-click), so wait for it
+    if (S.renaming && tree.contains(S.renaming)) { S.binderPending = true; return; }
     tree.innerHTML = '';
     const ms = S.project.binder.find(r => r.kind === 'manuscript');
     const build = (n, depth) => {
@@ -529,12 +531,19 @@
   });
 
   function startRename(row, n) {
-    const titleEl = $('.tr-title', row);
+    // the binder may have been redrawn since the first click of a double-click (opening the document does that)
+    row = $(`.tree-row[data-id="${n.id}"]`) || row;
+    const titleEl = row && $('.tr-title', row); if (!titleEl) return;
     const input = document.createElement('input');
     input.className = 'rename'; input.value = n.title;
     titleEl.replaceWith(input);
+    S.renaming = input;
     input.focus(); input.select();
+    input.addEventListener('mousedown', e => e.stopPropagation()); input.addEventListener('click', e => e.stopPropagation()); input.addEventListener('dblclick', e => e.stopPropagation());
+    let finished = false;
     const done = commit => {
+      if (finished) return; finished = true;
+      S.renaming = null; S.binderPending = false;
       if (commit && input.value.trim()) {
         n.title = input.value.trim();
         if (n.id === S.docId) $('#doc-title').value = n.title;
@@ -1625,8 +1634,22 @@
     let clean = plain || !html
       ? Clip.textToHTML(text)
       : Clip.cleanPaste(html, { docFont: st.font, docSize: st.size, dropFonts: false });
-    if (/<\/p>[\s\S]*<p/i.test(clean)) clean = Clip.dropBlankLines(clean).html;      // no empty lines as spacing: Manuscript style does the spacing
+    // empty lines used as spacing come out (Manuscript style does the spacing), unless this book keeps them
+    let offer = null;
+    if (/<\/p>[\s\S]*<p/i.test(clean) && st.blankLines !== 'keep') {
+      const r = Clip.dropBlankLines(clean);
+      if ((r.removed || r.scenes) && !st.blankLines) offer = { kept: clean, r };
+      clean = r.html;
+    }
     insertCleanHTML(clean);
+    if (offer) {
+      const { removed, scenes } = offer.r;
+      toastAction(`Took out ${removed} empty line${removed === 1 ? '' : 's'}${scenes ? `, and made ${scenes} scene break${scenes === 1 ? '' : 's'} where several were in a row` : ''}. Unwip spaces paragraphs itself.`, 'Keep them as they were', () => {
+        document.execCommand('undo'); insertCleanHTML(offer.kept);
+        S.project.style.blankLines = 'keep'; scheduleMeta();
+        toast('Kept. Empty lines you paste into this book will stay from now on (change it in Manuscript style).', '', 7000);
+      }, 15000);
+    }
     offerTitleFromPaste(text || '');
   });
   api.onPastePlain(() => { S.plainPaste = true; restoreRange(); api.paste(); });
@@ -1727,11 +1750,15 @@
   //  'firstline' - the chapter's own first line (e.g. "Chapter 2: …") becomes a real heading
   //  'none'      - nothing added
   function titleMode() { const st = S.project.style; return st.chapterTitles || (st.titlesAsHeadings === false ? 'none' : 'names'); }
+  // tracked changes, decided in a copy only (the book itself is untouched)
+  function rejectChanges(html) { if (!/tc-(ins|del)/.test(html || '')) return html; const d = document.createElement('div'); d.innerHTML = html; d.querySelectorAll('ins.tc-ins, .tc-ins').forEach(x => x.remove()); d.querySelectorAll('del.tc-del, .tc-del').forEach(x => x.replaceWith(...x.childNodes)); return d.innerHTML; }
+  function acceptChanges(html) { if (!/tc-(ins|del)/.test(html || '')) return html; const d = document.createElement('div'); d.innerHTML = html; d.querySelectorAll('del.tc-del, .tc-del').forEach(x => x.remove()); d.querySelectorAll('ins.tc-ins, .tc-ins').forEach(x => x.replaceWith(...x.childNodes)); return d.innerHTML; }
   const isTitlePage = t => /^\s*(title|title page|front matter|copyright)\s*$/i.test(t || '');
   async function docBlocks(id, mode) {
     if (mode === true) mode = titleMode(); else if (!mode) mode = 'none';
     const f = findNode(id);
-    const html = id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, id);
+    let html = id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, id);
+    if (Clip.changesMode === 'reject') html = rejectChanges(html);   // an export asked for the text as it was before suggestions
     const blocks = Clip.extract(Clip.parseHTML(html)).blocks;
     if (f && isTitlePage(f.node.title)) { if (blocks[0]) blocks[0] = { ...blocks[0], titleDoc: true }; return blocks; }   // a title page keeps its own layout
     if (mode === 'names' && f && f.node.title) blocks.unshift(headingBlock('h1', f.node.title));
@@ -2299,6 +2326,7 @@
       ['book', 'EPUB e-book', 'For Kindle (KDP), Apple Books and Kobo', '', () => openPreview('ebook')],
       ['doc', 'Word document (.docx)', 'For an editor, agent or beta reader', '', () => openPreview('docs')],
       ['folder', 'A folder of chapter files…', 'One Word or Markdown file per chapter, for Scrivener or any app', '', () => window.UnwipExportFolder && window.UnwipExportFolder.open()],
+      ['book', 'One Word file for Vellum or Atticus…', 'Each chapter a Heading 1, scene breaks as *** (not yet beta tested)', '', () => window.UnwipExportFolder && window.UnwipExportFolder.oneWord()],
       ['heart', 'No hard feelings…', 'Take your book to Scrivener or anywhere else', '', () => window.UnwipNoHardFeelings && window.UnwipNoHardFeelings.open()],
       null,
       ['person', 'Send to a beta reader…', 'A Word file they mark up with Track Changes and comments', '', () => window.UnwipReader && window.UnwipReader.send()],
@@ -2379,10 +2407,11 @@
         <div class="section-label">Body text</div>
         <div class="field"><label>Font</label><select id="s-font">${fontOptions(st.font)}</select></div>
         <div class="field"><label>Size (pt)</label><input type="number" id="s-size" min="6" max="40" step="0.5" value="${st.size}"></div>
-        <div class="field"><label>Line spacing</label><select id="s-lh">${opt([[1, 'Single'], [1.15, '1.15'], [1.5, '1.5'], [2, 'Double']], st.lineHeight)}</select></div>
+        <div class="field"><label>Line spacing</label><select id="s-lh">${opt([[1, 'Single'], [1.15, '1.15'], [1.5, '1.5'], [2, 'Double']].concat([1, 1.15, 1.5, 2].includes(+st.lineHeight) ? [] : [[st.lineHeight, String(st.lineHeight)]]).sort((a, b) => a[0] - b[0]), st.lineHeight)}</select></div>
         <div class="field"><label>First-line indent (inches)</label><input type="number" id="s-indent" min="0" max="2" step="0.05" value="${st.indent}"></div>
         <div class="field"><label>Space after paragraphs (pt)</label><input type="number" id="s-pspace" min="0" max="36" step="1" value="${st.paraSpacing}"></div>
         <div class="field"><label>Page width on screen</label><select id="s-width">${opt([[640, 'Narrow'], [760, 'Medium'], [900, 'Wide']], st.pageWidth)}</select></div>
+        <div class="field full"><label>Empty lines in text you paste or import</label><select id="s-blank">${opt([['keep', 'Keep them where they are'], ['tidy', 'Take them out (two or more in a row become a scene break)']], st.blankLines === 'keep' ? 'keep' : 'tidy')}</select></div>
         <label class="check"><input type="checkbox" id="s-justify" ${st.justify ? 'checked' : ''}> Justify text</label>
         <label class="check"><input type="checkbox" id="s-nofirst" ${st.noIndentFirst ? 'checked' : ''}> No indent after headings and scene breaks</label>
         <div class="field full"><label>Chapter titles when copying and exporting</label><select id="s-titles">${[['names', 'Document names from the binder'], ['firstline', 'The first line of each chapter (e.g. “Chapter 2: …”)'], ['none', 'Don’t add titles']].map(([v, l]) => `<option value="${v}" ${titleMode() === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -2398,7 +2427,7 @@
       </div>`;
     const read = () => {
       const v = id => $('#' + id, body).value, c = id => $('#' + id, body).checked;
-      st.font = v('s-font'); st.size = +v('s-size') || 12; st.lineHeight = +v('s-lh'); st.indent = +v('s-indent'); st.paraSpacing = +v('s-pspace');
+      st.font = v('s-font'); st.size = +v('s-size') || 12; st.lineHeight = +v('s-lh'); st.indent = +v('s-indent'); st.paraSpacing = +v('s-pspace'); st.blankLines = v('s-blank');
       st.pageWidth = +v('s-width'); st.justify = c('s-justify'); st.noIndentFirst = c('s-nofirst'); st.chapterTitles = v('s-titles'); st.titlesAsHeadings = st.chapterTitles !== 'none';
       for (const h of ['h1', 'h2']) {
         Object.assign(st.headings[h], { font: v(`s-${h}-font`), size: +v(`s-${h}-size`) || st.headings[h].size, align: v(`s-${h}-align`), bold: c(`s-${h}-bold`), italic: c(`s-${h}-italic`) });
@@ -3352,7 +3381,7 @@
     showMenu(r.left, r.bottom + 4, [
       ...(window.UnwipBookImport ? window.UnwipBookImport.menuItems() : []), { sep: true },
       { label: 'Scrivener project (.scriv)…', action: importScrivener },
-      { label: 'Restore from a backup file (.unwip)…', action: async () => { try { const slug = await api.backupImportFile(); if (slug) { toast('Backup restored as a new project.'); showLibrary(); } } catch (e) { toast(esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 7000); } } }
+      { label: 'Restore from a backup file (.unwip)…', action: async () => { try { const slug = await api.backupImportFile(); if (slug) { try { await Fonts.loadImported(await api.importedFonts()); } catch {} toast('Backup restored as a new project.'); showLibrary(); } } catch (e) { toast(esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 7000); } } }
     ]);
   };
   async function importWordProject() {
@@ -4131,7 +4160,7 @@
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,
     reloadProjectMeta, showLibrary, openProject, leaveProject: () => leaveProject(), importScrivener: () => importScrivener(), DEFAULT_STYLE, setMode, setView: v => setView(v), importWordProject: () => importWordProject(), newProjectTemplate: () => newProjectTemplate(), ROOTS,
-    tidyBlankLines, sectionDialog, sheetFor, scheduleNames, fontOptionsHTML, applyStyle, markScenes, docBlocks, templateGallery, continueWriting, noteLastPlace, caretOffset,
+    tidyBlankLines, sectionDialog, sheetFor, scheduleNames, fontOptionsHTML, applyStyle, markScenes, docBlocks, rejectChanges, acceptChanges, isTitlePage, compileManuscript, templateGallery, continueWriting, noteLastPlace, caretOffset,
     openPreview, snapshotsDialog, openSettings, goalsDialog, writtenOn, dayKey, streaks, dial, manuscriptWords, openFind, openSearch, splitAtCursor, setMode, restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
   };
 })();

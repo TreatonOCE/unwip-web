@@ -44,11 +44,14 @@ window.UnwipNoHardFeelings = (function () {
       if (t === 'U' || /underline/.test(st.textDecoration || '')) on += '\\ul';
       if (t === 'S' || t === 'STRIKE' || /line-through/.test(st.textDecoration || '')) on += '\\strike';
       if (t === 'SUP') on += '\\super'; if (t === 'SUB') on += '\\sub';
+      if (st.fontSize) { const pt = parseFloat(st.fontSize) * (/px$/.test(st.fontSize) ? 0.75 : 1); if (pt > 0) on += `\\fs${Math.round(pt * 2)}`; }
       out += on ? `{${on} ${inline(n, notes)}}` : inline(n, notes);
     });
     return out;
   }
-  function htmlToRTF(html, style) {
+  // opts.gaps: { paragraph fingerprint: how many empty lines followed it in Scrivener } (see importers.js rawLook)
+  function htmlToRTF(html, style, opts = {}) {
+    const gaps = opts.gaps || null, key = window.FolioImport && window.FolioImport.paraKey;
     const d = document.createElement('div'); d.innerHTML = html || '';
     const font = (style && style.font) || 'Times New Roman', size = Math.round(((style && style.size) || 12) * 2);
     const indent = Math.round(((style && style.indent) != null ? style.indent : 0.5) * 1440), line = Math.round(((style && style.lineHeight) || 1.5) * 240);
@@ -65,6 +68,9 @@ window.UnwipNoHardFeelings = (function () {
       if (h) { out += `\\pard\\plain\\f0\\fs${size + (4 - h[1]) * 6}\\b\\sb240\\sa120${al} ${inline(b)}\\b0\\par\n`; first = true; continue; }
       const fi = first || isScene || !text || /^(center|right)$/.test(align) ? 0 : indent;
       out += `\\pard\\plain\\f0\\fs${size}\\sl${line}\\slmult1\\fi${fi}${al}${b.tagName === 'BLOCKQUOTE' ? '\\li720\\ri720' : ''}${b.tagName === 'LI' ? '\\li360' : ''} ${b.tagName === 'LI' ? '\\bullet\\tab ' : ''}${inline(b)}\\par\n`;
+      // the empty lines that followed this paragraph in Scrivener go back after it
+      const g = gaps && text && key ? gaps[key(b.textContent)] : 0;
+      for (let k = 0; k < (g || 0); k++) out += `\\pard\\plain\\f0\\fs${size}\\sl${line}\\slmult1\\fi${indent}\\ql \\par\n`;
       first = isScene ? true : (text ? false : first);
     }
     return out + '}';
@@ -105,12 +111,19 @@ window.UnwipNoHardFeelings = (function () {
         if (pic.length) { const b64 = pic[0].canvas.toDataURL('image/png').split(',')[1]; const bin = atob(b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); files.push({ name: `Files/Data/${id}/content.png`, data: arr }); type = 'Image'; pics++; }
         else { mapsSkipped++; return ''; }
       } else if (!isFolder) {
-        const html = n.id === S.docId ? U.editor.innerHTML : await U.api.loadDoc(S.slug, n.id).catch(() => '');
+        let html = n.id === S.docId ? U.editor.innerHTML : await U.api.loadDoc(S.slug, n.id).catch(() => '');
+        // suggested changes are decided in the copy, as chosen in the summary (the book here keeps them)
+        html = opts.tcm === 'reject' ? U.rejectChanges(html) : U.acceptChanges(html);
         // a chapter whose title was typed into its text in Scrivener gets that line back (see titles.js)
         // remembered typed titles go back exactly; a book with none remembered gets each chapter's name typed in
         const line = !opts.restore || !inDraft ? '' : n.tt && n.tt.line ? n.tt.line : (anyTT || FRONT.test(n.title || '') ? '' : (n.title || ''));
-        const typed = line ? `<p style="text-align: center"><b>${esc(line)}</b></p><p><br></p>` : '';
-        files.push({ name: `Files/Data/${id}/content.rtf`, data: htmlToRTF(typed + html, P.style) });
+        // the typed title looks as it did in Scrivener when Unwip remembered that (size, bold, alignment and the
+        // empty lines under it); otherwise like Unwip's own chapter title
+        const t0 = opts.look && n.sv && n.sv.t && n.sv.t.s ? n.sv.t : null, h1 = (P.style.headings && P.style.headings.h1) || { size: 18, bold: true, align: 'center' };
+        const tl = t0 ? { s: t0.s, b: t0.b, a: { c: 'center', r: 'right', j: 'justify' }[t0.a] || 'left', n: t0.n || 1 } : { s: h1.size || 18, b: h1.bold ? 1 : 0, a: h1.align || 'center', n: 1 };
+        const typed = line ? `<p style="text-align: ${tl.a}"><span style="font-size: ${tl.s}pt">${tl.b ? '<b>' : ''}${esc(line)}${tl.b ? '</b>' : ''}</span></p>${'<p><br></p>'.repeat(Math.min(6, tl.n))}` : '';
+        const gaps = opts.look && P.style.blankLines !== 'keep' && n.sv && n.sv.g ? Object.fromEntries(n.sv.g.map(x => { const [k, c] = x.split(':'); return [k, +c || 1]; })) : null;
+        files.push({ name: `Files/Data/${id}/content.rtf`, data: htmlToRTF(typed + html, opts.look && P.scrivLayout ? { ...P.style, ...P.scrivLayout } : P.style, { gaps }) });
         docsOut.push(n.title); if (onStep) onStep(docsOut.length);
       }
       if (n.synopsis) files.push({ name: `Files/Data/${id}/synopsis.txt`, data: n.synopsis });
@@ -176,33 +189,48 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
   async function open() {
     if (!S.project) return U.toast('Open the book you want to take with you first.');
     await U.flushSave();
-    let hasTyped = S.project.importedFrom === 'Scrivener'; U.walkTree(S.project.binder, n => { if (n.tt) hasTyped = true; });
+    let hasTyped = S.project.importedFrom === 'Scrivener', hasLook = !!S.project.scrivLayout; U.walkTree(S.project.binder, n => { if (n.tt) hasTyped = true; if (n.sv) hasLook = true; });
+    const L = S.project.scrivLayout || {};
     const body = document.createElement('div'); body.className = 'nhf';
     const title = S.project.title || 'My book';
     body.innerHTML = `
       <p class="nhf-lead">No hard feelings. Your writing is yours, and taking it somewhere else should be easy. Pick how you’d like “${esc(title)}” packed up. Nothing in Unwip is changed or removed.</p>
-      <label class="nhf-opt"><input type="radio" name="nhf" value="scriv" checked><span><b>A Scrivener project</b><small>Opens in Scrivener 3 (Windows and Mac). Your manuscript becomes the Draft; characters, places, notes and other sections become folders; research and trash go to Scrivener’s own. Text with its formatting, footnotes, pictures, synopses, status, labels and icons come across, and maps as pictures.</small></span></label>
-      <label class="nhf-opt"><input type="radio" name="nhf" value="docx"><span><b>A folder of Word files</b><small>One per chapter, in folders like your binder. For Word, Google Docs, Ulysses, Atticus, Vellum and almost anything else.</small></span></label>
-      <label class="nhf-opt"><input type="radio" name="nhf" value="md"><span><b>A folder of Markdown files</b><small>For Obsidian, iA Writer, Bear, Notion and plain-text apps.</small></span></label>
+      <label class="nhf-opt"><input type="radio" name="nhf" value="scriv" checked><span><b>A Scrivener project</b><small>Opens in Scrivener 3 for Windows (tested). Scrivener on Mac should open it too, but that’s not yet tested by beta testers. Your manuscript becomes the Draft; characters, places, notes and other sections become folders; research and trash go to Scrivener’s own. Text with its formatting, footnotes, pictures, synopses, status, labels and icons come across, and maps as pictures.</small></span></label>
+      <label class="nhf-opt"><input type="radio" name="nhf" value="one"><span><b>One Word file for Vellum or Atticus</b><small>Your manuscript as a single Word file, laid out the way those apps import a book: each chapter title a Heading 1, scene breaks as ***, no stray blank lines. <i class="untested">Should work, but not yet tested by beta testers.</i></small></span></label>
+      <label class="nhf-opt"><input type="radio" name="nhf" value="docx"><span><b>A folder of Word files</b><small>One per chapter, in folders like your binder, numbered “01 - Chapter One” so they stay in order. For Word, Google Docs, Ulysses and almost anything else. <i class="untested">Should work, but not yet tested by beta testers.</i></small></span></label>
+      <label class="nhf-opt"><input type="radio" name="nhf" value="md"><span><b>A folder of Markdown files</b><small>For Obsidian, iA Writer, Bear, Notion and plain-text apps. <i class="untested">Should work, but not yet tested by beta testers.</i></small></span></label>
       <label class="nhf-opt"><input type="radio" name="nhf" value="backup"><span><b>A full Unwip backup</b><small>Everything exactly as it is here, in one file, in case you ever come back.</small></span></label>
       ${hasTyped ? `<label class="check nhf-tt"><input type="checkbox" id="nhf-tt" checked><span>Type each chapter’s title at the top of its text, as it was in Scrivener<small>Unwip shows chapter names as headings by itself; Scrivener needs them in the text. Where Unwip tidied a typed title, the original line and binder name go back.</small></span></label>` : ''}
-      <p class="sim-small">Not carried over to Scrivener: comments, tracked changes (suggested deletions are left out, additions kept), connections, the timeline, your calendar and mood boards. Those stay safe here.</p>`;
-    const ok = await U.modal({ title: 'No hard feelings: take your book with you', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Pack it up', value: true, kind: 'primary' }] });
+      ${hasLook ? `<label class="check nhf-tt"><input type="checkbox" id="nhf-look" checked><span>Put back how it looked in Scrivener<small>Title lines at their old size, the empty lines between paragraphs where you had them${L.lineHeight ? `, and Scrivener’s ${L.lineHeight}× line spacing` : ''}${L.size ? ` at ${L.size}pt` : ''}. Untick to use Unwip’s layout instead.</small></span></label>` : ''}
+      <p class="sim-small">Next you’ll see exactly what’s going and what isn’t, before anything is saved.</p>`;
+    if (open.last) { const r = body.querySelector(`[name="nhf"][value="${open.last}"]`); if (r) r.checked = true; }
+    const ok = await U.modal({ title: 'No hard feelings: take your book with you', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Next', value: true, kind: 'primary' }] });
     if (!ok) return;
-    const how = body.querySelector('[name="nhf"]:checked').value;
-    if (how === 'docx' || how === 'md') return window.UnwipExportFolder && window.UnwipExportFolder.open({ fmt: how, what: 'all' });
+    const how = open.last = body.querySelector('[name="nhf"]:checked').value;
+    const XF = window.UnwipExportFolder;
+    if (how === 'docx' || how === 'md') return XF && XF.open({ fmt: how, what: 'all' });
+    if (how === 'one') return XF && XF.oneWord();
     if (how === 'backup') { try { const p = await api.backupExport(S.slug); if (p) U.toast('Full backup saved.'); } catch (e) { U.toast('Couldn’t save the backup.', 'warn'); } return; }
+    // the summary: what's going, what isn't, and what to do with suggested changes
+    const restore = !!(body.querySelector('#nhf-tt') || {}).checked, look = !!(body.querySelector('#nhf-look') || {}).checked;
+    const t = await XF.tally(S.project.binder);
+    const sum = document.createElement('div'); sum.className = 'nhf';
+    sum.innerHTML = `<p class="nhf-lead">Here’s what goes into the Scrivener project. Your manuscript becomes the Draft; characters, places, notes and other sections become folders; research and trash go to Scrivener’s own.</p>${XF.summaryHTML(t, 'scriv')}`;
+    const go = await U.modal({ title: 'Before you pack it up', body: sum, wide: true, buttons: [{ label: 'Back', value: 'back', kind: 'ghost' }, { label: 'Pack it up', value: true, kind: 'primary' }] });
+    if (go === 'back') return open();
+    if (go !== true) return;
+    const tcm = XF.changesChoice(sum);
     const safe = (title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').trim() || 'My book').slice(0, 80);
     U.toast('Packing it up…', '', 3000);
     let res;
-    try { res = await buildScriv(safe, null, { restore: !!(body.querySelector('#nhf-tt') || {}).checked }); } catch (e) { return U.toast('Couldn’t make the Scrivener project: ' + esc(String(e.message || e)), 'warn', 8000); }
+    try { res = await buildScriv(safe, null, { restore, tcm, look }); } catch (e) { return U.toast('Couldn’t make the Scrivener project: ' + esc(String(e.message || e)), 'warn', 8000); }
     try {
       let where;
       if (api.exportScriv) where = await api.exportScriv(safe, res.files);
       else { const zip = window.FolioEPUB.zip(res.files.map(f => ({ name: `${safe}.scriv/${f.name}`, data: f.data }))); await api.exportBinary(zip, safe + '.scriv', 'zip', 'Scrivener project (zip)'); where = safe + '.scriv (in a .zip: unzip it, then open it in Scrivener)'; }
       if (!where) return;
       await U.modal({ title: 'Packed up', body: `<p>“${esc(where)}” is ready: ${res.docs} document${res.docs === 1 ? '' : 's'}${res.pics ? ` and ${res.pics} map${res.pics === 1 ? '' : 's'} as pictures` : ''}.</p>
-        <p>In Scrivener, choose <b>File › Open</b> and pick it. Scrivener may offer to update the project to its newest format; that’s fine. It may also take a moment to rebuild its search index the first time.</p>
+        <p>In Scrivener, choose <b>File › Open</b> and pick it. It may take a moment to rebuild its search index the first time.</p>
         <p class="sim-small">Your book is still here in Unwip, untouched. All the best with it.</p>`, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
     } catch (e) { U.toast('Couldn’t save it: ' + esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 8000); }
   }

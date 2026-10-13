@@ -157,6 +157,8 @@
       if (rel.startsWith('backups/') || /(^|\/)\.open-on-|\.tmp$/.test(rel)) continue;
       const v = await FS.read(k); files.push({ name: rel, data: v });
     }
+    // fonts you imported live with the app, not the book; they go along so a restore elsewhere looks the same
+    try { for (const f of (await FS.list('app/fonts')).files) files.push({ name: '_fonts/' + f, data: await FS.read(`app/fonts/${f}`) }); } catch {}
     return zipFiles(files);
   }
   async function restoreArchive(files, suffix) {
@@ -167,6 +169,7 @@
     const slug = await uniqueSlug(project.title);
     for (const f of files) {
       if (f.name.includes('..') || f.name.startsWith('/')) continue;
+      if (f.name.startsWith('_fonts/')) { const to = `app/fonts/${f.name.slice(7)}`; if (/\.(ttf|otf|woff2?)$/i.test(to) && !(await FS.read(to).catch(() => null))) await FS.write(to, enc(f.data)); continue; }
       const isText = /\.(json|html|txt)$/i.test(f.name);
       const data = f.name === 'project.json' ? JSON.stringify({ ...project, modified: Date.now() }, null, 2) : isText ? new TextDecoder().decode(enc(f.data)) : enc(f.data);
       await FS.write(`${pdir(slug)}/${f.name}`, data);
@@ -405,10 +408,17 @@
             const root = scrivx.webkitRelativePath.split('/').slice(0, -1).join('/');
             const rel = f => f.webkitRelativePath.slice(root.length + 1);
             const pic = f => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(f); });
+            // made in Scrivener on iPhone or iPad and not yet opened on a computer: the binder is Mobile/binder.mob
+            // and the writing is in Mobile/Data
+            let xml = await scrivx.text(); const mob = list.find(f => rel(f) === 'Mobile/binder.mob');
+            const stub = /MobileStub\s*=\s*"Yes"/i.test(xml) || !/<Binder[\s>]/.test(xml);
+            if (stub && !mob) return reject(new Error('This project was made in Scrivener on an iPhone or iPad, and its writing isn’t in the folder yet (Dropbox may still be downloading it). Open it once in Scrivener, then try again.'));
+            if (stub) xml = await mob.text();
+            const dataRoot = stub ? 'Mobile' : 'Files';
             const files = {};
             for (const f of list) {
               const p = rel(f); let m;
-              if ((m = p.match(/^Files\/Data\/([^/]+)\/(content\.rtf|synopsis\.txt|notes\.rtf|content\.(png|jpe?g|gif|webp))$/i))) {
+              if (p.startsWith(dataRoot + '/Data/') && (m = p.match(/^(?:Files|Mobile)\/Data\/([^/]+)\/(content\.rtf|synopsis\.txt|notes\.rtf|content\.(png|jpe?g|gif|webp))$/i))) {
                 const e = files[m[1]] = files[m[1]] || {};
                 if (/^content\.rtf$/i.test(m[2])) e.content = await f.text(); else if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else e.image = await pic(f);
               } else if ((m = p.match(/^Files\/Docs\/(\d+)(_synopsis\.txt|_notes\.rtf|\.rtf|\.(png|jpe?g|gif|webp))$/i))) {
@@ -416,7 +426,7 @@
                 if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else if (/\.rtf$/i.test(m[2])) e.content = await f.text(); else e.image = await pic(f);
               }
             }
-            resolve({ name: (root.split('/').pop() || scrivx.name).replace(/\.scriv$/i, '').replace(/\.scrivx$/i, ''), scrivx: await scrivx.text(), files });
+            resolve({ name: (root.split('/').pop() || scrivx.name).replace(/\.scriv$/i, '').replace(/\.scrivx$/i, ''), scrivx: xml, files, mobile: stub, mobilePending: !stub && !!mob });
           } catch (e) { reject(e); }
         };
         inp.addEventListener('cancel', () => { inp.remove(); resolve(null); });

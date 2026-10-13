@@ -2160,7 +2160,13 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .nhf-lead { font-size: 15px; margin: 0 0 12px; }
 .nhf-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; cursor: pointer; }
 .nhf-opt:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.untested { display: inline; color: #a0632a; font-style: italic; }
 .nhf-opt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+/* the summary before an export */
+.xs { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 12px 0 4px; font-size: 14px; }
+.xs p { margin: 0 0 6px; } .xs-left { color: var(--muted); }
+.xs-tc { margin-top: 10px; padding: 10px 12px; border-radius: 8px; border-left: 4px solid #c9892b; background: color-mix(in srgb, #c9892b 10%, transparent); }
+.xs-tc .check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; } .xs-tc small { display: block; color: var(--muted); font-size: 12.5px; }
 .tsx-cap { position: absolute; left: 8%; right: 8%; bottom: 14px; text-align: center; font: italic 12px/1.35 var(--ui); color: #8a857c; pointer-events: none; }
 
 /* Insights in the side panel */

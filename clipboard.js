@@ -206,8 +206,9 @@
       const prev = node.previousSibling, next = node.nextSibling;
       const isB = n => n && n.nodeType === 1 && (BLOCK_TAGS.has(n.tagName.toUpperCase()) || /^(UL|OL|TABLE|HR|BR)$/i.test(n.tagName));
       // a space alone inside a formatting run (<span> </span> between a bold word and the next) is a real space
-      const par = node.parentNode;
-      if (par && par.nodeType === 1 && /^(SPAN|B|STRONG|I|EM|U|S|FONT|A|SUP|SUB|MARK|SMALL|CODE)$/i.test(par.tagName) && (par.previousSibling || par.nextSibling)) return false;
+      // (also when that run is wrapped in more runs: <span style="font-family…"><b> </b></span>, as Scrivener writes it)
+      for (let el = node.parentNode; el && el.nodeType === 1 && /^(SPAN|B|STRONG|I|EM|U|S|FONT|A|SUP|SUB|MARK|SMALL|CODE)$/i.test(el.tagName); el = el.parentNode)
+        if (el.previousSibling || el.nextSibling) return false;
       return (!prev || isB(prev)) && (!next || isB(next));
     }
 
