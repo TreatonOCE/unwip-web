@@ -2872,7 +2872,8 @@
     const mins = Math.max(0.1, Math.min(sp.minutes, (Date.now() - sp.start) / 60000));
     const words = Math.max(0, S.sessionTyped - sp.startTyped);
     const wpm = Math.round(words / mins * 10) / 10;
-    const rec = { date: new Date().toISOString(), minutes: Math.round(mins * 10) / 10, words, wpm, goal: sp.goal };
+    const docNode = S.docId && findNode(S.docId);
+    const rec = { date: new Date().toISOString(), minutes: Math.round(mins * 10) / 10, words, wpm, goal: sp.goal, doc: docNode ? docNode.node.title : '' };
     const prevBest = S.project.stats.sprints.reduce((a, x) => Math.max(a, x.wpm || 0), 0);
     S.project.stats.sprints.push(rec);
     scheduleMeta();
@@ -2886,8 +2887,8 @@
         <div class="sprint-grid"><div><b>${fmt(words)}</b><span>words</span></div><div><b>${rec.minutes}</b><span>minutes</span></div><div><b>${S.project.stats.sprints.length}</b><span>sprints in this project</span></div></div>
         <p style="margin-top:14px">${[goalLine, best].filter(Boolean).join(' ')}</p>
         ${quotesOn() ? (q => `<div class="sprint-quote">${quoteHTML(q)}</div>`)(Quotes.random()) : ''}</div>`,
-      buttons: [{ label: 'Done', value: true, kind: 'primary' }]
-    });
+      buttons: [...(window.UnwipSprints ? [{ label: 'All sprints', value: 'all', kind: 'ghost' }] : []), { label: 'Done', value: true, kind: 'primary' }]
+    }).then(v => { if (v === 'all') window.UnwipSprints.open(); });
     editor.focus();
   }
   $('#btn-sprint').onclick = startSprintDialog;
@@ -2965,7 +2966,7 @@
         ${dial({ pct: g.total ? total / g.total : 0, big: g.total ? Math.floor(total / g.total * 100) + '%' : fmt(total), small: g.total ? `${fmt(total)} / ${fmt(g.total)}` : 'words', label: 'Manuscript', color: '#c27a2c' })}
         <div class="stat-stack">
           <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>day streak<br><small>best ${st.best}</small></span></div>
-          <div class="stat-card bolt"><span class="ic">${I.bolt}</span><b>${bestWpm || '–'}</b><span>best sprint wpm<br><small>${sprints.length} sprints${avgWpm ? ` · avg ${avgWpm}` : ''}</small></span></div>
+          <button type="button" class="stat-card bolt" id="g-sprints" title="See every sprint"><span class="ic">${I.bolt}</span><b>${bestWpm || '–'}</b><span>best sprint wpm<br><small>${sprints.length} sprints${avgWpm ? ` · avg ${avgWpm}` : ''} ›</small></span></button>
         </div>
       </div>
       ${paceText(g, total) ? `<div class="pace">${paceText(g, total)}</div>` : ''}
@@ -2976,6 +2977,7 @@
         <div class="field"><label>Deadline (optional)</label><input type="date" id="g-deadline" value="${g.deadline || ''}" class="date-input"></div>
       </div>
       <p style="margin-top:10px">Only words you type count towards daily goals and streaks. Pasting and big deletions are left out so the numbers stay honest.</p>`;
+    const gs = $('#g-sprints', body); if (gs) gs.onclick = () => { const c = body.closest('.modal-back'); const x = c && c.querySelector('.m-foot button'); if (x) x.click(); window.UnwipSprints && window.UnwipSprints.open(); };
     const hb = $('#g-history', body); if (hb) hb.onclick = () => { const c = body.closest('.modal-back'); const x = c && c.querySelector('.m-foot button'); if (x) x.click(); window.UnwipHistory.open(); };
     const ok = await modal({ title: 'Goals & progress', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }, { label: 'Save goals', value: true, kind: 'primary' }] });
     if (!ok) return;

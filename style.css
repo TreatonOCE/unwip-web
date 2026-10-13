@@ -1963,3 +1963,27 @@ p.in-note.k-g:hover { border-color: var(--line); }
 .pc-col.empty .pc-bar { height: 6px !important; background: transparent; border: 1.5px dashed var(--line); }
 .dbx-steps { margin: 0 0 12px; padding-left: 20px; } .dbx-steps li { margin: 4px 0; }
 a.dbx-open { display: inline-flex; text-decoration: none; }
+
+/* ---- Sprint history */
+.spr-filter { display: flex; align-items: center; gap: 10px; margin: -4px 0 14px; font: 13px var(--ui); color: var(--muted); }
+.spr-filter select { height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--text); padding: 0 10px; font: inherit; }
+.spr-cards { grid-template-columns: repeat(4, 1fr); }
+.spr-chart { position: relative; display: flex; align-items: flex-end; gap: 3px; height: 90px; margin: 16px 0 6px; padding: 0 2px; border-bottom: 1px solid var(--line); }
+.spr-chart i { flex: 1; max-width: 22px; background: color-mix(in srgb, var(--accent) 55%, var(--paper)); border-radius: 3px 3px 0 0; }
+.spr-avg { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--muted); opacity: .7; }
+.spr-avg span { position: absolute; right: 0; top: -17px; font: 11px var(--ui); color: var(--muted); }
+.spr-table-wrap { max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; margin-top: 14px; background: var(--paper); }
+.spr-table { width: 100%; border-collapse: collapse; font: 13.5px var(--ui); }
+.spr-table th { position: sticky; top: 0; background: var(--paper); text-align: left; font: 700 11.5px var(--ui); text-transform: uppercase; letter-spacing: .4px; color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.spr-table td { padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.spr-table td small { color: var(--muted); margin-left: 4px; }
+.spr-table .n { text-align: right; font-variant-numeric: tabular-nums; }
+.spr-table tr.best td { background: color-mix(in srgb, #f59e0b 9%, transparent); }
+.spr-star { color: #d97706; }
+.spr-doc { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.spr-del { width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.spr-del:hover { background: rgba(220, 38, 38, .1); color: #dc2626; }
+button.stat-card { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+button.stat-card:hover { border-color: var(--accent); }
+@media (max-width: 620px) { .spr-cards { grid-template-columns: repeat(2, 1fr); } .spr-table td:nth-child(2), .spr-table th:nth-child(2) { display: none; } }
+.spr-filter select { width: auto; min-width: 220px; }
