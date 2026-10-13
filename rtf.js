@@ -6,7 +6,7 @@ window.FolioRTF = (function () {
   const SKIP_DEST = new Set(['info', 'object', 'header', 'headerl', 'headerr', 'headerf', 'footer', 'footerl', 'footerr', 'footerf',
     'fldinst', 'themedata', 'colorschememapping', 'datastore', 'latentstyles', 'listtable', 'listoverridetable', 'rsidtbl', 'generator',
     'xmlnstbl', 'mmathPr', 'pgdsctbl', 'revtbl', 'filetbl', 'background', 'shp', 'shpinst', 'nonshppict', 'bkmkstart', 'bkmkend',
-    'footnote', 'annotation', 'atnid', 'atnauthor', 'listtext', 'pntext', 'pntxta', 'pntxtb', 'docvar', 'userprops', 'wgrffmtfilter', 'xe', 'tc']);
+    'annotation', 'atnid', 'atnauthor', 'listtext', 'pntext', 'pntxta', 'pntxtb', 'docvar', 'userprops', 'wgrffmtfilter', 'xe', 'tc']);
   const cp1252 = new TextDecoder('windows-1252');
 
   // Scrivener on Windows writes PostScript names ("TimesNewRomanPSMT", "PalatinoLinotype-Italic").
@@ -45,9 +45,10 @@ window.FolioRTF = (function () {
       if (st.dest === 'pict') { if (st.pict) st.pict.hex += t.replace(/[^0-9a-f]/gi, ''); return; }
       if (st.dest === 'fonttbl' || st.dest === 'stylesheet') { destBuf += t; return; }
       if (st.dest === 'colortbl') return;
+      if (st.dest === 'footnote') { if (pendingSkip > 0) { const n = Math.min(pendingSkip, t.length); t = t.slice(n); pendingSkip -= n; } if (st.fn) st.fn.text += t; return; }
       if (pendingSkip > 0) { const n = Math.min(pendingSkip, t.length); t = t.slice(n); pendingSkip -= n; if (!t) return; }
       const last = runs[runs.length - 1];
-      if (last && !last.br && JSON.stringify(last.char) === JSON.stringify(st.char)) last.text += t;
+      if (last && !last.br && !last.img && last.fn === undefined && JSON.stringify(last.char) === JSON.stringify(st.char)) last.text += t;   // (never onto a picture or footnote, or the words vanish)
       else runs.push({ text: t, char: { ...st.char } });
     }
     function endPara() {
@@ -86,6 +87,8 @@ window.FolioRTF = (function () {
           const wTw = pc.wgoal || (pc.w ? pc.w * 15 : 0), hTw = pc.hgoal || (pc.h ? pc.h * 15 : 0);
           runs.push({ img: `data:image/${pc.type};base64,` + btoa(bin), pct: wTw ? Math.max(10, Math.min(100, Math.round(wTw / 8640 * 100))) : 60, w: wTw, h: hTw, char: { ...st.char } });
         }
+        // a footnote group just ended: it becomes Unwip's footnote mark at this point in the text
+        if (prevDest === 'footnote' && st.dest !== 'footnote' && closing.fn && !st.skip) { const t = closing.fn.text.replace(/\s+/g, ' ').trim(); if (t) runs.push({ fn: t, char: { ...st.char } }); }
         if (prevDest !== st.dest && (prevDest === 'fonttbl' || prevDest === 'stylesheet')) { destBuf = ''; destNum = null; }
         groupDepth--;
         i++;
@@ -132,7 +135,9 @@ window.FolioRTF = (function () {
     function handle(word, num, hasNum) {
       // destinations
       if (word === 'fonttbl' || word === 'colortbl' || word === 'stylesheet') { st.dest = word; destBuf = ''; destNum = null; return; }
-      if (word === 'shppict') { st.skip = false; return; }          // Word/Scrivener wrap the real picture in {\*\shppict …}
+      if (word === 'shppict') { st.skip = false; return; }
+      if (word === 'footnote') { st.dest = 'footnote'; st.fn = { text: '' }; st.skip = false; return; }   // its text is kept as a footnote
+      if (st.dest === 'footnote') { if (word === 'par' || word === 'line' || word === 'tab') st.fn.text += ' '; else if (word === 'u') { const cp = num < 0 ? num + 65536 : num; st.fn.text += String.fromCharCode(cp); pendingSkip = st.uc; } else if (word === 'uc') st.uc = num; else if (/^(emdash|endash|lquote|rquote|ldblquote|rdblquote)$/.test(word)) st.fn.text += { emdash: '—', endash: '–', lquote: '‘', rquote: '’', ldblquote: '“', rdblquote: '”' }[word]; return; }          // Word/Scrivener wrap the real picture in {\*\shppict …}
       if (word === 'pict') { st.dest = 'pict'; st.pict = { type: null, hex: '', w: 0, h: 0, wgoal: 0, hgoal: 0 }; return; }
       if (st.dest === 'pict') {
         if (st.pict) { if (word === 'pngblip') st.pict.type = 'png'; else if (word === 'jpegblip') st.pict.type = 'jpeg'; else if (word === 'picwgoal') st.pict.wgoal = num; else if (word === 'pichgoal') st.pict.hgoal = num; else if (word === 'picw') st.pict.w = num; else if (word === 'pich') st.pict.h = num; }
@@ -200,6 +205,7 @@ window.FolioRTF = (function () {
       if (para.indent != null && para.indent >= 0) css.push(`text-indent:${para.indent}pt`);
       const inner = runs.map(r => {
         if (r.br) return '<br>';
+        if (r.fn !== undefined) return `<sup class="fn" contenteditable="false" data-fn="${esc(r.fn).replace(/"/g, '&quot;')}">\u200b</sup>`;
         if (r.img) return `<img class="doc-img" src="${r.img}" data-w="${r.w || ''}" data-h="${r.h || ''}" style="width: ${r.pct}%" alt="">`;
         let h = esc(r.text);
         const ch = r.char;
@@ -221,7 +227,9 @@ window.FolioRTF = (function () {
       }).join('');
       return `<${tag}${css.length ? ` style="${css.join(';')}"` : ''}>${inner || '<br>'}</${tag}>`;
     }).join('');
-    return html;
+    // Scrivener for Windows marks its named styles with text like <$Scr_Ps::0> … <!$Scr_Ps::0> and hides it on
+    // reading; anywhere else it would show, so it goes (the formatting itself is kept)
+    return html.replace(/&lt;!?\$Scr_[A-Za-z]+::\d+&gt;/g, '');
   }
 
   return { toHTML };

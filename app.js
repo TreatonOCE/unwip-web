@@ -113,7 +113,7 @@
     m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
   }
   function hideMenu() { $('#menu').classList.add('hidden'); }
-  document.addEventListener('mousedown', e => { if (!e.target.closest('#menu')) hideMenu(); });
+  document.addEventListener('mousedown', e => { if (!e.target.closest('#menu') && !(S.longPress && Date.now() - S.longPress < 900)) hideMenu(); });
 
   function modal({ title, body, buttons, wide, onOpen }) {
     return new Promise(resolve => {
@@ -452,7 +452,8 @@
       return;
     }
     const row = e.target.closest('.tree-row'); if (!row) return;
-    if (e.target.closest('.tr-add')) { addNode('doc', row.dataset.id, true); return; }
+    if (e.target.closest('.tr-add')) { if (e.detail < 2) addNode('doc', row.dataset.id, true); return; }   // a double-click still adds one
+    if (S.swallowClick && Date.now() - S.swallowClick < 800) { S.swallowClick = 0; return; }        // the end of a press-and-hold
     // a second click on the same row straight after the first is a double-click: rename. Counted here rather than
     // left to the browser's dblclick, because the first click redraws the binder and Windows may then not see a
     // double-click on the new row at all.
@@ -482,8 +483,23 @@
     if (n.root && n.kind === 'trash') return;   // the Trash keeps its name
     startRename(row, n);                          // sections (Manuscript, Characters…) can be renamed too
   });
+  // press and hold on a phone or tablet opens the same menu as a right-click (iPhones and iPads have no right-click)
+  {
+    let lp = null;
+    const cancel = () => { clearTimeout(lp); lp = null; };
+    tree.addEventListener('touchstart', e => {
+      const row = e.target.closest('.tree-row'); if (!row || row.classList.contains('fav-row') || e.touches.length > 1) return;
+      const t = e.touches[0], x = t.clientX, y = t.clientY;
+      cancel(); lp = setTimeout(() => { lp = null; S.longPress = Date.now(); S.swallowClick = Date.now(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y })); }, 500);
+    }, { passive: true });
+    tree.addEventListener('touchmove', cancel, { passive: true });
+    // lifting the finger after the menu opened isn't a tap (it would close the menu again)
+    tree.addEventListener('touchend', e => { cancel(); if (S.longPress && Date.now() - S.longPress < 1500 && e.cancelable) e.preventDefault(); });
+    tree.addEventListener('touchcancel', cancel, { passive: true });
+  }
   tree.addEventListener('contextmenu', e => {
     const row = e.target.closest('.tree-row'); if (!row || row.classList.contains('fav-row')) return;
+    if (e.isTrusted && S.longPress && Date.now() - S.longPress < 1200) { e.preventDefault(); return; }   // Android's own long-press menu, after ours
     e.preventDefault();
     const n = findNode(row.dataset.id).node;
     const root = rootOf(n.id);

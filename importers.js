@@ -62,7 +62,7 @@ window.FolioImport = (function () {
           name: val(kid(st, 'name')) || id, basedOn: val(kid(st, 'basedOn')),
           font: f ? f.getAttributeNS(W, 'ascii') : null, size: kid(rpr, 'sz') ? +val(kid(rpr, 'sz')) / 2 : null,
           bold: kid(rpr, 'b') ? onOff(kid(rpr, 'b')) : null, italic: kid(rpr, 'i') ? onOff(kid(rpr, 'i')) : null,
-          align: ppr && kid(ppr, 'jc') ? val(kid(ppr, 'jc')) : null
+          align: ppr && kid(ppr, 'jc') ? val(kid(ppr, 'jc')) : null, numPr: ppr ? kid(ppr, 'numPr') : null
         };
       }
     }
@@ -99,6 +99,26 @@ window.FolioImport = (function () {
     }
     const activeC = new Set();
     let sectionBreak = false;
+    // lists: Unwip has no list formatting, so each list line keeps its bullet or number as text ("• ", "3. ", "b) ")
+    const numFmt = {}, absOf = {}, counters = {};
+    const nXml = await text('word/numbering.xml');
+    if (nXml) {
+      const nd = parse(nXml);
+      for (const a of nd.getElementsByTagNameNS(W, 'abstractNum')) { const aid = a.getAttributeNS(W, 'abstractNumId') || a.getAttribute('w:abstractNumId'); for (const l of kids(a, 'lvl')) numFmt[aid + ':' + (l.getAttributeNS(W, 'ilvl') || l.getAttribute('w:ilvl'))] = { fmt: val(kid(l, 'numFmt')) || 'decimal', text: val(kid(l, 'lvlText')) || '%1.', start: +val(kid(l, 'start')) || 1 }; }
+      for (const n of nd.getElementsByTagNameNS(W, 'num')) absOf[n.getAttributeNS(W, 'numId') || n.getAttribute('w:numId')] = val(kid(n, 'abstractNumId'));
+    }
+    const roman = n => { let r = '', v = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']]; for (const [k, s] of v) while (n >= k) { r += s; n -= k; } return r; };
+    const fmtNum = (n, f) => f === 'lowerLetter' ? String.fromCharCode(96 + ((n - 1) % 26) + 1) : f === 'upperLetter' ? String.fromCharCode(64 + ((n - 1) % 26) + 1) : f === 'lowerRoman' ? roman(n) : f === 'upperRoman' ? roman(n).toUpperCase() : String(n);
+    function listMark(ppr, sid) {
+      const np = (ppr && kid(ppr, 'numPr')) || (sid ? styleProp(sid, 'numPr') : null); if (!np) return '';
+      const numId = val(kid(np, 'numId')), ilvl = +val(kid(np, 'ilvl')) || 0;
+      if (!numId || numId === '0') return '';
+      const L = numFmt[absOf[numId] + ':' + ilvl] || { fmt: 'bullet' };
+      if (L.fmt === 'bullet' || L.fmt === 'none') return L.fmt === 'none' ? '' : '• ';
+      const key = numId + ':' + ilvl; counters[key] = (counters[key] || (L.start - 1)) + 1;
+      for (const k of Object.keys(counters)) if (k.startsWith(numId + ':') && +k.split(':')[1] > ilvl) delete counters[k];   // a sub-list starts again
+      return L.text.replace(/%(\d)/g, (_, d) => fmtNum(counters[numId + ':' + (+d - 1)] || 1, (numFmt[absOf[numId] + ':' + (+d - 1)] || L).fmt)) + ' ';
+    }
     for (const p of paras) {
       const ppr = kid(p, 'pPr');
       const sid = ppr ? val(kid(ppr, 'pStyle')) : null;
@@ -110,7 +130,7 @@ window.FolioImport = (function () {
       const align = jc === 'center' ? 'center' : jc === 'right' || jc === 'end' ? 'right' : jc === 'both' ? 'justify' : null;
       const pageBreakBefore = (ppr && kid(ppr, 'pageBreakBefore')) || sectionBreak;
       sectionBreak = !!(ppr && kid(ppr, 'sectPr'));
-      let inner = '';
+      let inner = esc(listMark(ppr, sid));
       const runs = [];
       // collect runs (also inside hyperlinks / smart tags)
       // tracked changes from an editor (w:ins / w:del) come in as suggestions

@@ -168,7 +168,8 @@ window.UnwipMobile = (function () {
   document.addEventListener('click', e => {
     if (!phone.matches) return;
     const row = e.target.closest('#binder-tree .tree-row');
-    if (!row || e.target.closest('.tr-chev, .tr-add')) return;
+    if (!row || e.target.closest('.tr-chev, .tr-add, input.rename')) return;
+    if (S.longPress && Date.now() - S.longPress < 1500) return;   // the end of a press-and-hold opens the menu, not the page
     const f = U.findNode(row.dataset.id); if (!f) return;
     if (f.node.type === 'doc') { if (S.view !== 'write') U.setView('write'); setTimeout(showPage, 60); }
   });

@@ -189,7 +189,7 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
   async function open() {
     if (!S.project) return U.toast('Open the book you want to take with you first.');
     await U.flushSave();
-    let hasTyped = S.project.importedFrom === 'Scrivener', hasLook = !!S.project.scrivLayout; U.walkTree(S.project.binder, n => { if (n.tt) hasTyped = true; if (n.sv) hasLook = true; });
+    let hasTyped = false, hasLook = !!S.project.scrivLayout; U.walkTree(S.project.binder, n => { if (n.tt) hasTyped = true; if (n.sv) hasLook = true; });
     const L = S.project.scrivLayout || {};
     const body = document.createElement('div'); body.className = 'nhf';
     const title = S.project.title || 'My book';
@@ -200,7 +200,9 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
       <label class="nhf-opt"><input type="radio" name="nhf" value="docx"><span><b>A folder of Word files</b><small>One per chapter, in folders like your binder, numbered “01 - Chapter One” so they stay in order. For Word, Google Docs, Ulysses and almost anything else. <i class="untested">Should work, but not yet tested by beta testers.</i></small></span></label>
       <label class="nhf-opt"><input type="radio" name="nhf" value="md"><span><b>A folder of Markdown files</b><small>For Obsidian, iA Writer, Bear, Notion and plain-text apps. <i class="untested">Should work, but not yet tested by beta testers.</i></small></span></label>
       <label class="nhf-opt"><input type="radio" name="nhf" value="backup"><span><b>A full Unwip backup</b><small>Everything exactly as it is here, in one file, in case you ever come back.</small></span></label>
-      ${hasTyped ? `<label class="check nhf-tt"><input type="checkbox" id="nhf-tt" checked><span>Type each chapter’s title at the top of its text, as it was in Scrivener<small>Unwip shows chapter names as headings by itself; Scrivener needs them in the text. Where Unwip tidied a typed title, the original line and binder name go back.</small></span></label>` : ''}
+      ${hasTyped
+        ? `<label class="check nhf-tt"><input type="checkbox" id="nhf-tt" checked><span>Put the typed chapter titles back at the top of each chapter, as they were in Scrivener<small>When this book came in, Unwip took the titles typed into the text (“Chapter 1: …”) out, because it shows chapter names as headings itself. This puts each original line, and the chapter’s old binder name, back.</small></span></label>`
+        : `<label class="check nhf-tt"><input type="checkbox" id="nhf-tt"><span>Type each chapter’s name at the top of its text<small>Your chapters don’t have their titles typed into the text. Scrivener adds titles itself when it compiles, so leave this off unless you want them typed in.</small></span></label>`}
       ${hasLook ? `<label class="check nhf-tt"><input type="checkbox" id="nhf-look" checked><span>Put back how it looked in Scrivener<small>Title lines at their old size, the empty lines between paragraphs where you had them${L.lineHeight ? `, and Scrivener’s ${L.lineHeight}× line spacing` : ''}${L.size ? ` at ${L.size}pt` : ''}. Untick to use Unwip’s layout instead.</small></span></label>` : ''}
       <p class="sim-small">Next you’ll see exactly what’s going and what isn’t, before anything is saved.</p>`;
     if (open.last) { const r = body.querySelector(`[name="nhf"][value="${open.last}"]`); if (r) r.checked = true; }
@@ -220,7 +222,7 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
     if (go === 'back') return open();
     if (go !== true) return;
     const tcm = XF.changesChoice(sum);
-    const safe = (title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').trim() || 'My book').slice(0, 80);
+    const safe = (title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '') || 'My book').slice(0, 80);
     U.toast('Packing it up…', '', 3000);
     let res;
     try { res = await buildScriv(safe, null, { restore, tcm, look }); } catch (e) { return U.toast('Couldn’t make the Scrivener project: ' + esc(String(e.message || e)), 'warn', 8000); }

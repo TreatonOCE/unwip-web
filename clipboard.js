@@ -132,6 +132,7 @@
       return s;
     }
     function pushText(text, s) {
+      if (text && text.includes('$Scr_')) text = text.replace(/<!?\$Scr_[A-Za-z]+::\d+>/g, '');   // Scrivener's hidden style marks
       if (!text) return;
       const b = ensureBlock();
       const last = b.runs[b.runs.length - 1];
@@ -154,7 +155,9 @@
       if (SKIP_TAGS.has(t)) return;
       if (el.classList && el.classList.contains('tc-del') && !(window.FolioClip && window.FolioClip.keepChanges)) return;
       const raw = el.getAttribute('style') || '';
-      if (/mso-list\s*:\s*ignore/i.test(raw) || /display\s*:\s*none/i.test(raw)) return; // Word bullet glyphs, hidden text
+      if (/display\s*:\s*none/i.test(raw)) return;   // hidden text
+      // Word's own bullet or number in front of a list line: keep it as "• " or "1. "
+      if (/mso-list\s*:\s*ignore/i.test(raw)) { const g = (el.textContent || '').replace(/[\s\u00a0]+/g, ' ').trim(); if (g) pushText(/^[\dA-Za-z]{1,4}[.)]$/.test(g) ? g + ' ' : '• ', {}); return; }
       if (t === 'BR') { ensureBlock().runs.push({ br: true }); return; }
       // Unwip footnote marker: the note itself lives in data-fn
       if (t === 'SUP' && el.hasAttribute('data-fn')) { ensureBlock().runs.push({ fn: el.getAttribute('data-fn') || '', text: '' }); return; }
@@ -190,6 +193,12 @@
         let tag = blockTagFor(el);
         if (tag === 'p' && battrs.tagOverride) tag = battrs.tagOverride;
         newBlock(tag, attrs);
+        // a list item keeps its bullet or number as text, since Unwip has no list formatting of its own
+        if (t === 'LI') {
+          const par = el.parentElement, ol = par && par.tagName === 'OL';
+          const n = ol ? [...par.children].filter(c => c.tagName === 'LI').indexOf(el) + (+par.getAttribute('start') || 1) : 0;
+          if (!/^\s*([•·▪◦‣\-–*]|\d+[.)])\s/.test(el.textContent || '')) pushText(ol ? `${n}. ` : '• ', {});
+        }
         for (const c of el.childNodes) walk(c, st, attrs, inPre || t === 'PRE');
         current = null;
         return;
