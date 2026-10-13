@@ -174,10 +174,19 @@ window.UnwipMobile = (function () {
     root.style.setProperty('--m-kb', kb + 'px');
   }
   if (vv) { vv.addEventListener('resize', placeBar); vv.addEventListener('scroll', placeBar); }
+  // the iPhone doesn't always tell us the keyboard's final height the first time it opens (its ^ v ✓ bar arrives late),
+  // so keep re-measuring for a couple of seconds after the keyboard comes up
+  let settleUntil = 0;
+  function settleBar() {
+    const go = !settleUntil || Date.now() > settleUntil; settleUntil = Date.now() + 2000;
+    if (!go) return;
+    (function tick() { placeBar(); if (Date.now() < settleUntil && root.classList.contains('m-editing')) requestAnimationFrame(tick); else settleUntil = 0; })();
+  }
+  editor.addEventListener('focus', settleBar); editor.addEventListener('pointerup', settleBar);
   // typing mode only when you tap into the page (or type on a keyboard), not when Unwip moves the cursor itself
   let tappedAt = 0;
   document.addEventListener('pointerdown', e => { tappedAt = editor.contains(e.target) ? Date.now() : 0; }, true);
-  const startEditing = () => { if (!phone.matches || root.classList.contains('m-editing')) return; mark('m-editing', true); placeBar(); fmtState(); refreshHead(); setTimeout(fadeEdges, 50); };
+  const startEditing = () => { if (!phone.matches || root.classList.contains('m-editing')) return; mark('m-editing', true); placeBar(); settleBar(); fmtState(); refreshHead(); setTimeout(fadeEdges, 50); };
   editor.addEventListener('focus', () => { if (Date.now() - tappedAt < 1500) startEditing(); });
   editor.addEventListener('pointerup', () => { if (document.activeElement === editor) startEditing(); });
   editor.addEventListener('keydown', startEditing);
