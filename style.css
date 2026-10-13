@@ -2237,3 +2237,15 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .dbx-mini .dbx-warn, .dbx-mini .dbx-dot { position: absolute; right: 2px; top: 2px; font-size: 11px; }
 .dbx-mini.warn { color: #b45309; }
 .sy-auto { margin: 10px 0 4px; }
+/* Import from Dropbox: a plain list, the whole row is the button */
+.dbi-path { margin-bottom: 10px; font-size: 14px; color: var(--muted); }
+.dbi-h { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 0 6px; }
+.dbi-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.dbi-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.dbi-row:first-child { border-top: 0; }
+.dbi-row:active, .dbi-row:hover { background: var(--accent-soft); }
+.dbi-row > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dbi-go { color: var(--accent); font-size: 13px; font-weight: 600; flex: none; }
+.dbi-ic { flex: none; }
+/* before and after on a phone: two short panes, with room around them to scroll the window */
+@media (max-width: 640px) { .simp-page { height: 30vh; } .simp { padding: 0 6px; } }
