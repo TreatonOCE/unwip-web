@@ -65,7 +65,7 @@ window.UnwipScriv = (function () {
           <div class="sim-r"><select data-t="${i}" ${r.on ? '' : 'disabled'}>${TARGETS.map(([k, l]) => `<option value="${k}" ${k === r.target ? 'selected' : ''}>${k === 'new' ? `A new section “${esc(r.title)}”` : l}</option>`).join('')}</select>${r.mem ? '<small class="sim-mem" title="You chose this last time for a folder with this name">remembered</small>' : ''}</div>`).join('')}
       </div>
       <p class="sim-not"><b>Not imported:</b> ${esc(scan.notImported.join(', '))}.</p>
-      ${titleHits.length && window.UnwipTitles ? window.UnwipTitles.choiceHTML(titleHits, titleTotal, 'sim-tt') : ''}
+      ${titleHits.length && window.UnwipTitles ? window.UnwipTitles.choiceHTML(titleHits, titleTotal, 'sim-tt') : titleTotal ? `<p class="sim-small"><b>Chapter titles:</b> ${titleTotal === 1 ? 'your chapter doesn’t start with its title' : `none of the ${titleTotal} chapters start with their title`} typed into the text, so there’s nothing to tidy. Unwip shows each chapter’s binder name as its heading.</p>` : ''}
       <div class="sim-foot">
         <div class="field"><label>New project name</label><input type="text" id="sim-name" value="${esc(data.name)}"></div>
         <div class="field"><label>Empty lines between paragraphs</label><select id="sim-blank"><option value="keep">Keep them where they are, as in Scrivener</option><option value="tidy">Take them out (Unwip spaces paragraphs itself; two or more in a row become a scene break)</option></select></div>
