@@ -576,7 +576,8 @@ window.UnwipDropbox = (function () {
     await load();
     // back from Dropbox's sign-in page
     const q = new URLSearchParams(location.search);
-    if (q.get('code')) {
+    if (q.get('code') && /^imp_/.test(q.get('state') || '')) { /* back from the import's own sign-in: dbximport.js finishes it */ }
+    else if (q.get('code')) {
       const saved = JSON.parse(sessionStorage.getItem('unwip-dbx') || 'null'); sessionStorage.removeItem('unwip-dbx');
       history.replaceState(null, '', location.pathname);
       if (saved && q.get('state') === saved.state) setTimeout(() => finish(q.get('code'), saved.v, redirectUri()), 800);

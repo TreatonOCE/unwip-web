@@ -415,6 +415,14 @@
     watchProject: async () => true,
     onExternalChange: on('external'),
     // for dropbox.js (web only): the file store, and a way to tell the app something changed
+    // a zipped Scrivener project (from Dropbox's download, dbximport.js), read the same way as a picked folder
+    async __readScrivZip(buf, name) {
+      const files = await unzip(buf);
+      const types = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+      const entries = files.filter(f => !/(^|\/)__MACOSX\//.test(f.name)).map(f => ({ path: f.name, text: async () => new TextDecoder().decode(f.data), dataURL: async () => { let b = ''; for (let i = 0; i < f.data.length; i += 0x8000) b += String.fromCharCode.apply(null, f.data.subarray(i, i + 0x8000)); return `data:${types[(f.name.split('.').pop() || '').toLowerCase()] || 'application/octet-stream'};base64,${btoa(b)}`; }, at: 0 }));
+      entries.zipName = name || '';
+      return readScrivEntries(entries);
+    },
     __fs: FS, __emit: (name, data) => (LISTENERS[name] || []).forEach(cb => { try { cb(data); } catch (e) { console.warn(e); } }), __device: deviceName,
     async backupExport(slug) { const p = await FS.json(`${pdir(slug)}/project.json`, {}); return download(await projectArchive(slug), `${slugify(p.title || slug)} ${new Date().toLocaleDateString('en-CA')}.unwip`, 'application/zip'); },
     async backupImportFile() { const [f] = await pickFiles({ accept: '.unwip,.zip,application/zip' }); if (!f) return null; return restoreArchive(await unzip(await bytesOf(f)), ' (restored)'); },

@@ -15,17 +15,24 @@ window.UnwipScriv = (function () {
   const errText = e => String((e && e.message) || e || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
   let blankChoice = 'keep';
-  async function start() {
+  async function start(opts = {}) {
     // ---- 1. scan
     let data;
-    // a phone or iPad can't pick a .scriv folder, only a zip of it
+    // a phone or iPad can't pick a .scriv folder: the project comes straight from Dropbox (or, failing that, a zip)
     const touch = api.web && (/iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
-    if (touch) {
-      const go = await U.modal({ title: 'Import from Scrivener', body: `<p>On an iPhone or iPad, Unwip reads a <b>zip</b> of your Scrivener project (Apple doesn’t let web apps open the .scriv folder itself).</p>
-        <ol class="sim-steps"><li>Open the <b>Files</b> app and find your project (in Dropbox › Apps › Scrivener, or wherever it is).</li><li>Press and hold the <b>.scriv</b> project and choose <b>Compress</b>. A .zip appears beside it.</li><li>Come back here, tap <b>Choose the zip</b> and pick it.</li></ol>
-        <p class="sim-small">Your Scrivener project isn’t changed. You can delete the .zip afterwards.</p>`, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Choose the zip…', value: true, kind: 'primary' }] });
-      if (!go) return;
+    const DI = window.UnwipDropboxImport;
+    let how = opts.fromDropbox ? 'dropbox' : null;
+    if (touch && !how) {
+      how = await U.modal({ title: 'Import from Scrivener', body: `<p>${DI && DI.ready() ? 'Pick the Scrivener project straight from your Dropbox. Nothing there is changed.' : 'On an iPhone or iPad, Unwip reads a zip of your Scrivener project (Apple doesn’t let web apps open the .scriv folder itself).'}</p>
+        <p class="sim-small">A project kept only on this ${/iPad/.test(navigator.userAgent) ? 'iPad' : 'iPhone'} in Scrivener? Use Scrivener’s own Sync with Dropbox first, so it’s in Dropbox, then pick it here.</p>
+        ${DI && DI.ready() ? '' : `<ol class="sim-steps"><li>In the <b>Files</b> app, press and hold the <b>.scriv</b> project and choose <b>Compress</b>.</li><li>Come back here, tap <b>Choose the zip</b> and pick it.</li></ol>`}`,
+        buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, ...(DI && DI.ready() ? [{ label: 'Use a zip instead…', value: 'zip', kind: 'ghost' }, { label: 'Choose from Dropbox…', value: 'dropbox', kind: 'primary' }] : [{ label: 'Choose the zip…', value: 'zip', kind: 'primary' }])] });
+      if (!how) return;
     }
+    if (how === 'dropbox') {
+      try { data = await DI.pickProject(); } catch (e) { return U.toast(esc(errText(e) || 'Could not open that project.'), 'warn', 9000); }
+      if (!data) return;
+    } else
     try { data = await api.importScrivener(); } catch (e) { return U.toast(esc(errText(e) || 'Could not open that project.'), 'warn', 7000); }
     if (!data) return;
     if (data.mobilePending) U.toast('This project has changes from Scrivener on an iPhone or iPad that Scrivener on your computer hasn’t taken in yet, so they won’t come across. To include them, open the project in Scrivener on your computer first, close it, then import again.', 'warn', 14000);
