@@ -14,6 +14,7 @@ window.ICONS = (function () {
     check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
     steps: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2"/><circle cx="5" cy="18" r="1"/>'),
     back: svg('<path d="M15 18l-6-6 6-6"/>'),
+    heart: svg('<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'),
     folder: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
     folderOpen: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v1"/><path d="M3 9v8a2 2 0 0 0 2 2h12.5a2 2 0 0 0 1.9-1.4L21.5 11H6.3a2 2 0 0 0-1.9 1.4L3 17"/>'),
     doc: svg('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>'),

@@ -77,9 +77,14 @@ window.FolioAnalysis = (function () {
   }
 
   // names: [{text, kind}] from the sheets. Finds capitalised words that are one letter off a name.
-  function nameCheck(texts, names) {
+  function nameCheck(texts, names, ignore = {}) {
+    // words used in lowercase in the book are ordinary words ("cast", "last", "cost"), not names or misspelled names
+    const lower = new Map();
+    for (const t of texts) { const re = /(?<![\p{L}\p{N}])\p{Ll}[\p{L}'’]{2,}/gu; let m; while ((m = re.exec(t.text))) { const w = m[0].replace(/['’]s$/, ''); lower.set(w, (lower.get(w) || 0) + 1); } }
+    const ordinary = w => (lower.get(w.toLowerCase()) || 0) >= 2;
     const nameWords = new Map();   // lower -> proper spelling
-    for (const n of names) for (const w of n.text.split(/[\s\-]+/)) if (w.length >= 4 && /^\p{Lu}/u.test(w)) nameWords.set(w.toLowerCase(), w);
+    for (const n of names) for (const w of n.text.split(/[\s\-]+/)) if (w.length >= 4 && /^\p{Lu}/u.test(w) && !ordinary(w) && !(ignore.names || []).includes(w)) nameWords.set(w.toLowerCase(), w);
+    const pairs = new Set(ignore.pairs || []);
     const used = new Map(), suspects = new Map();
     for (const t of texts) {
       let m; const re = new RegExp(WORD.source, 'gu');
@@ -87,11 +92,12 @@ window.FolioAnalysis = (function () {
         const w = m[0].replace(/['’]s$/, '');
         const lw = w.toLowerCase();
         if (nameWords.has(lw)) { used.set(lw, (used.get(lw) || 0) + 1); continue; }
-        if (!/^\p{Lu}/u.test(w) || w.length < 4 || COMMON.has(lw)) continue;
+        if (!/^\p{Lu}/u.test(w) || w.length < 4 || COMMON.has(lw) || ordinary(w)) continue;
         for (const [nl, proper] of nameWords) {
           const max = nl.length >= 8 ? 2 : 1;
           if (editDistance(lw, nl, max) <= max) {
             const key = w + '|' + proper;
+            if (pairs.has(key)) break;
             const s = suspects.get(key) || { found: w, suggestion: proper, count: 0, docs: new Set() };
             s.count++; s.docs.add(t.title); suspects.set(key, s);
             break;

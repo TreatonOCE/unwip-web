@@ -33,7 +33,7 @@ window.UnwipExportFolder = (function () {
   }
   const blocksToText = blocks => blocks.map(b => (b.runs || []).map(r => (r.br ? '\n' : r.text || '')).join('').trim()).filter(Boolean).join('\n\n') + '\n';
 
-  async function open() {
+  async function open(preset = {}) {
     if (!S.project) return U.toast('Open a book first.');
     await U.flushSave();
     const body = document.createElement('div'); body.className = 'efx';
@@ -47,6 +47,7 @@ window.UnwipExportFolder = (function () {
       <label class="check"><input type="checkbox" id="efx-title" checked><span>Put each chapter’s name at the top of its file</span></label>
       <label class="check"><input type="checkbox" id="efx-syn"><span>Add synopses (as a line under the name)</span></label>
       <p class="sim-small">${api.web ? 'In a browser it downloads as one .zip file holding the folder.' : 'You’ll choose where the folder goes.'} Maps are left out (save them as pictures from the map itself).</p>`;
+    if (preset.fmt) $('#efx-fmt', body).value = preset.fmt; if (preset.what) $('#efx-what', body).value = preset.what;
     const ok = await U.modal({ title: 'Export as a folder of files', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Export', value: true, kind: 'primary' }] });
     if (!ok) return;
     const fmt = $('#efx-fmt', body).value, what = $('#efx-what', body).value, withTitle = $('#efx-title', body).checked, withSyn = $('#efx-syn', body).checked;

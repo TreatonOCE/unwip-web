@@ -2155,3 +2155,10 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .tt-box p { margin: 0 0 6px; } .tt-box .check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; font-size: 14px; } .tt-box small { display: block; color: var(--muted); font-size: 12.5px; }
 .nv-done { color: #2f7d4a; font-weight: 600; margin: 0 0 10px; } .nv-fail { color: #b3412e; margin-top: 10px; } .nv-try { font-size: 12.5px; margin-left: 4px; }
 .nv-voices li { break-inside: avoid; }
+.nm-head { display: flex; justify-content: space-between; align-items: center; } .nm-ignored { color: var(--muted); font-size: 13px; margin: 8px 4px; }
+
+/* no hard feelings */
+.nhf-lead { font-size: 15px; margin: 0 0 12px; }
+.nhf-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; cursor: pointer; }
+.nhf-opt:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.nhf-opt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }

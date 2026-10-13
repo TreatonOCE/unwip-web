@@ -2299,6 +2299,7 @@
       ['book', 'EPUB e-book', 'For Kindle (KDP), Apple Books and Kobo', '', () => openPreview('ebook')],
       ['doc', 'Word document (.docx)', 'For an editor, agent or beta reader', '', () => openPreview('docs')],
       ['folder', 'A folder of chapter files…', 'One Word or Markdown file per chapter, for Scrivener or any app', '', () => window.UnwipExportFolder && window.UnwipExportFolder.open()],
+      ['heart', 'No hard feelings…', 'Take your book to Scrivener or anywhere else', '', () => window.UnwipNoHardFeelings && window.UnwipNoHardFeelings.open()],
       null,
       ['person', 'Send to a beta reader…', 'A Word file they mark up with Track Changes and comments', '', () => window.UnwipReader && window.UnwipReader.send()],
       ['importic', 'Bring in a reader’s feedback…', 'Their changes and comments land in the right chapters', '', () => window.UnwipReader && window.UnwipReader.receive()]
@@ -3166,11 +3167,17 @@
     function renderNames() {
       const ents = window.FolioNames.entries;
       if (!ents.length) { $('#nm-results', body).innerHTML = '<p class="srch-empty">Add characters, places or items (with a name and aliases) and Unwip will check their spelling across the book.</p>'; return; }
-      const { names, suspects } = Ana.nameCheck(texts, ents);
+      // suggestions you've said no to are kept with the book
+      const ig = S.project.nameIgnore = S.project.nameIgnore || { pairs: [] };
+      const { names, suspects } = Ana.nameCheck(texts, ents, ig);
       $('#nm-results', body).innerHTML = (suspects.length
-        ? `<div class="sr-total warn">Possible misspellings of your names:</div>` + suspects.map(s => `<div class="nm-row"><span><b>${esc(s.found)}</b> ×${s.count} → did you mean <b>${esc(s.suggestion)}</b>?<small>${esc(s.docs.slice(0, 3).join(', '))}${s.docs.length > 3 ? '…' : ''}</small></span><span class="nm-acts"><button class="rc-btn" data-find="${esc(s.found)}">Show</button><button class="rc-btn primary" data-fix="${esc(s.found)}" data-to="${esc(s.suggestion)}">Replace all</button></span></div>`).join('')
+        ? `<div class="sr-total warn nm-head"><span>Possible misspellings of your names:</span><button class="rc-btn" id="nm-ignore-all" title="Hide every suggestion in this list">Ignore all</button></div>` + suspects.map(s => `<div class="nm-row"><span><b>${esc(s.found)}</b> ×${s.count} → did you mean <b>${esc(s.suggestion)}</b>?<small>${esc(s.docs.slice(0, 3).join(', '))}${s.docs.length > 3 ? '…' : ''}</small></span><span class="nm-acts"><button class="rc-btn" data-ign="${esc(s.found + '|' + s.suggestion)}" title="Not a misspelling: don’t suggest this again">Ignore</button><button class="rc-btn" data-find="${esc(s.found)}">Show</button><button class="rc-btn primary" data-fix="${esc(s.found)}" data-to="${esc(s.suggestion)}">Replace all</button></span></div>`).join('')
+          + (ig.pairs.length ? `<p class="nm-ignored">${ig.pairs.length} suggestion${ig.pairs.length === 1 ? '' : 's'} ignored. <button class="link-btn" id="nm-unignore">Show them again</button></p>` : '')
         : `<div class="sr-total ok">✓ No misspelled names found.</div>`) +
         `<div class="sr-total" style="margin-top:14px">How often each name appears</div><div class="fq-list">${names.map(n => `<button class="fq-row" data-w="${esc(n.name)}"><span class="fq-word">${esc(n.name)}</span><span class="fq-n">${fmt(n.count)}</span></button>`).join('')}</div>`;
+      $$('#nm-results [data-ign]', body).forEach(b => b.onclick = () => { ig.pairs.push(b.dataset.ign); scheduleMeta(); renderNames(); });
+      { const all = $('#nm-ignore-all', body); if (all) all.onclick = () => { const before = ig.pairs.slice(); suspects.forEach(s => ig.pairs.push(s.found + '|' + s.suggestion)); scheduleMeta(); renderNames(); toastAction(`Ignored ${suspects.length} suggestion${suspects.length === 1 ? '' : 's'}.`, 'Undo', () => { ig.pairs = before; S.project.nameIgnore.pairs = before; scheduleMeta(); renderNames(); }); }; }
+      { const un = $('#nm-unignore', body); if (un) un.onclick = () => { ig.pairs = []; S.project.nameIgnore.pairs = []; scheduleMeta(); renderNames(); }; }
       $$('#nm-results [data-find]', body).forEach(b => b.onclick = () => { $('#sr-q', body).value = b.dataset.find; $('#sr-case', body).checked = true; setTab('search'); });
       $$('#nm-results [data-fix]', body).forEach(b => b.onclick = async () => { $('#sr-q', body).value = b.dataset.fix; $('#sr-r', body).value = b.dataset.to; $('#sr-case', body).checked = true; $('#sr-word', body).checked = true; setTab('search'); });
       $$('#nm-results .fq-row', body).forEach(b => b.onclick = () => { $('#sr-q', body).value = b.dataset.w; setTab('search'); });
