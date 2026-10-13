@@ -24,22 +24,23 @@ window.UnwipVoice = (function () {
       body.innerHTML = `
         <div class="nv-note"><b>About this voice</b><p>${esc(DISCLOSURE)}</p><p class="nv-small">${esc(SOURCES)}</p></div>
         ${installed ? `<p>✓ The natural voice is on this ${api.web ? 'browser' : 'computer'}. Pick one of its voices in Read aloud’s voice list (🔊, or F8):</p>
-            <ul class="nv-voices">${VOICES.map(v => `<li><b>${esc(v[1])}</b> <span>${esc(v[2])}</span></li>`).join('')}</ul>
+            <ul class="nv-voices">${VOICES.map(v => `<li><b>${esc(v[1])}</b> <span>${esc(v[2])}</span> <button type="button" class="link-btn nv-try" data-v="${v[0]}" title="Hear a short sample">▶ Hear</button></li>`).join('')}</ul>
             <p class="nv-small">${phone() ? 'On phones and tablets it can take a few seconds to prepare each sentence, and Unwip prepares ahead while it reads. Your device’s own voice starts straight away.' : 'Unwip prepares the next sentences while it reads, so after the first one it should keep up.'}</p>`
         : `<p>It’s a one-off download of about <b>${MB()} MB</b>. After that it works offline.${phone() ? ' On a phone, use Wi-Fi. It can also take a few seconds to prepare each sentence there, so your device’s own voice may suit better.' : ''}</p>
            <div class="nv-prog hidden"><div class="nv-bar"><i></i></div><span class="nv-pt"></span></div>`}`;
     };
-    draw();
+    draw(); hookSamples(body);
     const buttons = installed
       ? [{ label: 'Remove it', value: 'remove', kind: 'ghost danger-text' }, { label: 'Close', value: false, kind: 'primary' }]
       : [{ label: 'Not now', value: false, kind: 'ghost' }, { label: `Download (${MB()} MB)`, value: 'get', kind: 'primary' }];
-    let backEl = null;
+    let backEl = null, modalDone = null;
     const v = await new Promise(resolve => {
-      U.modal({ title: 'Natural voice for Read aloud', body, wide: true, buttons, onOpen: b => {
+      modalDone = U.modal({ title: 'Natural voice for Read aloud', body, wide: true, buttons, onOpen: b => {
         backEl = b;
         const dl = [...b.querySelectorAll('.m-foot button')].find(x => /^Download/.test(x.textContent));
         if (dl) dl.onclick = e => { e.stopPropagation(); resolve('get'); };   // keep the window open to show progress
-      } }).then(resolve);
+      } });
+      modalDone.then(resolve);
     });
     if (v === 'remove') {
       if (!(await U.confirmBox('Remove the natural voice?', `Deletes the downloaded voice (about ${MB()} MB) from this ${api.web ? 'browser' : 'computer'}. Read aloud goes back to your device’s own voice. You can download it again any time.`, 'Remove'))) return false;
@@ -47,7 +48,8 @@ window.UnwipVoice = (function () {
     }
     if (v !== 'get') return false;
     // downloading, with progress in the same window
-    const closeWin = () => { const b = backEl && backEl.querySelector('.m-foot button'); if (b) { b.disabled = false; b.click(); } };
+    // when it's done (or fails) the window stays open with one Close button, so it can be read at leisure
+    const onlyClose = () => { if (!foot) return; foot.querySelectorAll('button').forEach((b, i) => { if (i === 0) { b.disabled = false; b.textContent = 'Close'; b.className = 'btn primary'; } else b.remove(); }); };
     const foot = backEl && backEl.querySelector('.m-foot'), prog = body.querySelector('.nv-prog'), bar = body.querySelector('.nv-bar i'), pt = body.querySelector('.nv-pt');
     if (foot) foot.querySelectorAll('button').forEach(b => { b.disabled = true; });
     if (prog) prog.classList.remove('hidden');
@@ -57,16 +59,35 @@ window.UnwipVoice = (function () {
       installed = true;
       if (pt) pt.textContent = 'Getting the voice ready…';
       await api.voiceWarm().catch(() => {});
-      closeWin();
-      U.toast('The natural voice is ready. Pick it in Read aloud’s voice list.');
+      draw(); hookSamples(body);
+      const note = document.createElement('p'); note.className = 'nv-done'; note.textContent = 'Download finished. Try the voices below with ▶ Hear, then close this window.'; body.prepend(note);
+      onlyClose();
+      await modalDone;
       return true;
     } catch (e) {
-      closeWin();
-      U.toast(esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) + ' Nothing was changed.', 'warn', 9000);
+      if (prog) prog.classList.add('hidden');
+      const note = document.createElement('p'); note.className = 'nv-fail'; note.textContent = String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') + ' Nothing was changed, so you can try again later.'; body.appendChild(note);
+      onlyClose();
+      await modalDone;
       return false;
     }
   }
 
   const speak = (text, voice, speed) => api.voiceSpeak(text, voice, speed);
+  // a short sample of a voice, played straight away
+  let sampleCtx = null, sampleSrc = null;
+  function hookSamples(box) {
+    box.querySelectorAll('.nv-try').forEach(b => b.onclick = async () => {
+      const was = b.textContent; b.textContent = 'Preparing…'; b.disabled = true;
+      try {
+        const a = await speak('Hello. This is how I’ll sound reading your chapters aloud.', b.dataset.v, 1);
+        sampleCtx = sampleCtx || new (window.AudioContext || window.webkitAudioContext)(); if (sampleCtx.state === 'suspended') await sampleCtx.resume().catch(() => {});
+        if (sampleSrc) { try { sampleSrc.stop(); } catch {} }
+        const buf = sampleCtx.createBuffer(1, a.audio.length, a.rate); buf.copyToChannel(a.audio instanceof Float32Array ? a.audio : new Float32Array(a.audio), 0);
+        sampleSrc = sampleCtx.createBufferSource(); sampleSrc.buffer = buf; sampleSrc.connect(sampleCtx.destination); sampleSrc.start();
+      } catch (e) { U.toast('Couldn’t play the sample: ' + esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn'); }
+      b.textContent = was; b.disabled = false;
+    });
+  }
   return { VOICES, DISCLOSURE, SOURCES, setup, status, speak, get installed() { return installed; } };
 })();

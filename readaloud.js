@@ -58,7 +58,7 @@ window.UnwipRead = (function () {
   function halt() { try { synth() && synth().cancel(); } catch {} if (source) { try { source.onended = null; source.stop(); } catch {} source = null; } }
   async function speakNatural(my) {
     const s = sents[idx]; highlight(s); render();
-    const p = soundFor(idx); for (let j = 1; j <= 2 && idx + j < sents.length; j++) soundFor(idx + j);
+    const p = soundFor(idx); for (let j = 1; j <= 3 && idx + j < sents.length; j++) soundFor(idx + j);
     let a; const wait = setTimeout(() => { if (my === token) waitNote(true); }, 250);
     try { a = await p; } catch (e) { clearTimeout(wait); if (my !== token) return; waitNote(false); U.toast('The natural voice stopped: ' + esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 8000); stop(); return; }
     clearTimeout(wait); waitNote(false);
@@ -90,6 +90,20 @@ window.UnwipRead = (function () {
     const r = s.range.getBoundingClientRect(), w = U.editorWrap.getBoundingClientRect();
     if (r.top < w.top + 60 || r.bottom > w.bottom - 120) U.editorWrap.scrollTo({ top: U.editorWrap.scrollTop + r.top - w.top - w.height * 0.35, behavior: 'smooth' });
   }
+  // open the player without reading yet, so a voice and speed can be picked first; ▶ starts
+  function open(from) {
+    if (!S.docId) { U.toast('Open a chapter first.'); return; }
+    sents = collect();
+    if (!sents.length) { U.toast('Nothing to read in this chapter yet.'); return; }
+    idx = from != null ? from : startIndex();
+    made.clear(); playing = false; halt(); showBar(); highlight(sents[idx]); render(); prepare();
+  }
+  // the natural voice gets the first sentences ready while you choose
+  function prepare() {
+    if (!natural() || !sents.length) return;
+    try { window.folio.voiceWarm && window.folio.voiceWarm().catch(() => {}); } catch {}
+    for (let j = 0; j < 2 && idx + j < sents.length; j++) soundFor(idx + j);
+  }
   function start(from) {
     if (!S.docId) { U.toast('Open a chapter first.'); return; }
     if (!natural() && (!synth() || !window.SpeechSynthesisUtterance)) { U.toast('This device doesn’t have a reading voice.', 'warn'); return; }
@@ -108,7 +122,7 @@ window.UnwipRead = (function () {
     const lb = document.getElementById('btn-listen'); if (lb) lb.classList.remove('on');
   }
   const jump = d => { idx = Math.max(0, Math.min(sents.length - 1, idx + d)); if (playing) { halt(); speak(); } else { highlight(sents[idx]); render(); } };
-  const toggle = () => bar ? (playing ? pause() : resume()) : start();
+  const toggle = () => bar ? (playing ? pause() : resume()) : open();
 
   // ---------------------------------------------------------------- the little player
   const ICON = {
@@ -123,19 +137,19 @@ window.UnwipRead = (function () {
     bar = document.createElement('div'); bar.className = 'ra-bar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'Read aloud');
     bar.innerHTML = `<button class="ra-b" data-a="prev" title="Previous sentence">${ICON.prev}</button><button class="ra-b ra-play" data-a="play"></button><button class="ra-b" data-a="next" title="Next sentence">${ICON.next}</button>
       <span class="ra-pos"></span><span class="ra-wait" hidden>Preparing the voice…</span>
-      <select class="ra-rate" title="Speed">${[0.8, 0.9, 1, 1.1, 1.25, 1.5].map(r => `<option value="${r}" ${r === rate ? 'selected' : ''}>${r}×</option>`).join('')}</select>
+      <select class="ra-rate" title="Speed">${[0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2].map(r => `<option value="${r}" ${r === rate ? 'selected' : ''}>${r}×</option>`).join('')}</select>
       <select class="ra-voice" title="Voice"></select>
       <button class="ra-b" data-a="stop" title="Stop reading (Esc)">${ICON.x}</button>`;
     document.body.appendChild(bar);
     bar.addEventListener('mousedown', e => { if (!e.target.closest('select')) e.preventDefault(); });
     bar.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b) return; ({ prev: () => jump(-1), next: () => jump(1), play: () => (playing ? pause() : resume()), stop })[b.dataset.a](); });
-    $('.ra-rate', bar).onchange = e => { rate = +e.target.value; SET('rate', rate); if (playing) { halt(); speak(); } };
+    $('.ra-rate', bar).onchange = e => { rate = +e.target.value; SET('rate', rate); if (playing) { halt(); speak(); } else prepare(); };
     $('.ra-voice', bar).onchange = async e => {
       if (e.target.value === 'k:get') { // set up the natural voice first
         const was = playing; pause(); const ok = NV() && await NV().setup();
         if (ok) { voiceName = 'k:bf_emma'; SET('voice', voiceName); } fillVoices(); if (ok && was) resume(); return;
       }
-      voiceName = e.target.value; SET('voice', voiceName); if (playing) { halt(); speak(); }
+      voiceName = e.target.value; SET('voice', voiceName); if (playing) { halt(); speak(); } else prepare();
     };
     fillVoices(); render();
   }
@@ -167,5 +181,5 @@ window.UnwipRead = (function () {
     if (e.key === 'F8' && S.docId) { e.preventDefault(); toggle(); }
     else if (e.key === 'Escape' && bar && !document.querySelector('.modal-back, .cmdk-back')) stop();
   });
-  return { start, stop, pause, resume, toggle, get playing() { return playing; }, get index() { return idx; }, get count() { return sents.length; }, sentences: () => sents.map(s => s.text) };
+  return { open, start, stop, pause, resume, toggle, get playing() { return playing; }, get index() { return idx; }, get count() { return sents.length; }, sentences: () => sents.map(s => s.text) };
 })();

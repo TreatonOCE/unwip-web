@@ -2149,3 +2149,9 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 /* labels from Scrivener */
 .lbl-chip { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font: 600 11px/18px var(--ui); color: #222; background: color-mix(in srgb, var(--lc) 45%, white); vertical-align: middle; white-space: nowrap; }
 @media (max-width: 640px) { .sim-grid { grid-template-columns: minmax(0,1fr) 20px minmax(0, 150px); } .simp-cols { grid-template-columns: 1fr; } }
+
+/* chapter titles typed into the text */
+.tt-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 10px 0; background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.tt-box p { margin: 0 0 6px; } .tt-box .check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; font-size: 14px; } .tt-box small { display: block; color: var(--muted); font-size: 12.5px; }
+.nv-done { color: #2f7d4a; font-weight: 600; margin: 0 0 10px; } .nv-fail { color: #b3412e; margin-top: 10px; } .nv-try { font-size: 12.5px; margin-left: 4px; }
+.nv-voices li { break-inside: avoid; }

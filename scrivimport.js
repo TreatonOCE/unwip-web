@@ -45,7 +45,13 @@ window.UnwipScriv = (function () {
     if (g.other) parts.push(`${g.other} other file${g.other === 1 ? '' : 's'} (not imported)`);
     return parts.join(', ') || 'empty';
   }
+  // chapters that start with their title typed in (checked on the Draft's chapters)
+  function titleScan(roots, docs) {
+    const items = []; U.walkTree(roots.manuscript || [], n => { if (n.type === 'doc' && docs[n.id]) items.push({ node: n, html: docs[n.id] }); });
+    return { hits: window.UnwipTitles ? window.UnwipTitles.scan(items) : [], total: items.length };
+  }
   async function mapScreen(data, scan, conv, rows) {
+    const { hits: titleHits, total: titleTotal } = titleScan(conv.roots, conv.docs);
     const body = document.createElement('div'); body.className = 'sim';
     body.innerHTML = `
       <p class="hint">Step 2 of 3. Here’s what’s in <b>${esc(data.name)}</b> and where each part will go. Change anything with the lists on the right, or untick what you don’t want. Your Scrivener project isn’t changed, and everything goes into a <b>new</b> Unwip project.</p>
@@ -57,11 +63,13 @@ window.UnwipScriv = (function () {
           <div class="sim-r"><select data-t="${i}" ${r.on ? '' : 'disabled'}>${TARGETS.map(([k, l]) => `<option value="${k}" ${k === r.target ? 'selected' : ''}>${k === 'new' ? `A new section “${esc(r.title)}”` : l}</option>`).join('')}</select>${r.mem ? '<small class="sim-mem" title="You chose this last time for a folder with this name">remembered</small>' : ''}</div>`).join('')}
       </div>
       <p class="sim-not"><b>Not imported:</b> ${esc(scan.notImported.join(', '))}.</p>
+      ${titleHits.length && window.UnwipTitles ? window.UnwipTitles.choiceHTML(titleHits, titleTotal, 'sim-tt') : ''}
       <div class="sim-foot">
         <div class="field"><label>New project name</label><input type="text" id="sim-name" value="${esc(data.name)}"></div>
         <label class="check"><input type="checkbox" id="sim-mem" checked><span>Remember these choices for folders with the same names</span></label>
         <p class="sim-small">Comes across: text with its formatting, folders and order, synopses, document notes, ${scan.labels.length ? 'labels, ' : ''}${scan.statuses.length ? 'status, ' : ''}icons and pictures${conv.docFont ? `, and your main font (${esc(conv.docFont)}${conv.docSize ? ' ' + conv.docSize + 'pt' : ''})` : ''}.</p>
       </div>`;
+    if (rows.titles) { const r = body.querySelector(`[name="sim-tt"][value="${rows.titles}"]`); if (r) r.checked = true; }
     body.querySelectorAll('[data-on]').forEach(c => c.onchange = () => { const r = rows[+c.dataset.on]; r.on = c.checked; c.closest('.sim-l').classList.toggle('off', !r.on); body.querySelector(`[data-t="${c.dataset.on}"]`).disabled = !r.on; });
     body.querySelectorAll('[data-t]').forEach(s => s.onchange = () => { rows[+s.dataset.t].target = s.value; });
     const hasDraft = Object.keys(conv.docs).length > 0;
@@ -71,8 +79,9 @@ window.UnwipScriv = (function () {
       { label: 'Import into a new project', value: 'go', kind: 'primary' }] });
     if (!v) return null;
     const name = $('#sim-name', body).value.trim() || data.name, mem = $('#sim-mem', body).checked;
+    const tt = body.querySelector('[name="sim-tt"]:checked'); rows.titles = tt ? tt.value : 'leave';
     if (v === 'preview') return { preview: true };
-    return { name, mem };
+    return { name, mem, titles: rows.titles };
   }
 
   // the same chapter as Scrivener had it, and as it will look in Unwip
@@ -111,6 +120,12 @@ window.UnwipScriv = (function () {
     }
     U.toast('Importing…', '', 2500);
     let res; try { res = FI.scrivener(data, U.uid, { map }); } catch (e) { return U.toast(esc(errText(e)), 'warn', 7000); }
+    // typed chapter titles, as chosen
+    let tidied = 0;
+    if (v.titles && v.titles !== 'leave' && window.UnwipTitles) {
+      const { hits } = titleScan(res.roots, res.docs);
+      tidied = window.UnwipTitles.apply(hits, v.titles); for (const h of hits) res.docs[h.node.id] = h.newHTML;
+    }
     const tpl = U.newProjectTemplate();
     for (const r of tpl.binder) { r.children = res.roots[r.kind] || []; r.open = r.kind === 'manuscript'; }
     for (const ns of res.newSections || []) {
@@ -141,6 +156,7 @@ window.UnwipScriv = (function () {
         <p><b>${r.documents}</b> documents and <b>${r.folders}</b> folders from “${esc(data.name)}” are in the new project “${esc(v.name)}”. Your Scrivener project is untouched.</p>
         <ul>
           ${(r.placed || []).map(p => `<li>${esc(p.title)} → ${p.target === 'new' ? `a new section, “${esc(p.title)}”` : esc(where[p.target] || p.target)}</li>`).join('')}
+          ${tidied ? `<li>${tidied} chapter title${tidied === 1 ? ' was' : 's were'} typed into the text; ${v.titles === 'typed' ? 'they’re now the chapter names' : 'the binder names were kept'} and the typed line${tidied === 1 ? ' was' : 's were'} taken out, so nothing shows twice.</li>` : ''}
           ${r.withNotes ? `<li>Notes from ${r.withNotes} documents are in Notes › Document notes from Scrivener.</li>` : ''}
           ${res.docFont ? `<li>Your main font, ${esc(res.docFont)}${res.docSize ? ` ${res.docSize}pt` : ''}, is this project’s manuscript style. To change it everywhere, use Manuscript style › Font for the whole book.</li>` : ''}
           ${r.images ? `<li>${r.images} picture${r.images > 1 ? 's' : ''} came across.</li>` : ''}

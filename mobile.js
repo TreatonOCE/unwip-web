@@ -63,7 +63,7 @@ window.UnwipMobile = (function () {
     U.showMenu(Math.max(8, r.right - 250), r.top - 8, [
       { label: 'Copy for Docs', action: () => click('#btn-copy-docs') },
       { label: 'Snapshots (saved versions)', action: () => window.UnwipSide && window.UnwipSide.open('snapshots') },
-      { label: 'Read aloud', action: () => window.UnwipRead && window.UnwipRead.start() },
+      { label: 'Read aloud', action: () => window.UnwipRead && window.UnwipRead.open() },
       { label: 'Dialogue view', action: () => window.UnwipDialogue && window.UnwipDialogue.toggle('dialogue') },
       { label: 'Find in this chapter', action: () => click('#m-find') },
       { label: 'Writer mode', action: () => click('#btn-writer') },

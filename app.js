@@ -476,6 +476,7 @@
       if (n.type === 'folder') {
         items.push({ label: 'New document inside', action: () => addNode('doc', n.id, true) });
         items.push({ label: 'New folder inside', action: () => addNode('folder', n.id, true) });
+        if (window.UnwipTitles && root.kind === 'manuscript') items.push({ label: 'Tidy chapter titles typed into the text…', action: () => window.UnwipTitles.fixExisting(n.id) });
         if (window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn lists in here into sheets…', action: () => { const ids = []; walkTree(n.children || [], c => { if (c.type === 'doc' && !c.map) ids.push(c.id); }); window.UnwipSheets.convert(ids); } });
       }
       if (!n.root) {
@@ -3237,8 +3238,8 @@
   $('#btn-search').innerHTML = I.search;
   $('#btn-search').onclick = () => openSearch('search');
   $('#rp-analysis').onclick = () => openSearch('freq');
-  $('#rp-read').onclick = () => window.UnwipRead && window.UnwipRead.start();
-  $('#btn-listen').onclick = () => { const R = window.UnwipRead; if (!R) return; if (document.querySelector('.ra-bar')) R.stop(); else R.start(); };
+  $('#rp-read').onclick = () => window.UnwipRead && window.UnwipRead.open();
+  $('#btn-listen').onclick = () => { const R = window.UnwipRead; if (!R) return; if (document.querySelector('.ra-bar')) R.stop(); else R.open(); };
   $('#btn-listen').addEventListener('mousedown', e => e.preventDefault());
 
   // ================================================================== SNAPSHOTS
