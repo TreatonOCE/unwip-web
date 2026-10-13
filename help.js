@@ -56,7 +56,7 @@ window.UnwipHelp = (function () {
     ['Getting words down', 'Sprints', 'A timed burst of writing with a word target. Counts words you type, not paste.', 'Top bar › Sprint'],
     ['Getting words down', 'Goals and streaks', 'A daily word goal, a project target and deadline, and a streak on the main screen.', 'Settings, and the main screen'],
     ['Getting words down', 'Spark (blank page, slow days)', 'Five small tools for hard days: Just 50 words, Why am I stuck?, Messy draft (no backspace), Make it smaller, and Your patterns.', 'Top bar › Spark'],
-    ['Getting words down', 'Play', 'A practice space that doesn’t touch your books: daily prompts, exercises, story dice, warm-ups, style mimic and a journal.', 'Main screen › Play tab'],
+    ['Getting words down', 'Play', 'A practice space that doesn’t touch your books: daily story starters, exercises, story dice, warm-ups, style mimic and a journal.', 'Main screen › Play tab'],
     ['Getting words down', 'Themes and typing feel', 'Colour themes, page colour, typewriter scrolling, focus dimming, caret style, letter animations and typing sounds.', 'Settings › Themes / Typewriter'],
 
     ['Revising', 'Revise', 'Highlights things to look at: hard sentences, adverbs, passive voice, filler, repeated words, grammar, commonly confused words (its/it’s, their/there…) and UK/US spelling mixes. Hover a highlight for a one-click fix. Focused shows the five big things (very hard and hard sentences, adverbs, passive voice, simpler wording); Detailed shows every check, including grammar. It never changes anything by itself, and there’s no AI.', 'Top bar › Revise, or F7'],

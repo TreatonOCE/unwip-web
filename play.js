@@ -1,5 +1,5 @@
 // Unwip - Play: a practice space. Nothing here counts towards your books.
-// Daily prompt, constraint exercises (checked by rules, no AI), timed warm-ups, story dice,
+// Daily story starter, constraint exercises (checked by rules, no AI), timed warm-ups, story dice,
 // style mimic (compare your rhythm with a paragraph you admire) and practice stats.
 window.UnwipPlay = (function () {
   'use strict';
@@ -166,7 +166,7 @@ window.UnwipPlay = (function () {
     problem: ['someone is lying', 'the bridge is out', 'they have one hour', 'nobody remembers their name', 'the wrong person gets the message', 'a promise has to be broken', 'they’re being followed', 'the money is fake', 'an old friend comes back', 'a storm traps everyone inside', 'the plan worked too well', 'they must choose who to save', 'a secret is overheard', 'the door won’t open again', 'someone is missing', 'the cure is the poison', 'a debt comes due', 'they’re mistaken for someone else', 'the map is wrong', 'a rival needs their help', 'the ghost wants something', 'the sun doesn’t rise', 'they lose their voice', 'the king is dead', 'a lie has to come true', 'the animals are fleeing', 'a stranger knows too much', 'it must be back before dawn', 'the dragon is the victim', 'everyone is pretending']
   };
   const DIE_LABEL = { who: 'Who', where: 'Where', what: 'Object', problem: 'Problem' };
-  const KIND = { prompt: ['📜', 'Daily prompt'], exercise: ['🎯', 'Exercise'], warmup: ['⏱️', 'Warm-up'], dice: ['🎲', 'Story dice'], mimic: ['🪞', 'Style mimic'], free: ['✍️', 'Free write'] };
+  const KIND = { prompt: ['📜', 'Daily story starter'], exercise: ['🎯', 'Exercise'], warmup: ['⏱️', 'Warm-up'], dice: ['🎲', 'Story dice'], mimic: ['🪞', 'Style mimic'], free: ['✍️', 'Free write'] };
 
   // ================================================================== DATA
   let index = null;
@@ -209,7 +209,7 @@ window.UnwipPlay = (function () {
       <div class="pl-head"><div><h1>Play</h1><p>A practice space. Nothing here counts towards your books, so it can be as messy as you like.</p></div>
         <div class="pl-stats"><div><b>🔥 ${streak()}</b><span>day streak</span></div><div><b>${fmt(week)}</b><span>words this week</span></div><div><b>${index.pieces.length}</b><span>pieces</span></div><div><b>${done.size}/${EXERCISES.length}</b><span>exercises done</span></div></div></div>
       <section class="pl-today">
-        <div class="pl-today-label">${promptOffset ? 'Another prompt' : 'Today’s prompt'}</div>
+        <div class="pl-today-label">${promptOffset ? 'Another story starter' : 'Today’s story starter'}</div>
         <div class="pl-today-text">${esc(p)}</div>
         <div class="pl-today-acts"><button class="btn primary" id="pl-go-prompt">Write this</button><button class="btn ghost" id="pl-next-prompt">Another one ↻</button><button class="btn ghost" id="pl-free">Just a blank page</button></div>
       </section>

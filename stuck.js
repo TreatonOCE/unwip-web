@@ -1,4 +1,4 @@
-// Unwip - "Stuck?" tools for procrastination days. No AI: small rules, prompts and nudges.
+// Unwip - "Stuck?" tools for procrastination days. No AI: small rules, ideas and nudges.
 //  1. Just 50 words   - a tiny sprint to get started
 //  2. Why am I stuck? - pick a reason, get a concrete next step
 //  3. Messy draft     - no backspace, what you wrote fades, spellcheck off

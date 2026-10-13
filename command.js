@@ -30,7 +30,7 @@ window.UnwipCommand = (function () {
     ['Insert a scene break', 'divider asterisks * * *', '', click('#btn-scene'), needDoc],
     ['Clear formatting', 'remove styles plain', '', click('#btn-clear'), needDoc],
     ['Start a writing sprint', 'timer timed session pomodoro', '', click('#btn-sprint'), desk(inProject)],
-    ['Spark: ideas to get going', 'stuck writers block blank procrastinating prompts help', '', click('#btn-stuck'), inProject],
+    ['Spark: ideas to get going', 'stuck writers block blank procrastinating prompts story starters help', '', click('#btn-stuck'), inProject],
     ['Copy for Docs', 'clipboard google docs word paste', 'Ctrl+Shift+C', click('#btn-copy-docs'), needDoc],
     ['Preview & page counts', 'pages paperback kindle', '', () => U.openPreview(), desk(inProject)],
     ['Export a print-ready PDF', 'paperback print kdp interior', '', () => U.openPreview('paperback'), desk(inProject)],

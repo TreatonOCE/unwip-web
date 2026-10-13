@@ -340,7 +340,7 @@ Ideas:
       { scrivener: 'Same as Scrivener’s Snapshots.', docs: 'Like Version history, but you choose the moments.' }],
     ['#btn-copy-docs', 'Copy for Google Docs', 'Copies the chapter (or the whole book) ready to paste into Google Docs with the formatting right.'],
     ['#btn-export-more', 'Export', 'The arrow next to Copy for Docs: print-ready PDF, EPUB e-book, Word, and page counts.'],
-    ['#btn-library', 'All your projects', 'Back to the main screen. The Play tab there has writing prompts and exercises that don’t touch your book.'],
+    ['#btn-library', 'All your projects', 'Back to the main screen. The Play tab there has story starters and exercises that don’t touch your book.'],
     ['#btn-settings', 'Settings', 'Themes, typing sounds, Dropbox or OneDrive sync, backups and updates. Help in here runs this tour again.']
   ];
   let tEls = null;
