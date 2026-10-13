@@ -50,10 +50,7 @@ window.UnwipInsights = (function () {
       if (!e.primary) c.name = e.text; c.names.add(e.text);
       by.set(e.sheetId, c);
     }
-    return [...by.values()].filter(c => c.name).map(c => {
-      const alts = [...c.names].filter(x => x.length > 1).sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      return { ...c, re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts.join('|')})(?![\\p{L}\\p{N}])`, 'gu') };
-    });
+    return [...by.values()].filter(c => c.name).map(c => ({ ...c, re: window.FolioNames.matcher(window.FolioNames.namesFor(c.id)) || /(?!)/gu }));
   }
   const COLORS = ['#2563eb', '#db2777', '#059669', '#d97706', '#7c3aed', '#0891b2', '#dc2626', '#65a30d', '#c026d3', '#0d9488', '#ea580c', '#4f46e5'];
   const colorOf = i => COLORS[i % COLORS.length];

@@ -79,5 +79,25 @@ window.FolioNames = (function () {
     return [...words];
   }
 
-  return { rebuild, suggest, used, allWords, get entries() { return entries; } };
+  // the names to look for when counting where a sheet is mentioned: its name and aliases, plus a
+  // character's first name ("Mara" for "Mara Vell"), as a regular expression
+  const NOT_FIRST = /^(the|a|an|lord|lady|sir|dame|king|queen|prince|princess|captain|doctor|dr|mr|mrs|ms|miss|saint|st|father|mother|brother|sister|old|young|master|mistress)\.?$/i;
+  function namesFor(sheetId) {
+    const mine = entries.filter(e => e.sheetId === sheetId), set = new Set(mine.map(e => e.text));
+    // (skipped when another sheet shares that first name or is called it)
+    const firstOf = e => { const w = e.text.split(/\s+/); return w.length > 1 && w[0].length > 2 && !NOT_FIRST.test(w[0]) && /^\p{Lu}/u.test(w[0]) ? w[0] : ''; };
+    for (const e of mine) if (!e.primary && e.kind === 'Character') {
+      const f = firstOf(e); if (!f) continue;
+      if (entries.some(o => o.sheetId !== sheetId && (o.text === f || (!o.primary && o.kind === 'Character' && firstOf(o) === f)))) continue;
+      set.add(f);
+    }
+    return [...set].filter(x => x.length > 1 && !/^New [a-z]/.test(x));
+  }
+  function matcher(names) {
+    if (!names.length) return null;
+    const alts = [...names].sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/^(the|a|an)(?=\s)/i, m => `[${m[0].toUpperCase()}${m[0].toLowerCase()}]${m.slice(1)}`));
+    return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts.join('|')})(?![\\p{L}\\p{N}])`, 'gu');
+  }
+
+  return { rebuild, suggest, used, allWords, namesFor, matcher, get entries() { return entries; } };
 })();
