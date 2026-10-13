@@ -179,6 +179,8 @@ window.UnwipSync = (function () {
   // ================================================================== CHANGES ARRIVING WHILE OPEN
   api.onExternalChange(async info => {
     if (!S.project || info.slug !== S.slug) return;
+    // Unwip was about to save over a version it hadn't seen; that version was kept as a conflicted copy
+    if (info.file === 'conflict') { checkConflicts(); return; }
     if (info.file === 'project.json') {
       const load = async () => { clearTimeout(S.metaTimer); S.metaTimer = null; try { U.reloadProjectMeta(await api.openProject(S.slug)); U.toast('Updated with changes from your other device.'); } catch {} };
       if (S.metaTimer) U.toastAction('The binder was changed on another device.', 'Load those changes', load, 20000);
@@ -186,17 +188,26 @@ window.UnwipSync = (function () {
       return;
     }
     if (info.id && info.id === S.docId) {
-      const before = editor.innerHTML;
+      const id = info.id, before = editor.innerHTML;
+      const incoming = await api.loadDoc(S.slug, id);
+      if (incoming === before) return;
+      const mineChanged = S.dirty || S.touchedDoc === id;
+      // both versions are always kept: the other device's goes to Snapshots straight away, so it survives even
+      // if this chapter is saved again here before anyone decides
+      if (S.dirty) await api.snapSave(S.slug, id, incoming, 'Version from another device', false).catch(() => {});
       const load = async () => {
-        if (S.dirty) await U.takeSnapshot('My version before an update from another device').catch(() => {});
-        const html = await api.loadDoc(S.slug, info.id);
+        if (S.docId !== id) return;
+        clearTimeout(S.saveTimer);
+        // this computer's version goes to Snapshots first (never saved over the other one)
+        if (mineChanged) await api.snapSave(S.slug, id, editor.innerHTML, 'My version before an update from another device', false).catch(() => {});
+        const html = S.dirty ? incoming : await api.loadDoc(S.slug, id);
         const top = U.editorWrap.scrollTop;
         S.programmatic = true; editor.innerHTML = html || '<p><br></p>'; S.programmatic = false;
-        S.dirty = false; U.resyncWords(); U.updateStatus(); U.editorWrap.scrollTop = top;
-        highlightChanges(before); api.seenSave(S.slug, info.id, editor.innerHTML);
+        S.dirty = false; S.touchedDoc = null; U.resyncWords(); U.updateStatus(); U.editorWrap.scrollTop = top;
+        highlightChanges(before); api.seenSave(S.slug, id, editor.innerHTML); U.refreshSnapCount && U.refreshSnapCount();
       };
-      if (!S.dirty) { await load(); U.toast('This chapter was just updated from your other device. Changes are highlighted.'); }
-      else U.toastAction('This chapter was also changed on another device.', 'Use that version (yours goes to Snapshots)', load, 20000);
+      if (!S.dirty) { await load(); U.toast(mineChanged ? 'This chapter was just updated from your other device (your version is in Snapshots). Changes are highlighted.' : 'This chapter was just updated from your other device. Changes are highlighted.'); }
+      else U.toastAction('This chapter was also changed on another device. Its version is in Snapshots.', 'Use that version instead (yours goes to Snapshots)', load, 20000);
     }
   });
 
@@ -208,7 +219,7 @@ window.UnwipSync = (function () {
     const body = document.createElement('div');
     body.innerHTML = `<p>Dropbox found ${list.length === 1 ? 'a document that was' : 'documents that were'} changed on two devices at once, so it kept both versions. Nothing is lost. Choose what to do with each one.</p>
       <div class="sy-list">${list.map((c, i) => `<div class="sy-row" data-i="${i}"><div><b>${esc(titleOf(c))}</b><span>Other version from ${esc(c.device)}</span></div>
-        <button class="btn small" data-a="keep">${c.kind === 'doc' ? 'Keep both' : 'Recover missing items'}</button><button class="btn small ghost" data-a="drop">Not needed</button></div>`).join('')}</div>
+        <button class="btn small" data-a="keep">${c.kind === 'doc' ? 'Keep both' : 'Compare and bring in'}</button><button class="btn small ghost" data-a="drop">Not needed</button></div>`).join('')}</div>
       <p class="rp-note">“Keep both” adds the other version as a new document right under the original, so you can compare them. “Not needed” moves it to the project’s backups folder rather than deleting it.</p>`;
     const handle = async (c, row, action) => {
       try {
@@ -227,7 +238,19 @@ window.UnwipSync = (function () {
             notes.children.push({ id: U.uid(), type: 'folder', title: `Recovered from ${c.device}`, open: true, children: missing.map(m => ({ id: m.id, type: 'doc', title: m.title, synopsis: m.synopsis, words: m.words || 0 })) });
             notes.open = true;
           }
-          U.toast(missing.length ? `Recovered ${missing.length} document${missing.length > 1 ? 's' : ''} into Notes › Recovered from ${esc(c.device)}.` : 'Nothing was missing. Your binder already has everything.');
+          // names (and synopses) that differ between the two: nobody can tell which is newer, so you choose
+          const diffs = []; const theirs = new Map(); U.walkTree(other.binder || [], n => theirs.set(n.id, n));
+          U.walkTree(S.project.binder, n => { const t = theirs.get(n.id); if (!t || n.root) return; if ((t.title || '') !== (n.title || '')) diffs.push({ n, key: 'title', mine: n.title || 'Untitled', other: t.title || 'Untitled' }); if ((t.synopsis || '') !== (n.synopsis || '')) diffs.push({ n, key: 'synopsis', mine: n.synopsis || '(none)', other: t.synopsis || '(none)' }); });
+          let changed = 0;
+          if (diffs.length) {
+            const box = document.createElement('div');
+            box.innerHTML = `<p>These are different in the other device’s binder. Tick the ones to take from there; the rest stay as they are here.</p>
+              <div class="sy-diffs">${diffs.map((d, i) => `<label class="check"><input type="checkbox" data-d="${i}"><span>${d.key === 'title' ? 'Name' : `Synopsis of “${esc(d.n.title || '')}”`}: here “${esc(d.mine.slice(0, 120))}”, there <b>“${esc(d.other.slice(0, 120))}”</b></span></label>`).join('')}</div>`;
+            const ok = await U.modal({ title: 'Different on the other device', body: box, wide: true, buttons: [{ label: 'Keep mine', value: false, kind: 'ghost' }, { label: 'Use the ticked ones', value: true, kind: 'primary' }] });
+            if (ok) box.querySelectorAll('[data-d]:checked').forEach(cb => { const d = diffs[+cb.dataset.d]; d.n[d.key] = d.key === 'title' ? d.other : (d.other === '(none)' ? '' : d.other); changed++; });
+          }
+          const parts = []; if (missing.length) parts.push(`recovered ${missing.length} document${missing.length > 1 ? 's' : ''} into Notes › Recovered from ${esc(c.device)}`); if (changed) parts.push(`took ${changed} change${changed > 1 ? 's' : ''} from there`);
+          U.toast(parts.length ? `Done: ${parts.join(', and ')}.` : (diffs.length ? 'Kept everything as it is here. The other version is in the backups folder.' : 'Nothing was missing. Your binder already has everything.'));
         }
         await api.archiveConflict(S.slug, c.file);
         U.scheduleMeta(); U.renderBinder();

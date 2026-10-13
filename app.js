@@ -1126,7 +1126,7 @@
     if (S.view === 'outline') setView('write');
     if (S.splitId === id) { await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null; }
     $$('.toast.with-action').forEach(t => t.remove()); // offers about the previous document
-    S.docId = id; S.selectedId = id;
+    S.docId = id; S.selectedId = id; S.touchedDoc = null;
     S.project.lastDoc = id; scheduleMeta();
     let html = await api.loadDoc(S.slug, id);
     if (f.node.series && window.UnwipSeries) { try { const fresh = await window.UnwipSeries.reconcile(f.node, html); if (fresh != null && S.docId === id) html = fresh; } catch (e) { console.warn('series', e); } }
@@ -1179,7 +1179,7 @@
 
   // ---- saving
   function scheduleSave() {
-    S.dirty = true; S.dirtySinceBackup = true;
+    S.dirty = true; S.dirtySinceBackup = true; S.touchedDoc = S.docId;
     $('#st-save').textContent = 'Saving…'; $('#st-save').classList.add('saving');
     clearTimeout(S.saveTimer);
     S.saveTimer = setTimeout(flushSave, 700);
@@ -4190,7 +4190,7 @@
   window.__unwip = {
     S, api, I, $, $$, esc, fmt, countWords, today, editor, editorWrap, on, emit,
     modal, toast, toastAction, confirmBox, promptText, showMenu, quoteToast,
-    findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave,
+    findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave, refreshSnapCount,
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,
     reloadProjectMeta, showLibrary, openProject, leaveProject: () => leaveProject(), importScrivener: () => importScrivener(), DEFAULT_STYLE, setMode, setView: v => setView(v), importWordProject: () => importWordProject(), newProjectTemplate: () => newProjectTemplate(), ROOTS,
