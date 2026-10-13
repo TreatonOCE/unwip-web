@@ -113,7 +113,8 @@ window.UnwipAbout = (function () {
       items.push({ name, kind: 'Font · SIL Open Font License 1.1', copy, note, text: t });
     }
     const harper = await readText('vendor/harper/LICENSE');
-    if (harper) items.push({ name: 'Harper 2.10.0', kind: 'Grammar checker · Apache License 2.0', copy: 'By Automattic and the Harper contributors (github.com/Automattic/harper). Included unmodified.', note: 'Harper is built from many smaller open-source libraries, each under the MIT or Apache 2.0 licence; their notices are kept in the Harper project.', text: harper });
+    if (harper) items.push({ name: 'Harper 2.10.0', kind: 'Grammar checker · Apache License 2.0', copy: 'By Automattic and the Harper contributors (github.com/Automattic/harper). Included unmodified.', note: 'Harper is built together with 252 smaller open-source libraries and the Rust standard library. Their notices are listed next.', text: harper });
+    if (harper) items.push({ name: 'Libraries inside Harper', kind: 'MIT, Apache 2.0, Unicode, Zlib, MPL 2.0 and others', copy: 'The Rust libraries compiled into Harper, each with its version, licence, source and authors, followed by every licence text in full.', lazy: 'vendor/harper/THIRD-PARTY-NOTICES.txt' });
     if (api.engineLicenses) {
       const e = await api.engineLicenses().catch(() => null);
       if (e && e.license) items.push({ name: `Electron ${e.electron}`, kind: 'Runs the PC app · MIT License', copy: (e.license.split('\n').find(l => /^Copyright/i.test(l)) || '').trim(), text: e.license, chromium: e.chromium, chrome: e.chrome });
@@ -123,8 +124,11 @@ window.UnwipAbout = (function () {
       ${items.map((it, i) => `<details class="lic-item"><summary><b>${esc(it.name)}</b> <span>${esc(it.kind)}</span></summary>
         ${it.copy ? `<p class="lic-copy">${esc(it.copy)}</p>` : ''}${it.note ? `<p class="lic-note">${esc(it.note)}</p>` : ''}
         ${it.chromium !== undefined ? `<p class="lic-note">Electron includes Chromium ${esc(it.chrome || '')} and its components, each under its own open-source licence. ${it.chromium ? '<button class="link-btn" type="button" data-chromium>Open the Chromium licences</button>' : ''}</p>` : ''}
-        <pre>${esc(it.text)}</pre></details>`).join('')}
+        <pre>${it.lazy ? 'Loading…' : esc(it.text)}</pre></details>`).join('')}
       <p class="about-small">Spell checking uses the spell checker built into ${api.web ? 'your browser' : 'Chromium'}.</p>`;
+    // the long Harper list is only read when it's opened
+    body.querySelectorAll('.lic-item').forEach((d, i) => { const it = items[i]; if (!it.lazy) return;
+      d.addEventListener('toggle', async () => { if (!d.open || it.text) return; it.text = (await readText(it.lazy)) || 'Couldn’t read the notices file.'; d.querySelector('pre').textContent = it.text; }); });
     const cb = body.querySelector('[data-chromium]'); if (cb) cb.onclick = () => api.openChromiumLicenses();
     await U.modal({ title: 'Open-source licences', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
   }
