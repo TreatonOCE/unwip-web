@@ -357,7 +357,7 @@
   function manuscriptWords() { return folderWords(S.project.binder.find(r => r.kind === 'manuscript')); }
 
   // ------------------------------------------------------------------ binder rendering
-  function refreshPlanView() { if (S.view === 'outline') renderOutline(); else if (S.view === 'cork') renderCork(); }
+  function refreshPlanView() { if (S.view === 'outline') renderOutline(); else if (S.view === 'cork') renderCork(); else if (S.view === 'timeline') renderTimeline(); }
   function toggleFav(id) {
     const f = findNode(id); if (!f || f.node.root) return;
     f.node.fav = !f.node.fav; if (!f.node.fav) delete f.node.fav;
@@ -3791,7 +3791,8 @@
       lanes = names.map(n => ({ label: n === '—' ? 'No character' : n, events: shown.filter(e => n === '—' ? !(e.chars && e.chars.length) : e.chars.includes(n)) }));
     } else lanes = [{ label: '', events: shown }];
     // stack overlapping events into rows inside each lane
-    const ROW = 64;
+    const C = T.mode === 'days' && window.UnwipCalendar && window.UnwipCalendar.on ? window.UnwipCalendar : null;
+    const ROW = C ? 78 : 64;
     for (const ln of lanes) {
       const rows = [];
       ln.items = ln.events.slice().sort((a, b) => evStart(a, T) - evStart(b, T)).map(e => {
@@ -3805,17 +3806,23 @@
       });
       ln.height = Math.max(1, rows.length) * ROW + 16;
     }
-    const tick = d => T.mode === 'dates'
-      ? new Date(numDay(d) + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(px < 40 ? {} : { year: '2-digit' }) })
-      : `Day ${d}`;
-    const step = px >= 60 ? 1 : px >= 30 ? 2 : px >= 15 ? 5 : 10;
+    const tick = d => {
+      if (T.mode === 'dates') return new Date(numDay(d) + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(px < 40 ? {} : { year: '2-digit' }) });
+      if (!C) return `Day ${d}`;
+      const w = C.fromDay(d);
+      return `<i class="${w.d === 1 ? 'tl-m1' : ''}" title="Day ${d}: ${esc(C.describe(d))}">${w.d === 1 && w.m === 0 ? esc(String(w.y)) + ' · ' : ''}${esc(C.label(d, { short: true, tight: px < 60 }))}</i>`;
+    };
+    const step = C ? [1, 2, 3, 5, 7, 10, 15, 30, 60, 90].find(k => k * px >= 96) || 120 : px >= 60 ? 1 : px >= 30 ? 2 : px >= 15 ? 5 : 10;
     const ticks = []; for (let d = min; d <= max; d++) if ((d - min) % step === 0) ticks.push(d);
+    // full and new moons of your own calendar, on the day they fall
+    const moonMarks = () => { if (!C || max - min > 4000) return ''; let out = ''; for (let d = min; d <= max; d++) for (const m of C.fromDay(d).moons) if (m.exact) out += `<b class="tl-moon" style="left:${(d - min) * px + px / 2}px" title="Day ${d}: ${esc(m.n)}, ${m.exact} moon">${m.exact === 'full' ? '🌕' : '🌑'}</b>`; return out; };
     const names = characterNames();
     tv.innerHTML = `
       <div class="tl-head">
         <div class="seg" title="How time is measured">${[['days', 'Story days'], ['dates', 'Calendar dates']].map(([k, l]) => `<button data-mode="${k}" class="${T.mode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="seg" title="Layout">${[['single', 'One line'], ['chars', 'By character']].map(([k, l]) => `<button data-lanes="${k}" class="${T.lanes === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <select id="tl-filter" title="Follow one character"><option value="">All characters</option>${names.map(n => `<option ${n === T.filter ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+        ${T.mode === 'days' && window.UnwipCalendar ? `<button class="btn small ghost" id="tl-cal" title="Name the months, weeks, seasons and moons of your world">🌙 ${C ? esc(C.calendar.name || 'Calendar') : 'Your own calendar…'}</button>` : ''}
         <span class="mb-zoom"><input type="range" id="tl-zoom" min="10" max="160" step="5" value="${px}"></span>
         <span style="flex:1"></span>
         ${chapterList().length ? '<button class="btn small" id="tl-fromch">Add events from chapters</button>' : ''}
@@ -3823,7 +3830,7 @@
       </div>
       <div class="tl-scroll" id="tl-scroll">
         <div class="tl-inner" style="width:${width + 160}px">
-          <div class="tl-axis" style="margin-left:${T.lanes === 'chars' ? 140 : 0}px;width:${width}px">${ticks.map(d => `<span style="left:${(d - min) * px}px">${tick(d)}</span>`).join('')}</div>
+          <div class="tl-axis ${C ? 'cal' : ''}" style="margin-left:${T.lanes === 'chars' ? 140 : 0}px;width:${width}px">${ticks.map(d => `<span style="left:${(d - min) * px}px">${tick(d)}</span>`).join('')}${moonMarks()}</div>
           ${lanes.map(ln => `
             <div class="tl-lane" style="height:${ln.height}px">
               ${T.lanes === 'chars' ? `<div class="tl-lane-label">${esc(ln.label)}</div>` : ''}
@@ -3832,7 +3839,7 @@
                   const ch = it.e.chapterId && findNode(it.e.chapterId);
                   return `<div class="tl-ev ${it.span ? 'span' : ''}" data-id="${it.e.id}" style="left:${it.x}px;top:${it.row * ROW + 10}px;width:${it.w}px;--ev:${it.e.color || EV_COLOURS[0]}">
                     <b>${esc(it.e.title || 'Untitled event')}</b>
-                    <span>${ch ? '§ ' + esc(ch.node.title) : ''}${(it.e.chars || []).length && T.lanes !== 'chars' ? (ch ? ' · ' : '') + esc(it.e.chars.join(', ')) : ''}</span>
+                    <span>${C && evStart(it.e, T) != null ? `<em class="tl-wd">${esc(C.label(evStart(it.e, T)))}</em>` : ''}${ch ? '§ ' + esc(ch.node.title) : ''}${(it.e.chars || []).length && T.lanes !== 'chars' ? (ch ? ' · ' : '') + esc(it.e.chars.join(', ')) : ''}</span>
                   </div>`;
                 }).join('')}
               </div>
@@ -3850,6 +3857,7 @@
     $('#tl-filter', tv).onchange = e => { T.filter = e.target.value; scheduleMeta(); renderTimeline(); };
     $('#tl-zoom', tv).onchange = e => { T.zoom = +e.target.value; scheduleMeta(); renderTimeline(); };
     $('#tl-add', tv).onclick = () => editEvent(null);
+    const calB = $('#tl-cal', tv); if (calB) calB.onclick = async () => { if (await window.UnwipCalendar.setup()) renderTimeline(); };
     const fromCh = $('#tl-fromch', tv); if (fromCh) fromCh.onclick = addEventsFromChapters;
     $$('.tl-chip', tv).forEach(c => c.onclick = () => editEvent(T.events.find(e => e.id === c.dataset.id)));
     // drag to move along the line (snaps to whole days)
@@ -3888,6 +3896,7 @@
         <div class="field full"><label>What happens</label><input type="text" id="ev-title" value="${esc(ev.title || '')}" placeholder="e.g. The siege of the Moor begins"></div>
         <div class="field"><label>Story day</label><input type="number" id="ev-day" value="${ev.day ?? ''}" placeholder="e.g. 3"></div>
         <div class="field"><label>Lasts until day (optional)</label><input type="number" id="ev-endday" value="${ev.endDay ?? ''}" placeholder="same day"></div>
+        ${window.UnwipCalendar && window.UnwipCalendar.on ? `<div class="field full ev-world"><label>In ${esc(window.UnwipCalendar.calendar.name || 'your calendar')}</label><div class="ev-wrow"><input type="number" id="ev-wd" min="1"><select id="ev-wm">${window.UnwipCalendar.calendar.months.map((m, i) => `<option value="${i}">${esc(m[0])}</option>`).join('')}</select><input type="number" id="ev-wy" title="Year"><span id="ev-wdesc" class="hint"></span></div></div>` : ''}
         <div class="field"><label>Calendar date (optional)</label><input type="date" class="date-input" id="ev-date" value="${ev.date || ''}"></div>
         <div class="field"><label>Until date (optional)</label><input type="date" class="date-input" id="ev-enddate" value="${ev.endDate || ''}"></div>
         <div class="field full"><label>Characters involved (comma separated)</label><input type="text" id="ev-chars" list="ev-char-list" value="${esc((ev.chars || []).join(', '))}" placeholder="e.g. Mara, Teo">
@@ -3897,6 +3906,13 @@
         <div class="field full"><label>Notes</label><textarea id="ev-note" rows="3" class="ev-note">${esc(ev.note || '')}</textarea></div>
       </div>`;
     let colour = ev.color;
+    // your own calendar: the world date and the story day follow each other
+    if (window.UnwipCalendar && window.UnwipCalendar.on) {
+      const C = window.UnwipCalendar, dayIn = $('#ev-day', body), wd = $('#ev-wd', body), wm = $('#ev-wm', body), wy = $('#ev-wy', body), desc = $('#ev-wdesc', body);
+      const fromDayField = () => { if (dayIn.value === '') { desc.textContent = ''; return; } const w = C.fromDay(+dayIn.value); wd.value = w.d; wm.value = w.m; wy.value = w.y; desc.textContent = C.describe(+dayIn.value).split(' · ').slice(1).join(' · '); };
+      const fromWorld = () => { const m = +wm.value, max = +C.calendar.months[m][1]; if (+wd.value > max) wd.value = max; if (wd.value === '' || wy.value === '') return; dayIn.value = C.toDay(+wy.value, m, +wd.value); fromDayField(); };
+      dayIn.addEventListener('input', fromDayField); [wd, wm, wy].forEach(x => x.addEventListener('input', fromWorld)); fromDayField();
+    }
     $$('.ev-c', body).forEach(b => b.onclick = () => { $$('.ev-c', body).forEach(x => x.classList.remove('on')); b.classList.add('on'); colour = b.dataset.c; });
     const buttons = [{ label: 'Cancel', value: null, kind: 'ghost' }];
     if (!isNew) buttons.unshift({ label: 'Delete', value: 'delete', kind: 'ghost danger-text' });
