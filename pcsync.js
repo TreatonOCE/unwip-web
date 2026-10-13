@@ -27,7 +27,7 @@ window.UnwipPCSync = (function () {
       let pill = document.getElementById('pc-sync-pill');
       if (!pill) { pill = document.createElement('button'); pill.id = 'pc-sync-pill'; head.insertBefore(pill, head.firstChild); pill.onclick = click; }
       pill.className = 'dbx-pill pcs-pill ' + s.cls; pill.hidden = !s.text;
-      pill.innerHTML = CLOUD + (s.cls === 'warn' || s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : '') + `<span>${esc(s.text)}</span>` + (status && status.provider !== 'none' ? `<span class="pcs-act">${busy ? 'Checking…' : '↻ Sync now'}</span>` : '');
+      pill.innerHTML = CLOUD + (s.cls === 'warn' || s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : '') + `<span>${esc(s.text)}</span>` + (status && status.provider !== 'none' ? `<span class="pcs-act">${busy ? 'Checking…' : doneNote || '↻ Sync now'}</span>` : '');
       pill.title = s.long || s.text;
     }
     // beside the book's name while writing
@@ -36,23 +36,38 @@ window.UnwipPCSync = (function () {
       let mini = document.getElementById('pc-sync-mini');
       if (!mini) { mini = document.createElement('button'); mini.id = 'pc-sync-mini'; tb.appendChild(mini); mini.onclick = click; }
       mini.className = 'pcs-mini ' + s.cls; mini.hidden = !s.text;
-      mini.innerHTML = CLOUD + (s.cls === 'warn' || s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : '') + `<span class="pcs-lab">${status && status.provider !== 'none' ? (busy ? 'Checking…' : 'Sync') : 'This PC'}</span>`;
+      mini.innerHTML = CLOUD + (s.cls === 'warn' || s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : '') + `<span class="pcs-lab">${status && status.provider !== 'none' ? (busy ? 'Checking…' : doneNote || 'Sync') : 'This PC'}</span>`;
       mini.title = (s.long || s.text) + (S.slug && status && status.provider !== 'none' ? '' : '');
     }
   }
   async function refresh() { try { status = await api.syncStatus(S.slug || null); } catch { status = null; } render(); }
   // click: look for changes now, then say how things stand
+  let doneNote = '', doneT = null;
   async function click() {
     if (busy) return;
     busy = true; render();
-    let found = 0;
-    try { if (S.slug) found = await api.syncCheck(S.slug); await refresh(); } catch {}
-    busy = false; seenAt = Date.now(); render();
+    let found = 0, latest = null;
+    const t0 = Date.now();
+    try {
+      if (S.slug) found = await api.syncCheck(S.slug);
+      else {
+        // the main screen: read the books again, and find the last change another device made
+        await U.showLibrary();
+        const list = await api.listProjects();
+        latest = list.filter(b => b.dev && S.device && b.dev !== S.device).sort((a, b) => b.modified - a.modified)[0] || null;
+      }
+      await refresh();
+    } catch {}
+    if (Date.now() - t0 < 700) await new Promise(r => setTimeout(r, 700 - (Date.now() - t0)));   // long enough to see it happened
+    busy = false; seenAt = Date.now();
+    doneNote = found ? `✓ Brought in ${found} change${found === 1 ? '' : 's'}` : '✓ Up to date'; clearTimeout(doneT); doneT = setTimeout(() => { doneNote = ''; render(); }, 6000);
+    render();
     const s = state();
+    if (!S.slug && status && status.provider !== 'none') { U.toast(`Checked your books: ${latest ? `the last change from another device was “${esc(latest.title)}” on ${esc(latest.dev)}, ${ago(latest.modified)}.` : 'nothing from your other devices yet.'} The ${APP[status.provider]} app syncs them by itself, so there’s nothing else to press.`, '', 8000); return; }
     if (S.slug && found) U.toast(`Brought in ${found} change${found === 1 ? '' : 's'} from another device.`);
     else if (s.cls === 'warn') U.toast(esc(s.long), 'warn', 9000);
     else if (status && status.provider === 'none') U.toast(`${S.slug ? 'This book is' : 'Your books are'} kept on this PC only, so there’s nothing to sync. To share ${S.slug ? 'it' : 'them'} with your phone or other PCs, use Move to… on a book’s ⋯ menu.`, '', 8000);
-    else U.toast(S.slug ? `Up to date: nothing new from your other devices. The ${APP[status.provider]} app syncs this book by itself.` : `Your books are in ${esc(status.label)}, kept in step by the ${APP[status.provider]} app.`, '', 6000);
+    else U.toast(`Up to date: nothing new from your other devices. The ${APP[status.provider]} app syncs this book by itself.`, '', 6000);
   }
   U.on('project', () => { seenAt = Date.now(); refresh(); });
   U.on('library', () => refresh());

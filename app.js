@@ -209,11 +209,11 @@
           ${goal ? dial({ pct: p.words / goal, big: Math.floor(p.words / goal * 100) + '%', small: '', size: 58, track: 6 }) : ''}</div>
         ${pace ? `<div class="pc-pace">${esc(pace)}</div>` : ''}
         <div class="pc-meta">${fmt(p.words)}${goal ? ' / ' + fmt(goal) : ''} words · ${when}${p.dev && S.device && p.dev !== S.device ? ` · on ${esc(p.dev)}` : ''}</div><button class="icon-btn small pc-more" title="More">${I.dots}</button>`;
-      card.onclick = e => { if (!e.target.closest('.pc-more')) openProject(p.slug); };
+      card.onclick = e => { if (!e.target.closest('.pc-more')) openBook(p); };
       $('.pc-more', card).onclick = e => {
         e.stopPropagation();
         showMenu(e.clientX, e.clientY, [
-          { label: 'Open', action: () => openProject(p.slug) },
+          { label: 'Open', action: () => openBook(p) },
           { label: 'Show in folder', action: () => api.revealProject(p.slug) },
           { label: 'Backups…', action: () => window.UnwipSync && window.UnwipSync.backupsDialog(p.slug, p.title) },
           { label: 'Save a full backup file…', action: async () => { const f = await api.backupExport(p.slug); if (f) toast('Full backup saved, including images and snapshots.'); } },
@@ -225,6 +225,11 @@
       grid.appendChild(card);
     }
     renderBin();
+  }
+  // a book that's gone since the list was drawn (deleted or moved on another device): say so and redraw
+  async function openBook(p) {
+    try { await openProject(p.slug); }
+    catch (e) { toast(`“${esc(p.title)}” isn’t here any more. It may have been deleted or moved on another device (look in Deleted books).`, 'warn', 8000); showLibrary(); }
   }
   // ---- deleting a book: it goes to Deleted books (on this screen), where it can be restored
   async function deleteBook(p) {

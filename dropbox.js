@@ -441,7 +441,7 @@ window.UnwipDropbox = (function () {
     }
     if (gone.length) {
       await persist();
-      try { const U = window.__unwip; U.toast(`${gone.map(t => `“${esc(t)}”`).join(', ')} ${gone.length === 1 ? 'was' : 'were'} deleted on another device. ${gone.length === 1 ? 'It’s' : 'They’re'} in Deleted books here too, to bring back if you need.`, 'warn', 12000); } catch {}
+      try { const U = window.__unwip; if (!U.S.slug) U.showLibrary(); U.toast(`${gone.map(t => `“${esc(t)}”`).join(', ')} ${gone.length === 1 ? 'was' : 'were'} deleted on another device. ${gone.length === 1 ? 'It’s' : 'They’re'} in Deleted books here too, to bring back if you need.`, 'warn', 12000); } catch {}
     }
     return gone;
   }
