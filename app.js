@@ -4385,7 +4385,8 @@
   function renderQuoteCard(q) {
     const el = $('#quote-card');
     if (!quotesOn()) { el.classList.add('hidden'); return; }
-    q = q || Quotes.today();
+    // keep the same quote while Unwip is open (syncing redraws this screen); only ↻ or a fresh start brings a new one
+    q = renderQuoteCard.q = q || renderQuoteCard.q || Quotes.today();
     el.classList.remove('hidden');
     el.innerHTML = `${quoteHTML(q)}<button class="icon-btn small q-next" title="Another quote">${I.refresh}</button>`;
     $('.q-next', el).onclick = () => renderQuoteCard(Quotes.random(q));
