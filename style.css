@@ -2162,3 +2162,13 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .nhf-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; cursor: pointer; }
 .nhf-opt:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .nhf-opt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.tsx-cap { position: absolute; left: 8%; right: 8%; bottom: 14px; text-align: center; font: italic 12px/1.35 var(--ui); color: #8a857c; pointer-events: none; }
+
+/* Insights in the side panel */
+.in-mini { display: flex; align-items: flex-end; gap: 2px; height: 70px; margin: 6px 0 14px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; }
+.in-mini button { flex: 1; min-width: 2px; border: 0; padding: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 2px 2px 0 0; cursor: pointer; }
+.in-mini button:hover { background: var(--accent); }
+#insights-panel .side-foot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+/* six side-panel tabs: wrap onto two lines rather than hide any */
+.side-tabs { flex-wrap: wrap; overflow: visible; row-gap: 2px; padding-right: 36px; position: relative; }
+.side-tabs .side-x { position: absolute; right: 6px; top: 8px; margin: 0; }

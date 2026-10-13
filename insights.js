@@ -12,7 +12,9 @@ window.UnwipInsights = (function () {
   const cache = new Map();          // id -> { key, stats }
   let busy = false;
 
-  const chapters = () => { const out = [], ms = U.findNode('root-manuscript'); if (ms) U.walkTree(ms.node.children || [], n => { if (n.type === 'doc' && !n.map) out.push(n); }); return out; };
+  // title pages and front matter aren't chapters
+  const FRONT = /^\s*(title|title page|half[- ]title|front matter|copyright|dedication|epigraph|contents|table of contents)\s*$/i;
+  const chapters = () => { const out = [], ms = U.findNode('root-manuscript'); if (ms) U.walkTree(ms.node.children || [], n => { if (n.type === 'doc' && !n.map && !FRONT.test(n.title || '')) out.push(n); }); return out; };
   const SCENE = /^\s*(\*\s*){3,}\s*$|^\s*#\s*$|^\s*[~•·]{1,3}\s*$/;
   const wc = s => (s.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
 
@@ -76,12 +78,13 @@ window.UnwipInsights = (function () {
   // bars are numbered by their place in the manuscript (titles can repeat numbers or have none); hover shows the title
   const num = (n, i) => String(i + 1);
 
-  function pacing(chs, stats) {
-    const body = $('#in-body'), words = stats.map(s => s.words), total = words.reduce((a, b) => a + b, 0);
+  // what the charts and the side panel both say about the book
+  function findings(chs, stats) {
+    const words = stats.map(s => s.words), total = words.reduce((a, b) => a + b, 0);
     // empty chapters (placeholders) would drag the average down, so they're left out of it
     const filled = words.filter(w => w > 0), sorted = [...filled].sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)] || 0;
     const avg = filled.length ? total / filled.length : 0, max = Math.max(...words, 1), dlg = stats.reduce((a, s) => a + s.dialogue, 0);
-    $('#in-sum').textContent = `${chs.length} chapters · ${total.toLocaleString()} words · average ${Math.round(avg).toLocaleString()} · ${total ? Math.round(dlg / total * 100) : 0}% dialogue`;
+    const sum = `${chs.length} chapters · ${total.toLocaleString()} words · average ${Math.round(avg).toLocaleString()} · ${total ? Math.round(dlg / total * 100) : 0}% dialogue`;
     // things worth a look
     const notes = [];
     chs.forEach((n, i) => {
@@ -109,6 +112,12 @@ window.UnwipInsights = (function () {
       glance.push(['g', -1, `The book is ${pct}% dialogue. ${pct < 15 ? 'That’s on the narration-heavy side: fine for a reflective or descriptive book, but if a scene feels slow, more people talking can speed it up.' : pct > 55 ? 'That’s dialogue-heavy: quick to read, but check readers can still picture where everyone is.' : 'That’s a middle-of-the-road mix of talk and narration.'}`]);
       if (idx.length < 4) glance.push(['g', -1, `Comparing chapters gets more useful from about four chapters on: with ${idx.length} there isn’t much to compare yet.`]);
     }
+    return { words, total, avg, max, filled, median, dlg, notes, glance, sum };
+  }
+  function pacing(chs, stats) {
+    const body = $('#in-body');
+    const { words, total, avg, max, filled, dlg, notes, glance, sum } = findings(chs, stats);
+    $('#in-sum').textContent = sum;
     const avgPct = avg / max * 100;
     body.innerHTML = `
       <div class="pc-legend"><span><i class="pc-k nar"></i>Narration</span><span><i class="pc-k dlg"></i>Dialogue</span><span><i class="pc-k scn"></i>Scenes</span><span><i class="pc-k avg"></i>Average length</span></div>
@@ -183,5 +192,21 @@ window.UnwipInsights = (function () {
   }
 
   U.on('doc', () => { if (S.view === 'insights') render(); });
-  return { render, analyse, clear: () => cache.clear() };
+  // the side panel's Insights tab: the same findings, small enough for the panel
+  async function compact(box) {
+    const chs = chapters();
+    if (!chs.length) { box.innerHTML = '<p class="side-lead">Add some chapters to the Manuscript to see the shape of your book.</p>'; return; }
+    box.innerHTML = `<p class="side-lead">Reading ${chs.length} chapters…</p>`;
+    const stats = []; for (const n of chs) stats.push(await statsFor(n));
+    const f = findings(chs, stats);
+    const max = Math.max(...f.words, 1);
+    box.innerHTML = `<p class="side-lead">${esc(f.sum)}</p>
+      <div class="in-mini" title="Chapter lengths, in order. Click one to open it">${chs.map((n, i) => `<button style="height:${Math.max(3, f.words[i] / max * 100)}%" data-i="${i}" title="${esc(n.title || 'Untitled')}: ${f.words[i].toLocaleString()} words"></button>`).join('')}</div>
+      <div class="in-notes"><h4>Worth a look</h4>${f.notes.length ? f.notes.slice(0, 8).map(x => `<button class="in-note k-${x[0]}" data-i="${x[1]}">${x[2]}</button>`).join('') : '<p class="in-ok">Nothing unusual.</p>'}</div>
+      ${f.glance.length ? `<div class="in-notes in-glance"><h4>At a glance</h4>${f.glance.map(x => `<p class="in-note k-g">${x[2]}</p>`).join('')}</div>` : ''}
+      <div class="side-foot"><button class="btn small" data-full="pacing">Open the full charts</button><button class="btn small ghost" data-full="chars">Characters by chapter</button></div>`;
+    $$('[data-i]', box).forEach(b => b.onclick = () => go(chs[+b.dataset.i].id));
+    $$('[data-full]', box).forEach(b => b.onclick = () => { tab = b.dataset.full; try { localStorage.setItem(LS, tab); } catch {} U.setView('insights'); });
+  }
+  return { render, analyse, compact, clear: () => cache.clear() };
 })();

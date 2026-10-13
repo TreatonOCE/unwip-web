@@ -210,7 +210,8 @@ window.FolioImport = (function () {
     const pdfs = groups.reduce((a, g) => a + g.other, 0); if (pdfs) notImported.push(`${pdfs} PDF, web page or media file${pdfs === 1 ? '' : 's'}`);
     const labels = [...xml.querySelectorAll('LabelSettings Labels Label')].map(l => l.textContent.trim()).filter(n => n && !/^no label$/i.test(n));
     const statuses = [...xml.querySelectorAll('StatusSettings StatusItems Status')].map(l => l.textContent.trim()).filter(n => n && !/^no status$/i.test(n));
-    return { groups, notImported, labels, statuses };
+    const prop = sel => ((xml.querySelector(sel) || {}).textContent || '').trim();
+    return { groups, notImported, labels, statuses, projectTitle: prop('ProjectProperties ProjectTitle'), author: prop('ProjectProperties FullName') };
   }
 
   function scrivener(data, uid, opts = {}) {

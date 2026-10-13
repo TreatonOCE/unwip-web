@@ -272,17 +272,18 @@ ${t.drop ? `.tsx-flow .opener + p::first-letter{initial-letter:3;-webkit-initial
       try { await Promise.all([t.body, t.head].map(f => document.fonts.load(`${t.size}pt "${f}"`))); await document.fonts.load(`italic ${t.size}pt "${t.body}"`); } catch {}
     }
     const pages = [];
-    const blank = () => pages.push({ type: 'blank' });
+    // labels are shown under the pages in the preview only, so the opening pages of a printed book make sense
+    const blank = (label = 'Left blank, so the next part starts on a right-hand page, as in printed books') => pages.push({ type: 'blank', label });
     const toRecto = () => { if (pages.length % 2 === 1) blank(); };      // next page index even = page number odd = right-hand page
-    const fixed = (html, align = 'center', v = 'top') => pages.push({ type: 'fixed', html, align, v });
+    const fixed = (html, align = 'center', v = 'top', label = '') => pages.push({ type: 'fixed', html, align, v, label });
 
     // ---- front matter
     const F = d.front, hasText = s => !!String(s || '').trim();
-    if (F.halfTitle && title) { fixed(`<div class="bt" style="font-size:1.6em">${esc(title)}</div>`, 'center', 'third'); blank(); }
+    if (F.halfTitle && title) { fixed(`<div class="bt" style="font-size:1.6em">${esc(title)}</div>`, 'center', 'third', 'Half-title page: the book’s name on its own, as printed books open'); blank('Back of the half-title, left blank as in printed books'); }
     if (F.titlePage && title) {
-      fixed(`<div style="flex:1"></div><div class="bt">${esc(title)}</div>${hasText(book.subtitle) ? `<div class="st">${esc(book.subtitle)}</div>` : ''}<div style="flex:1.2"></div>${author ? `<div class="au">${esc(author)}</div>` : ''}<div style="flex:2"></div>${hasText(book.publisher) ? `<div class="pub">${esc(book.publisher)}</div>` : ''}`, 'center', 'fill');
-      if (F.copyright) pages.push({ type: 'fixed', html: `<div style="flex:1"></div><div class="cp">${copyrightHTML(book, author, title)}</div>`, v: 'fill' });
-      else blank();
+      fixed(`<div style="flex:1"></div><div class="bt">${esc(title)}</div>${hasText(book.subtitle) ? `<div class="st">${esc(book.subtitle)}</div>` : ''}<div style="flex:1.2"></div>${author ? `<div class="au">${esc(author)}</div>` : ''}<div style="flex:2"></div>${hasText(book.publisher) ? `<div class="pub">${esc(book.publisher)}</div>` : ''}`, 'center', 'fill', 'Title page');
+      if (F.copyright) pages.push({ type: 'fixed', html: `<div style="flex:1"></div><div class="cp">${copyrightHTML(book, author, title)}</div>`, v: 'fill', label: 'Copyright page (the back of the title page)' });
+      else blank('Back of the title page, left blank');
     } else if (F.copyright) { toRecto(); pages.push({ type: 'fixed', html: `<div style="flex:1"></div><div class="cp">${copyrightHTML(book, author, title)}</div>`, v: 'fill' }); blank(); }
     if (F.dedication && hasText(book.dedication)) { toRecto(); fixed(`<div class="ded">${esc(book.dedication).replace(/\n/g, '<br>')}</div>`, 'center', 'third'); blank(); }
     if (F.epigraph && hasText(book.epigraph)) { toRecto(); fixed(`<div class="epi">${esc(book.epigraph).replace(/\n/g, '<br>')}${hasText(book.epigraphBy) ? `<div class="by">— ${esc(book.epigraphBy)}</div>` : ''}</div>`, 'center', 'third'); blank(); }
@@ -416,7 +417,7 @@ ${fontFaceCSS(fontBase())}${extraFontCSS}${book.css}
       const slot = document.createElement('div');
       slot.dataset.i = i;
       slot.style.cssText = `position:absolute;top:0;left:${i * (g.P + space)}px;width:${g.P}px;height:${g.PH}px;box-shadow:0 1px 4px rgba(0,0,0,.18)`;
-      slot.innerHTML = pageHTML(book, i);
+      slot.innerHTML = pageHTML(book, i) + (book.pages[i].label ? `<div class="tsx-cap">${esc(book.pages[i].label)}</div>` : '');
       container.appendChild(slot);
     }
   }

@@ -133,6 +133,8 @@ window.UnwipScriv = (function () {
       tpl.binder.splice(tpl.binder.findIndex(x => x.kind === 'trash'), 0, { id: 'root-' + k, type: 'folder', kind: k, root: true, custom: true, open: false, children: ns.children, title: t, singular: t.replace(/ies$/i, 'y').replace(/(?<!s)s$/i, ''), fields: ['Name', 'Aliases'], sections: ['Description', 'Notes'], icon: '🗂️' });
     }
     tpl.importedFrom = 'Scrivener';
+    // the book's own title and author from Scrivener, for the title page
+    { const sc = FI.scrivenerScan(data); if (sc.projectTitle || sc.author) tpl.book = { ...(tpl.book || {}), ...(sc.projectTitle ? { title: sc.projectTitle } : {}), ...(sc.author ? { author: sc.author } : {}) }; }
     if (res.statusList && res.statusList.length) tpl.statuses = res.statusList;
     if (res.docFont || res.docSize) tpl.style = { ...(tpl.style || {}), ...(res.docFont ? { font: res.docFont } : {}), ...(res.docSize ? { size: res.docSize } : {}) };
     const slug = await api.createProject(v.name, tpl);
@@ -144,7 +146,9 @@ window.UnwipScriv = (function () {
       for (const img of box.querySelectorAll('img.doc-img')) { try { const p = await window.UnwipImages.shrinkDataURL(img.src); img.src = p.src; img.dataset.w = p.w; img.dataset.h = p.h; } catch {} }
       res.docs[id] = box.innerHTML;
     }
-    for (const id of ids) res.docs[id] = Clip.dropBlankLines(res.docs[id]).html;
+    // empty lines used as spacing go (but a title page keeps its own spacing)
+    const front = new Set(); U.walkTree(Object.values(res.roots).flat(), n => { if (n.type === 'doc' && /^\s*(title|title page|half[- ]title|front matter|copyright|dedication)\s*$/i.test(n.title || '')) front.add(n.id); });
+    for (const id of ids) if (!front.has(id)) res.docs[id] = Clip.dropBlankLines(res.docs[id]).html;
     for (const id of ids) await api.saveDoc(slug, id, res.docs[id]);
     U.walkTree(project.binder, n => { delete n._key; if (n.type === 'doc' && res.docs[n.id]) n.words = U.countWords(htmlText(res.docs[n.id])); });
     project.totalWords = 0;

@@ -83,5 +83,19 @@ window.UnwipTitles = (function () {
     }, 15000);
   }
 
+  // a book imported before this check existed: offer it once, when the book opens
+  U.on('project', () => setTimeout(async () => {
+    try {
+      const P = S.project; if (!P || P.ttOffered) return;
+      const ms = P.binder.find(r => r.kind === 'manuscript'); const list = []; U.walkTree((ms && ms.children) || [], n => { if (n.type === 'doc' && !n.map) list.push(n); });
+      if (list.length < 3) return;
+      const items = []; for (const n of list.slice(0, 80)) items.push({ node: n, html: await api.loadDoc(S.slug, n.id).catch(() => '') });
+      if (S.project !== P) return;
+      const hits = scan(items); P.ttOffered = true; U.scheduleMeta();
+      if (hits.length >= 3 && hits.length >= items.length * 0.25)
+        U.toastAction(`${hits.length} chapters have their title typed into the text too, so it shows twice.`, 'Tidy them…', () => fixExisting(), 20000);
+    } catch {}
+  }, 2500));
+
   return { find, scan, choiceHTML, apply, fixExisting };
 })();
