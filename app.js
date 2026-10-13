@@ -310,6 +310,7 @@
     await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null;
     setRevise(false);
     await flushSave();
+    if (S.metaTimer && S.slug) await saveMetaNow().catch(() => {});   // a rename or move made just before leaving
     if (S.slug) await api.backup(S.slug).catch(() => {});
     clearInterval(S.backupTimer);
     emit('leave');
@@ -455,7 +456,8 @@
     const f = findNode(row.dataset.id); if (!f) return;
     const n = f.node;
     if (n.type === 'folder') {
-      if (e.target.closest('.tr-chev') || n.id === S.selectedId) { n.open = !n.open; scheduleMeta(); }
+      // the second click of a double-click (which renames) shouldn't fold the folder away
+      if (e.target.closest('.tr-chev') || (n.id === S.selectedId && e.detail < 2)) { n.open = !n.open; scheduleMeta(); }
       S.selectedId = n.id; renderBinder();
     } else {
       openDoc(n.id, { focus: false });
@@ -464,7 +466,8 @@
   tree.addEventListener('dblclick', e => {
     const row = e.target.closest('.tree-row'); if (!row || row.classList.contains('fav-row')) return;
     const n = findNode(row.dataset.id).node;
-    if (!n.root) startRename(row, n);
+    if (n.root && n.kind === 'trash') return;   // the Trash keeps its name
+    startRename(row, n);                          // sections (Manuscript, Characters…) can be renamed too
   });
   tree.addEventListener('contextmenu', e => {
     const row = e.target.closest('.tree-row'); if (!row || row.classList.contains('fav-row')) return;
@@ -486,6 +489,7 @@
         items.push({ label: 'New folder below', action: () => addNode('folder', n.id, false) });
       }
     }
+    if (n.root && n.kind !== 'trash') items.push({ sep: true }, { label: 'Rename section', hint: 'Double-click', action: () => startRename($(`.tree-row[data-id="${n.id}"]`), n) });
     if (!n.root) {
       items.push({ sep: true });
       items.push({ label: n.fav ? '☆ Remove from favourites' : '★ Add to favourites', hint: 'Ctrl+D', action: () => toggleFav(n.id) });
@@ -1168,7 +1172,7 @@
   }
   function scheduleMeta() { clearTimeout(S.metaTimer); S.metaTimer = setTimeout(saveMetaNow, 600); }
   async function saveMetaNow() { clearTimeout(S.metaTimer); S.metaTimer = null; if (!S.slug) return; S.project.totalWords = manuscriptWords(); S.project.lastDevice = S.device || S.project.lastDevice; await api.saveProjectMeta(S.slug, S.project); }
-  window.addEventListener('beforeunload', () => { flushSave(); });
+  window.addEventListener('beforeunload', () => { flushSave(); if (S.metaTimer) saveMetaNow(); });
 
   // ---- status bar
   function updateStatus() {
