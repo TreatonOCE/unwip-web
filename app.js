@@ -493,6 +493,8 @@
         else items.push({ label: 'Share with the series…', action: async () => { if (!S.project.series) return window.UnwipSeries.open(); await flushSave(); await window.UnwipSeries.share([n]); toast(`“${esc(n.title)}” is shared with the series “${esc(S.project.series)}”.`); } });
       }
       if (n.type === 'doc') items.push({ label: 'Snapshots…', action: async () => { await openDoc(n.id); snapshotsDialog(); } });
+      if (n.type === 'doc' && !n.map && window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn into separate sheets…', action: () => window.UnwipSheets.convert([n.id]) });
+      if (n.type === 'folder' && window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn lists in here into sheets…', action: () => { const ids = []; walkTree(n.children || [], c => { if (c.type === 'doc' && !c.map) ids.push(c.id); }); window.UnwipSheets.convert(ids); } });
       if (n.type === 'doc' || n.type === 'folder') items.push({ label: 'Remove empty lines…', action: () => tidyBlankLines(n.id) });
       if (n.type === 'doc' && n.id !== S.docId) items.push({ label: 'Open in split view', action: () => { if (S.view !== 'write') setView('write'); openSplit(n.id); } });
       { const fn = findNode(n.id); const nx = fn.list[fn.index + 1];
@@ -3355,6 +3357,7 @@
         </ul></div>`,
       buttons: [{ label: 'Start writing', value: true, kind: 'primary' }]
     });
+    if (window.UnwipSheets) await window.UnwipSheets.offerAfterImport().catch(e => console.warn('sheets', e));
   }
   $('#btn-import').onclick = e => {
     const r = e.target.getBoundingClientRect();
@@ -4091,7 +4094,7 @@
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,
     reloadProjectMeta, showLibrary, openProject, leaveProject: () => leaveProject(), importScrivener: () => importScrivener(), DEFAULT_STYLE, setMode, setView: v => setView(v), importWordProject: () => importWordProject(), newProjectTemplate: () => newProjectTemplate(), ROOTS,
-    tidyBlankLines, sectionDialog, templateGallery, continueWriting, noteLastPlace, caretOffset,
+    tidyBlankLines, sectionDialog, sheetFor, scheduleNames, templateGallery, continueWriting, noteLastPlace, caretOffset,
     openPreview, snapshotsDialog, openSettings, goalsDialog, writtenOn, dayKey, streaks, dial, manuscriptWords, openFind, openSearch, splitAtCursor, setMode, restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
   };
 })();

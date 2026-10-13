@@ -2078,3 +2078,19 @@ button.stat-card:hover { border-color: var(--accent); }
 @media (max-width: 640px) { .cal-cols { grid-template-columns: 1fr; } }
 .tl-ev:has(.tl-wd) { height: 62px; }
 .tl-moon { position: absolute; bottom: 1px; transform: translateX(-50%); font-size: 9px; line-height: 1; font-weight: 400; opacity: .85; pointer-events: auto; }
+
+/* turning a list into sheets */
+.tsh-doc { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 10px 0; }
+.tsh-dh { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; font-size: 15px; }
+.tsh-dh label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.modal .tsh-dh select { width: auto; padding: 4px 8px; }
+.tsh-gh { font: 700 12.5px var(--ui); color: var(--muted); margin: 8px 0 2px; }
+.tsh-e { display: grid; grid-template-columns: 18px auto 1fr; column-gap: 8px; align-items: baseline; padding: 3px 4px; border-radius: 6px; cursor: pointer; font-size: 13.5px; }
+.tsh-e:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tsh-e.off { opacity: .45; }
+.tsh-e .tsh-n { white-space: nowrap; } .tsh-e .tsh-a { color: var(--muted); font-size: 12.5px; }
+.tsh-e .tsh-d { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tsh-e.off .tsh-n b { text-decoration: line-through; }
+.tsh-left { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+.tsh-opt { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 13.5px; }
+.tsh-sum { margin: 10px 0 0; }
