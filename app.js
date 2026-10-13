@@ -2297,6 +2297,7 @@
       ['doc', 'Print-ready PDF', 'Paperback interior with page numbers and chapter openers', '', () => openPreview('paperback')],
       ['book', 'EPUB e-book', 'For Kindle (KDP), Apple Books and Kobo', '', () => openPreview('ebook')],
       ['doc', 'Word document (.docx)', 'For an editor, agent or beta reader', '', () => openPreview('docs')],
+      ['folder', 'A folder of chapter files…', 'One Word or Markdown file per chapter, for Scrivener or any app', '', () => window.UnwipExportFolder && window.UnwipExportFolder.open()],
       null,
       ['person', 'Send to a beta reader…', 'A Word file they mark up with Track Changes and comments', '', () => window.UnwipReader && window.UnwipReader.send()],
       ['importic', 'Bring in a reader’s feedback…', 'Their changes and comments land in the right chapters', '', () => window.UnwipReader && window.UnwipReader.receive()]
@@ -3336,54 +3337,8 @@
     scheduleMeta(); renderBinder(); updateStatus();
     toast(`Imported ${items.length} document${items.length === 1 ? '' : 's'} from ${esc(file.name)}.`);
   }
-  async function importScrivener() {
-    let data;
-    try { data = await api.importScrivener(); } catch (e) { toast(esc((e.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '') || 'Could not open that project.'), 'warn', 7000); return; }
-    if (!data) return;
-    let res;
-    try { res = window.FolioImport.scrivener(data, uid); } catch (e) { toast(esc(e.message), 'warn', 7000); return; }
-    const tpl = newProjectTemplate();
-    for (const r of tpl.binder) { r.children = res.roots[r.kind] || []; r.open = r.kind === 'manuscript'; }
-    tpl.importedFrom = 'Scrivener';
-    if (res.statusList && res.statusList.length) tpl.statuses = res.statusList;
-    if (res.docFont || res.docSize) tpl.style = { ...(tpl.style || {}), ...(res.docFont ? { font: res.docFont } : {}), ...(res.docSize ? { size: res.docSize } : {}) };
-    const slug = await api.createProject(data.name, tpl);
-    // documents: body text; notes go into the document's notes field
-    const project = await api.openProject(slug);
-    const ids = Object.keys(res.docs);
-    // big pictures from Scrivener are shrunk to a sensible size before saving
-    if (window.UnwipImages) for (const id of ids) {
-      if (!/<img [^>]*src="data:image/.test(res.docs[id]) || res.docs[id].length < 600000) continue;
-      const box = document.createElement('div'); box.innerHTML = res.docs[id];
-      for (const img of box.querySelectorAll('img.doc-img')) { try { const p = await window.UnwipImages.shrinkDataURL(img.src); img.src = p.src; img.dataset.w = p.w; img.dataset.h = p.h; } catch {} }
-      res.docs[id] = box.innerHTML;
-    }
-    for (const id of ids) res.docs[id] = Clip.dropBlankLines(res.docs[id]).html;      // empty lines used as spacing
-    for (const id of ids) await api.saveDoc(slug, id, res.docs[id]);
-    // word counts
-    walkTree(project.binder, n => { if (n.type === 'doc' && res.docs[n.id]) n.words = countWords(htmlText(res.docs[n.id])); });
-    project.totalWords = 0;
-    await api.saveProjectMeta(slug, project);
-    await openProject(slug);
-    S.project.totalWords = manuscriptWords(); scheduleMeta();
-    const r = res.report;
-    await modal({
-      title: 'Scrivener import finished',
-      body: `<div class="import-report">
-        <p><b>${fmt(r.documents)}</b> documents and <b>${fmt(r.folders)}</b> folders imported into a new project, “${esc(data.name)}”.</p>
-        <ul>
-          <li>Your Draft folder is now the Manuscript. Research, Trash and character or place folders went to the matching sections; other folders went to Notes.</li>
-          ${res.docFont ? `<li>Your main font, ${esc(res.docFont)}${res.docSize ? ` ${res.docSize}pt` : ''}, is now this project’s manuscript style.</li>` : ''}
-          <li>Synopses, icons and your own status labels came across (switch to Detailed mode to see the statuses)${r.withNotes ? `. Notes from ${r.withNotes} documents are in Notes › Document notes from Scrivener` : ''}.</li>
-          ${r.images ? `<li>${r.images} picture${r.images > 1 ? 's' : ''} came across as documents showing the picture.</li>` : ''}
-          ${r.empty ? `<li>${r.empty} documents were empty in Scrivener and came across empty.</li>` : ''}
-          ${r.skipped.length ? `<li>Not imported (Unwip doesn't hold these yet): ${esc(r.skipped.slice(0, 8).join(', '))}${r.skipped.length > 8 ? ` and ${r.skipped.length - 8} more` : ''}.</li>` : ''}
-          <li>Not carried over: compile settings, snapshots, and Scrivener-only styles. Your original Scrivener project is untouched.</li>
-        </ul></div>`,
-      buttons: [{ label: 'Start writing', value: true, kind: 'primary' }]
-    });
-    if (window.UnwipSheets) await window.UnwipSheets.offerAfterImport().catch(e => console.warn('sheets', e));
-  }
+  // the three-step Scrivener import lives in scrivimport.js
+  async function importScrivener() { if (window.UnwipScriv) return window.UnwipScriv.start(); }
   $('#btn-import').onclick = e => {
     const r = e.target.getBoundingClientRect();
     showMenu(r.left, r.bottom + 4, [
@@ -3505,7 +3460,7 @@
         ${rows.map(({ n, depth, no }) => `
           <div class="ol-row ${n.type}" data-id="${n.id}">
             <span class="ol-no">${no}</span>
-            <span class="ol-title" style="padding-left:${depth * 18}px">${n.icon ? iconHTML(n, '') : n.type === 'folder' ? I.folder : ''}<button class="ol-open" title="Open">${esc(n.title || 'Untitled')}</button></span>
+            <span class="ol-title" style="padding-left:${depth * 18}px">${n.icon ? iconHTML(n, '') : n.type === 'folder' ? I.folder : ''}<button class="ol-open" title="Open">${esc(n.title || 'Untitled')}</button>${n.label ? `<span class="lbl-chip" style="--lc:${esc(n.label.c)}" title="Label">${esc(n.label.n)}</span>` : ''}</span>
             <span><textarea class="ol-syn" rows="1" placeholder="${n.type === 'folder' ? 'What this part covers…' : 'What happens…'}">${esc(n.synopsis || '')}</textarea></span>
             <span><input class="ol-pov" value="${esc(n.pov || '')}" placeholder="–" list="ol-pov-list"></span>
             <span>${n.type === 'doc' ? `<select class="ol-status" style="--st:${statusColor(n.status)}">${statusOptions().map(([v, l]) => `<option value="${v}" ${v === (n.status || '') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}</span>
@@ -3549,7 +3504,7 @@
           const count = isF ? (n.children || []).length : 0;
           return `<div class="ck-card ${isF ? 'folder' : ''}" style="--st:${isF ? 'var(--line)' : statusColor(n.status)}" draggable="true" data-id="${n.id}">
             <i class="ck-pin"></i>
-            <div class="ck-top"><span class="ck-num">${i + 1}</span>${n.icon ? `<span class="ck-icon">${iconHTML(n, '')}</span>` : ''}<input class="ck-title" value="${esc(n.title || '')}" placeholder="Untitled" spellcheck="false"></div>
+            <div class="ck-top"><span class="ck-num">${i + 1}</span>${n.icon ? `<span class="ck-icon">${iconHTML(n, '')}</span>` : ''}<input class="ck-title" value="${esc(n.title || '')}" placeholder="Untitled" spellcheck="false">${n.label ? `<span class="lbl-chip" style="--lc:${esc(n.label.c)}" title="Label">${esc(n.label.n)}</span>` : ''}</div>
             <textarea class="ck-syn" placeholder="${isF ? 'What this part covers…' : 'What happens…'}">${esc(n.synopsis || '')}</textarea>
             <div class="ck-foot">
               ${isF ? `<span class="ck-chip">${count} item${count === 1 ? '' : 's'}</span>` : `<button class="ck-chip ck-status" title="Click to change status (right-click to edit labels)">${esc(statusName(n.status))}</button>`}
@@ -4168,7 +4123,7 @@
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,
     reloadProjectMeta, showLibrary, openProject, leaveProject: () => leaveProject(), importScrivener: () => importScrivener(), DEFAULT_STYLE, setMode, setView: v => setView(v), importWordProject: () => importWordProject(), newProjectTemplate: () => newProjectTemplate(), ROOTS,
-    tidyBlankLines, sectionDialog, sheetFor, scheduleNames, fontOptionsHTML, applyStyle, markScenes, templateGallery, continueWriting, noteLastPlace, caretOffset,
+    tidyBlankLines, sectionDialog, sheetFor, scheduleNames, fontOptionsHTML, applyStyle, markScenes, docBlocks, templateGallery, continueWriting, noteLastPlace, caretOffset,
     openPreview, snapshotsDialog, openSettings, goalsDialog, writtenOn, dayKey, streaks, dial, manuscriptWords, openFind, openSearch, splitAtCursor, setMode, restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
   };
 })();

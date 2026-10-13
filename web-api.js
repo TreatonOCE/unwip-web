@@ -391,7 +391,38 @@
     snapDelete: async (slug, id, ts) => { const dir = `${pdir(slug)}/snapshots/${safeId(id)}`; await FS.write(`${dir}/snapshots.json`, JSON.stringify((await FS.json(`${dir}/snapshots.json`, [])).filter(m => m.ts !== Number(ts)))); await FS.remove(`${dir}/${Number(ts)}.html`); return true; },
     snapRename: async (slug, id, ts, label) => { const dir = `${pdir(slug)}/snapshots/${safeId(id)}`; const meta = await FS.json(`${dir}/snapshots.json`, []); const m = meta.find(x => x.ts === Number(ts)); if (m) { m.label = label; m.auto = false; } await FS.write(`${dir}/snapshots.json`, JSON.stringify(meta)); return true; },
     // imports: pick files from the iPad's Files app (Dropbox shows up there too)
-    async importScrivener() { throw new Error('Scrivener projects can be brought in with the PC app. Then use “Save a full backup file” there and open it here, or connect Dropbox.'); },
+    // a browser can read a whole folder: pick the .scriv folder (on a computer; phones can't pick folders)
+    importScrivener() {
+      return new Promise((resolve, reject) => {
+        const inp = document.createElement('input'); inp.type = 'file'; inp.webkitdirectory = true; inp.multiple = true; inp.style.display = 'none';
+        document.body.appendChild(inp);
+        inp.onchange = async () => {
+          try {
+            const list = [...inp.files]; inp.remove();
+            if (!list.length) return resolve(null);
+            const scrivx = list.find(f => /\.scrivx$/i.test(f.name));
+            if (!scrivx) return reject(new Error('That folder isn’t a Scrivener project (there’s no .scrivx file inside). Choose the folder whose name ends in .scriv.'));
+            const root = scrivx.webkitRelativePath.split('/').slice(0, -1).join('/');
+            const rel = f => f.webkitRelativePath.slice(root.length + 1);
+            const pic = f => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(f); });
+            const files = {};
+            for (const f of list) {
+              const p = rel(f); let m;
+              if ((m = p.match(/^Files\/Data\/([^/]+)\/(content\.rtf|synopsis\.txt|notes\.rtf|content\.(png|jpe?g|gif|webp))$/i))) {
+                const e = files[m[1]] = files[m[1]] || {};
+                if (/^content\.rtf$/i.test(m[2])) e.content = await f.text(); else if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else e.image = await pic(f);
+              } else if ((m = p.match(/^Files\/Docs\/(\d+)(_synopsis\.txt|_notes\.rtf|\.rtf|\.(png|jpe?g|gif|webp))$/i))) {
+                const e = files[m[1]] = files[m[1]] || {};
+                if (/synopsis/i.test(m[2])) e.synopsis = await f.text(); else if (/notes/i.test(m[2])) e.notes = await f.text(); else if (/\.rtf$/i.test(m[2])) e.content = await f.text(); else e.image = await pic(f);
+              }
+            }
+            resolve({ name: (root.split('/').pop() || scrivx.name).replace(/\.scriv$/i, '').replace(/\.scrivx$/i, ''), scrivx: await scrivx.text(), files });
+          } catch (e) { reject(e); }
+        };
+        inp.addEventListener('cancel', () => { inp.remove(); resolve(null); });
+        inp.click();
+      });
+    },
     async importDocx() { const [f] = await pickFiles({ accept: '.docx' }); return f ? { name: baseName(f.name), bytes: await bytesOf(f) } : null; },
     async importFiles() { const fs = await pickFiles({ accept: '.docx,.odt,.rtf,.txt,.md,.markdown,.text,.htm,.html', multiple: true }); return fs.length ? Promise.all(fs.map(async f => ({ name: baseName(f.name), ext: extOf(f.name), bytes: await bytesOf(f) }))) : null; },
     async importFolder() {

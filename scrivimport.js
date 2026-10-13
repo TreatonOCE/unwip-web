@@ -1,0 +1,156 @@
+// Unwip - bringing a Scrivener project in, in three steps:
+//  1. Scan: read the project (nothing in it is changed, ever).
+//  2. Preview and map: Scrivener's folders on the left, where each will land in Unwip on the right, with a tick
+//     box and a choice for each, a before-and-after look at a chapter, and what isn't brought across.
+//  3. Import into a new project, then a short report. Your choices for folder names are remembered.
+window.UnwipScriv = (function () {
+  'use strict';
+  const U = window.__unwip; if (!U) return;
+  const { S, api, esc, $, $$ } = U;
+  const FI = window.FolioImport, Clip = window.FolioClip;
+  const TARGETS = [['manuscript', 'Manuscript'], ['characters', 'Characters'], ['places', 'Places'], ['items', 'Items'], ['notes', 'Notes'], ['research', 'Research'], ['new', 'A new section'], ['trash', 'Trash']];
+  const ICON = { DraftFolder: '📖', ResearchFolder: '🔬', TrashFolder: '🗑️', Folder: '📁', Text: '📄' };
+  const nameKey = t => (t || '').trim().toLowerCase();
+  const htmlText = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return d.textContent || ''; };
+  const errText = e => String((e && e.message) || e || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+
+  async function start() {
+    // ---- 1. scan
+    let data;
+    try { data = await api.importScrivener(); } catch (e) { return U.toast(esc(errText(e) || 'Could not open that project.'), 'warn', 7000); }
+    if (!data) return;
+    let scan, conv;
+    try {
+      scan = FI.scrivenerScan(data);
+      conv = FI.scrivener(data, U.uid, { keepKeys: true });     // a first conversion, for the before-and-after look
+    } catch (e) { return U.toast(esc(errText(e)), 'warn', 7000); }
+    const remembered = (S.settings && S.settings.scrivMap) || {};
+    const rows = scan.groups.map(g => {
+      const mem = remembered[nameKey(g.title)];
+      return { ...g, target: mem || g.guess, on: g.type !== 'TrashFolder' || g.docs > 0, mem: !!mem && mem !== g.guess };
+    });
+    // ---- 2. preview and map
+    for (;;) {
+      const v = await mapScreen(data, scan, conv, rows);
+      if (!v) return;
+      if (v.preview) { await previewScreen(data, conv); continue; }
+      return importNow(data, rows, v);
+    }
+  }
+
+  function countText(g) {
+    const parts = [];
+    if (g.docs) parts.push(`${g.docs} document${g.docs === 1 ? '' : 's'}`);
+    if (g.pics) parts.push(`${g.pics} picture${g.pics === 1 ? '' : 's'}`);
+    if (g.other) parts.push(`${g.other} other file${g.other === 1 ? '' : 's'} (not imported)`);
+    return parts.join(', ') || 'empty';
+  }
+  async function mapScreen(data, scan, conv, rows) {
+    const body = document.createElement('div'); body.className = 'sim';
+    body.innerHTML = `
+      <p class="hint">Step 2 of 3. Here’s what’s in <b>${esc(data.name)}</b> and where each part will go. Change anything with the lists on the right, or untick what you don’t want. Your Scrivener project isn’t changed, and everything goes into a <b>new</b> Unwip project.</p>
+      <div class="sim-grid">
+        <div class="sim-h">Scrivener: ${esc(data.name)}</div><div></div><div class="sim-h">Unwip</div>
+        ${rows.map((r, i) => `
+          <label class="sim-l ${r.on ? '' : 'off'}"><input type="checkbox" data-on="${i}" ${r.on ? 'checked' : ''}><span class="sim-ic">${ICON[r.type] || '📄'}</span><span><b>${esc(r.title)}</b><small>${esc(countText(r))}</small></span></label>
+          <div class="sim-arrow">→</div>
+          <div class="sim-r"><select data-t="${i}" ${r.on ? '' : 'disabled'}>${TARGETS.map(([k, l]) => `<option value="${k}" ${k === r.target ? 'selected' : ''}>${k === 'new' ? `A new section “${esc(r.title)}”` : l}</option>`).join('')}</select>${r.mem ? '<small class="sim-mem" title="You chose this last time for a folder with this name">remembered</small>' : ''}</div>`).join('')}
+      </div>
+      <p class="sim-not"><b>Not imported:</b> ${esc(scan.notImported.join(', '))}.</p>
+      <div class="sim-foot">
+        <div class="field"><label>New project name</label><input type="text" id="sim-name" value="${esc(data.name)}"></div>
+        <label class="check"><input type="checkbox" id="sim-mem" checked><span>Remember these choices for folders with the same names</span></label>
+        <p class="sim-small">Comes across: text with its formatting, folders and order, synopses, document notes, ${scan.labels.length ? 'labels, ' : ''}${scan.statuses.length ? 'status, ' : ''}icons and pictures${conv.docFont ? `, and your main font (${esc(conv.docFont)}${conv.docSize ? ' ' + conv.docSize + 'pt' : ''})` : ''}.</p>
+      </div>`;
+    body.querySelectorAll('[data-on]').forEach(c => c.onchange = () => { const r = rows[+c.dataset.on]; r.on = c.checked; c.closest('.sim-l').classList.toggle('off', !r.on); body.querySelector(`[data-t="${c.dataset.on}"]`).disabled = !r.on; });
+    body.querySelectorAll('[data-t]').forEach(s => s.onchange = () => { rows[+s.dataset.t].target = s.value; });
+    const hasDraft = Object.keys(conv.docs).length > 0;
+    const v = await U.modal({ title: 'Import from Scrivener', body, wide: true, buttons: [
+      { label: 'Cancel', value: false, kind: 'ghost' },
+      ...(hasDraft ? [{ label: 'Show a chapter before and after…', value: 'preview', kind: 'ghost' }] : []),
+      { label: 'Import into a new project', value: 'go', kind: 'primary' }] });
+    if (!v) return null;
+    const name = $('#sim-name', body).value.trim() || data.name, mem = $('#sim-mem', body).checked;
+    if (v === 'preview') return { preview: true };
+    return { name, mem };
+  }
+
+  // the same chapter as Scrivener had it, and as it will look in Unwip
+  async function previewScreen(data, conv) {
+    const chapters = [];
+    U.walkTree(conv.roots.manuscript || [], n => { if (n.type === 'doc' && conv.docs[n.id] && htmlText(conv.docs[n.id]).trim()) chapters.push(n); });
+    if (!chapters.length) { U.toast('There are no chapters with text to show.'); return; }
+    const body = document.createElement('div'); body.className = 'simp';
+    const font = conv.docFont || (S.settings && S.settings.defaultStyle && S.settings.defaultStyle.font) || 'Times New Roman', size = conv.docSize || 12;
+    body.innerHTML = `
+      <div class="field"><label>Chapter</label><select id="simp-ch">${chapters.map((c, i) => `<option value="${i}">${esc(c.title || 'Untitled')}</option>`).join('')}</select></div>
+      <div class="simp-cols">
+        <div><div class="simp-h">Before: as Scrivener had it</div><div class="simp-page simp-before"></div></div>
+        <div><div class="simp-h">After: in Unwip (${esc(font)} ${size}pt)</div><div class="simp-page simp-after" style="font-family:'${esc(font)}', Georgia, serif; font-size:${size}pt"></div></div>
+      </div>
+      <p class="sim-small">Empty lines used as spacing are removed (the space between paragraphs comes from Manuscript style), and leftover fonts are folded into one main font. Bold, italics, scene breaks and pictures stay.</p>`;
+    // start on a real chapter rather than a title page
+    const firstReal = Math.max(0, chapters.findIndex(c => U.countWords(htmlText(conv.docs[c.id])) > 300));
+    const show = () => {
+      const n = chapters[+$('#simp-ch', body).value];
+      const f = data.files[n._key] || {};
+      $('.simp-before', body).innerHTML = f.content ? window.FolioRTF.toHTML(f.content) : conv.docs[n.id];
+      $('.simp-after', body).innerHTML = `<h1>${esc(n.title || '')}</h1>` + Clip.dropBlankLines(conv.docs[n.id]).html;
+      $('.simp-before', body).scrollTop = 0; $('.simp-after', body).scrollTop = 0;
+    };
+    await U.modal({ title: 'Before and after', body, wide: true, onOpen: () => { $('#simp-ch', body).value = String(firstReal); $('#simp-ch', body).onchange = show; show(); }, buttons: [{ label: 'Back to the list', value: true, kind: 'primary' }] });
+  }
+
+  // ---- 3. import into a new project
+  async function importNow(data, rows, v) {
+    const map = {}; for (const r of rows) map[r.key] = r.on ? r.target : 'skip';
+    if (v.mem) {
+      const memo = { ...((S.settings && S.settings.scrivMap) || {}) };
+      for (const r of rows) { if (!r.on) continue; if (r.target !== r.guess) memo[nameKey(r.title)] = r.target; else delete memo[nameKey(r.title)]; }
+      S.settings = await api.setSettings({ scrivMap: memo });
+    }
+    U.toast('Importing…', '', 2500);
+    let res; try { res = FI.scrivener(data, U.uid, { map }); } catch (e) { return U.toast(esc(errText(e)), 'warn', 7000); }
+    const tpl = U.newProjectTemplate();
+    for (const r of tpl.binder) { r.children = res.roots[r.kind] || []; r.open = r.kind === 'manuscript'; }
+    for (const ns of res.newSections || []) {
+      const k = 'custom-' + U.uid(), t = ns.title;
+      tpl.binder.splice(tpl.binder.findIndex(x => x.kind === 'trash'), 0, { id: 'root-' + k, type: 'folder', kind: k, root: true, custom: true, open: false, children: ns.children, title: t, singular: t.replace(/ies$/i, 'y').replace(/(?<!s)s$/i, ''), fields: ['Name', 'Aliases'], sections: ['Description', 'Notes'], icon: '🗂️' });
+    }
+    tpl.importedFrom = 'Scrivener';
+    if (res.statusList && res.statusList.length) tpl.statuses = res.statusList;
+    if (res.docFont || res.docSize) tpl.style = { ...(tpl.style || {}), ...(res.docFont ? { font: res.docFont } : {}), ...(res.docSize ? { size: res.docSize } : {}) };
+    const slug = await api.createProject(v.name, tpl);
+    const project = await api.openProject(slug);
+    const ids = Object.keys(res.docs);
+    if (window.UnwipImages) for (const id of ids) {
+      if (!/<img [^>]*src="data:image/.test(res.docs[id]) || res.docs[id].length < 600000) continue;
+      const box = document.createElement('div'); box.innerHTML = res.docs[id];
+      for (const img of box.querySelectorAll('img.doc-img')) { try { const p = await window.UnwipImages.shrinkDataURL(img.src); img.src = p.src; img.dataset.w = p.w; img.dataset.h = p.h; } catch {} }
+      res.docs[id] = box.innerHTML;
+    }
+    for (const id of ids) res.docs[id] = Clip.dropBlankLines(res.docs[id]).html;
+    for (const id of ids) await api.saveDoc(slug, id, res.docs[id]);
+    U.walkTree(project.binder, n => { delete n._key; if (n.type === 'doc' && res.docs[n.id]) n.words = U.countWords(htmlText(res.docs[n.id])); });
+    project.totalWords = 0;
+    await api.saveProjectMeta(slug, project);
+    await U.openProject(slug);
+    S.project.totalWords = U.manuscriptWords(); U.scheduleMeta();
+    const r = res.report, where = Object.fromEntries(TARGETS);
+    await U.modal({ title: 'Import finished', body: `<div class="import-report">
+        <p><b>${r.documents}</b> documents and <b>${r.folders}</b> folders from “${esc(data.name)}” are in the new project “${esc(v.name)}”. Your Scrivener project is untouched.</p>
+        <ul>
+          ${(r.placed || []).map(p => `<li>${esc(p.title)} → ${p.target === 'new' ? `a new section, “${esc(p.title)}”` : esc(where[p.target] || p.target)}</li>`).join('')}
+          ${r.withNotes ? `<li>Notes from ${r.withNotes} documents are in Notes › Document notes from Scrivener.</li>` : ''}
+          ${res.docFont ? `<li>Your main font, ${esc(res.docFont)}${res.docSize ? ` ${res.docSize}pt` : ''}, is this project’s manuscript style. To change it everywhere, use Manuscript style › Font for the whole book.</li>` : ''}
+          ${r.images ? `<li>${r.images} picture${r.images > 1 ? 's' : ''} came across.</li>` : ''}
+          ${r.empty ? `<li>${r.empty === 1 ? '1 document was' : `${r.empty} documents were`} empty in Scrivener and came across empty.</li>` : ''}
+          ${(r.left || []).length ? `<li>Left out, as you chose: ${esc(r.left.join(', '))}.</li>` : ''}
+          ${r.skipped.length ? `<li>Not imported (Unwip doesn’t hold these yet): ${esc(r.skipped.slice(0, 8).join(', '))}${r.skipped.length > 8 ? ` and ${r.skipped.length - 8} more` : ''}.</li>` : ''}
+          <li>Not imported: compile settings, collections, keywords, custom metadata, snapshots, links and Scrivener-only styles.</li>
+        </ul></div>`, buttons: [{ label: 'Start writing', value: true, kind: 'primary' }] });
+    if (window.UnwipSheets) await window.UnwipSheets.offerAfterImport().catch(() => {});
+  }
+
+  return { start, TARGETS };
+})();

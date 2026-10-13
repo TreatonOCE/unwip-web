@@ -179,13 +179,52 @@ window.FolioImport = (function () {
 
   // ---------------------------------------------------------------- Scrivener
   // returns { binder: [Unwip root folders], docs: {id: html}, report }
-  function scrivener(data, uid) {
+  // where a top-level Scrivener folder goes when nobody has said otherwise
+  function guessTarget(type, title) {
+    const t = (title || '').toLowerCase();
+    if (type === 'DraftFolder') return 'manuscript';
+    if (type === 'ResearchFolder') return 'research';
+    if (type === 'TrashFolder') return 'trash';
+    if (/character|cast|people/.test(t)) return 'characters';
+    if (/place|location|setting|world/.test(t)) return 'places';
+    if (/^items?$|objects|artifacts|artefacts/.test(t)) return 'items';
+    return 'notes';
+  }
+  // step 1 of importing: read the structure only (nothing is converted or changed) for the preview screen
+  function scrivenerScan(data) {
+    const xml = new DOMParser().parseFromString(data.scrivx, 'application/xml');
+    const top = xml.querySelector('Binder'); if (!top) throw new Error('Could not read this Scrivener project.');
+    const count = el => { let docs = 0, folders = 0, pics = 0, other = 0; for (const b of el.querySelectorAll('BinderItem')) { const ty = b.getAttribute('Type'); if (/Folder/.test(ty)) folders++; else if (ty === 'Image') pics++; else if (['PDF', 'WebArchive', 'Media'].includes(ty)) other++; else docs++; } return { docs, folders, pics, other }; };
+    const groups = [...top.children].filter(c => c.tagName === 'BinderItem').map(item => {
+      const type = item.getAttribute('Type'), title = ((item.querySelector(':scope > Title') || {}).textContent || 'Untitled').trim();
+      const c = count(item); if (!/Folder/.test(type)) { if (type === 'Image') c.pics++; else if (['PDF', 'WebArchive', 'Media'].includes(type)) c.other++; else c.docs++; }
+      return { key: item.getAttribute('UUID') || item.getAttribute('ID'), title, type, ...c, guess: guessTarget(type, title) };
+    });
+    // things Unwip doesn't bring across, named so nobody wonders where they went
+    const notImported = ['compile settings'];
+    if (xml.querySelector('Collections Collection')) notImported.push('collections and saved searches');
+    if (xml.querySelector('Keywords Keyword, KeywordSettings Keyword')) notImported.push('keywords');
+    if (xml.querySelector('CustomMetaDataSettings MetaDataField')) notImported.push('custom metadata');
+    if (xml.querySelector('ProjectTargets, Targets')) notImported.push('word count targets');
+    notImported.push('snapshots', 'document links and bookmarks', 'Scrivener-only styles');
+    const pdfs = groups.reduce((a, g) => a + g.other, 0); if (pdfs) notImported.push(`${pdfs} PDF, web page or media file${pdfs === 1 ? '' : 's'}`);
+    const labels = [...xml.querySelectorAll('LabelSettings Labels Label')].map(l => l.textContent.trim()).filter(n => n && !/^no label$/i.test(n));
+    const statuses = [...xml.querySelectorAll('StatusSettings StatusItems Status')].map(l => l.textContent.trim()).filter(n => n && !/^no status$/i.test(n));
+    return { groups, notImported, labels, statuses };
+  }
+
+  function scrivener(data, uid, opts = {}) {
     const xml = new DOMParser().parseFromString(data.scrivx, 'application/xml');
     const report = { documents: 0, folders: 0, skipped: [], empty: 0, withNotes: 0 };
     const docs = {};
     const noteDocs = [];
     const labels = {}, statuses = {};
-    for (const l of xml.querySelectorAll('LabelSettings Labels Label')) labels[l.getAttribute('ID')] = l.textContent.trim();
+    const labelColor = {};
+    for (const l of xml.querySelectorAll('LabelSettings Labels Label')) {
+      labels[l.getAttribute('ID')] = l.textContent.trim();
+      const c = (l.getAttribute('Color') || '').trim().split(/\s+/).map(Number);   // "0.7 0.85 0.63" (0-1) in Scrivener
+      if (c.length >= 3 && c.every(x => !isNaN(x))) labelColor[l.getAttribute('ID')] = `rgb(${c.slice(0, 3).map(x => Math.round((x <= 1 ? x * 255 : x))).join(',')})`;
+    }
     for (const s of xml.querySelectorAll('StatusSettings StatusItems Status')) statuses[s.getAttribute('ID')] = s.textContent.trim();
     // keep Scrivener's own status names (with colours from a matching palette), so nothing gets renamed
     const PALETTE = ['#9b968d', '#d39b2a', '#4a7fd0', '#7a5cc7', '#3f9a5a', '#c0392b', '#1f7a8c', '#b5651d'];
@@ -224,6 +263,8 @@ window.FolioImport = (function () {
       const extra = {};
       if (synopsis) extra.synopsis = synopsis;
       if (statusId && statusList.some(x => x.id === 's' + statusId)) extra.status = 's' + statusId;
+      const labelId = meta && meta.querySelector('LabelID') ? meta.querySelector('LabelID').textContent.trim() : null;
+      if (labelId && labels[labelId] && !/^no label$/i.test(labels[labelId]) && labelId !== '-1') extra.label = { n: labels[labelId], c: labelColor[labelId] || '#9b968d' };
       if (iconM && [...iconM[1]].length <= 4) extra.icon = iconM[1];
       if (notesHTML && textOf(notesHTML)) { const nid = uid(); docs[nid] = notesHTML; noteDocs.push({ id: nid, type: 'doc', title: `${title} (notes)`, words: 0 }); report.withNotes++; }
       if (isFolder) {
@@ -236,25 +277,30 @@ window.FolioImport = (function () {
       docs[id] = bodyHTML || '<p><br></p>';
       if (!hasText) report.empty++;
       report.documents++;
-      return { node: { id, type: 'doc', title, words: 0, ...extra }, type };
+      return { node: { id, type: 'doc', title, words: 0, ...extra, ...(opts.keepKeys ? { _key: key } : {}) }, type };
     }
     // unwrap {node, type} recursively
     const unwrap = r => { if (!r) return null; const n = r.node; if (n.children) n.children = n.children.map(unwrap).filter(Boolean); return n; };
 
     const top = xml.querySelector('Binder');
     if (!top) throw new Error('Could not read this Scrivener project.');
+    const newSections = [], placed = [];
     for (const item of [...top.children].filter(c => c.tagName === 'BinderItem')) {
+      const key = item.getAttribute('UUID') || item.getAttribute('ID');
+      const type = item.getAttribute('Type'), title = ((item.querySelector(':scope > Title') || {}).textContent || 'Untitled').trim();
+      const target = (opts.map && opts.map[key]) || guessTarget(type, title);
+      if (target === 'skip') { report.left = (report.left || []).concat(title); continue; }
       const r = convert(item); if (!r) continue;
       const node = unwrap(r);
-      const t = (node.title || '').toLowerCase();
-      if (r.type === 'DraftFolder') roots.manuscript.push(...(node.children || []));
-      else if (r.type === 'ResearchFolder') roots.research.push(...(node.children || []));
-      else if (r.type === 'TrashFolder') roots.trash.push(...(node.children || []));
-      else if (/character|cast|people/.test(t)) roots.characters.push(...(node.type === 'folder' ? node.children : [node]));
-      else if (/place|location|setting|world/.test(t)) roots.places.push(...(node.type === 'folder' ? node.children : [node]));
-      else if (/^items?$|objects|artifacts|artefacts/.test(t)) roots.items.push(...(node.type === 'folder' ? node.children : [node]));
-      else roots.notes.push(node);
+      const inner = node.type === 'folder' ? node.children : [node];
+      placed.push({ title, target });
+      if (target === 'new') newSections.push({ title, children: inner });
+      // the special folders (and folders whose name says what they hold) give their contents; anything else keeps its folder
+      else if (['manuscript', 'research', 'trash'].includes(target) && /Folder$/.test(type) && type !== 'Folder') roots[target].push(...inner);
+      else if (['characters', 'places', 'items'].includes(target) || (['manuscript', 'research'].includes(target) && guessTarget(type, title) === target)) roots[target].push(...inner);
+      else roots[target].push(node);
     }
+    report.placed = placed;
     if (noteDocs.length) roots.notes.push({ id: uid(), type: 'folder', title: 'Document notes from Scrivener', open: false, children: noteDocs });
     // the font and size used most in the manuscript become the project's style, so they don't need repeating on every word
     const tally = {}, sizes = {};
@@ -268,8 +314,8 @@ window.FolioImport = (function () {
     const top1 = o => Object.entries(o).sort((a, b) => b[1] - a[1])[0];
     const docFont = (top1(tally) || [])[0] || null, docSize = top1(sizes) ? +top1(sizes)[0] : null;
     for (const id of Object.keys(docs)) docs[id] = clean2(docs[id], docFont, docSize) || '<p><br></p>';
-    return { roots, docs, report, labels, statuses, statusList, docFont, docSize };
+    return { roots, docs, report, labels, statuses, statusList, docFont, docSize, newSections };
   }
 
-  return { docxToHTML, splitChapters, scrivener, unzip };
+  return { docxToHTML, splitChapters, scrivener, scrivenerScan, guessTarget, unzip };
 })();

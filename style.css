@@ -2129,3 +2129,23 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .bf-prev b { display: block; font-size: 21px; margin-bottom: 4px; }
 .bf .check { display: flex; gap: 8px; align-items: flex-start; margin: 7px 0; font-size: 14px; } .bf .check small { display: block; color: var(--muted); font-size: 12.5px; }
 .bf-scope { display: grid; gap: 4px; margin-top: 6px; }
+
+/* importing from Scrivener */
+.sim-grid { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 260px); gap: 6px 8px; align-items: center; margin: 12px 0; }
+.sim-h { font: 700 12px var(--ui); text-transform: uppercase; letter-spacing: .4px; color: var(--muted); padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.sim-l { display: flex; gap: 8px; align-items: center; cursor: pointer; min-width: 0; }
+.sim-l b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .sim-l small { color: var(--muted); font-size: 12.5px; }
+.sim-l.off { opacity: .45; } .sim-ic { font-size: 18px; }
+.sim-arrow { color: var(--muted); text-align: center; }
+.sim-r { display: flex; flex-direction: column; } .sim-mem { color: var(--accent); font-size: 11.5px; margin-top: 2px; }
+.sim-not { font-size: 13px; color: var(--muted); margin: 8px 0; }
+.sim-foot { border-top: 1px solid var(--line); padding-top: 10px; } .sim-foot .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: 14px; }
+.sim-small { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+.simp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.simp-h { font: 700 12px var(--ui); color: var(--muted); margin-bottom: 4px; }
+.simp-page { height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; background: #fffef9; color: #222; line-height: 1.5; }
+.simp-after p { margin: 0; text-indent: .5in; } .simp-after p:first-of-type, .simp-after h1 + p { text-indent: 0; }
+.simp-after h1 { font-size: 1.5em; text-align: center; margin: 0 0 1em; }
+/* labels from Scrivener */
+.lbl-chip { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font: 600 11px/18px var(--ui); color: #222; background: color-mix(in srgb, var(--lc) 45%, white); vertical-align: middle; white-space: nowrap; }
+@media (max-width: 640px) { .sim-grid { grid-template-columns: minmax(0,1fr) 20px minmax(0, 150px); } .simp-cols { grid-template-columns: 1fr; } }
