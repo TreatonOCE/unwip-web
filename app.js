@@ -188,7 +188,18 @@
     const grid = $('#project-grid');
     grid.innerHTML = '';
     if (!list.length) grid.innerHTML = '<div class="lib-empty">No projects yet. Create one to start writing.</div>';
-    for (const p of list) {
+    // grouped by where they're kept (Dropbox, then other synced folders, then this device), when there's more than one place
+    const groupKey = p => `${p.placeRank ?? 2}|${p.place || ''}`;
+    const groups = [...new Set(list.map(groupKey))].sort((a, b) => (+a.split('|')[0] - +b.split('|')[0]) || a.localeCompare(b));
+    const grouped = groups.length > 1;
+    const ordered = grouped ? groups.flatMap(g => list.filter(p => groupKey(p) === g)) : list;
+    let lastGroup = null;
+    for (const p of ordered) {
+      if (grouped && groupKey(p) !== lastGroup) {
+        lastGroup = groupKey(p);
+        const n = list.filter(x => groupKey(x) === lastGroup).length;
+        const h = document.createElement('div'); h.className = 'lib-group'; h.innerHTML = `<span>${esc(p.place || 'Other')}</span><small>${n} book${n === 1 ? '' : 's'}</small>`; grid.appendChild(h);
+      }
       const card = document.createElement('div');
       card.className = 'project-card';
       const when = p.modified ? new Date(p.modified).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -197,7 +208,7 @@
       card.innerHTML = `<div class="pc-top"><div><div class="pc-spine"></div><h3>${esc(p.title)}</h3></div>
           ${goal ? dial({ pct: p.words / goal, big: Math.floor(p.words / goal * 100) + '%', small: '', size: 58, track: 6 }) : ''}</div>
         ${pace ? `<div class="pc-pace">${esc(pace)}</div>` : ''}
-        <div class="pc-meta">${fmt(p.words)}${goal ? ' / ' + fmt(goal) : ''} words · ${when}${p.dev && S.device && p.dev !== S.device ? ` · on ${esc(p.dev)}` : ''}${p.place ? ` · <span class="pc-place">${esc(p.place)}</span>` : ''}</div><button class="icon-btn small pc-more" title="More">${I.dots}</button>`;
+        <div class="pc-meta">${fmt(p.words)}${goal ? ' / ' + fmt(goal) : ''} words · ${when}${p.dev && S.device && p.dev !== S.device ? ` · on ${esc(p.dev)}` : ''}</div><button class="icon-btn small pc-more" title="More">${I.dots}</button>`;
       card.onclick = e => { if (!e.target.closest('.pc-more')) openProject(p.slug); };
       $('.pc-more', card).onclick = e => {
         e.stopPropagation();
@@ -328,7 +339,7 @@
     S.sessionTyped = 0;
     S.project.totalWords = total; scheduleMeta(); // refresh a stale total straight away
     renderBinder();
-    const first = project.lastDoc && findNode(project.lastDoc) && !S.popped.has(project.lastDoc) ? project.lastDoc : firstDocId();
+    const first = project.lastDoc && findNode(project.lastDoc) ? project.lastDoc : firstDocId();
     if (first) await openDoc(first); else showEmpty(true);
     updateStatus();
     api.backup(slug).catch(() => {});
@@ -622,7 +633,7 @@
       if (n.type === 'doc' && !n.map && window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn into separate sheets…', action: () => window.UnwipSheets.convert([n.id]) });
       if (n.type === 'doc' || n.type === 'folder') items.push({ label: 'Remove empty lines…', action: () => tidyBlankLines(n.id) });
       if (n.type === 'doc' && n.id !== S.docId) items.push({ label: 'Open in split view', action: () => { if (S.view !== 'write') setView('write'); openSplit(n.id); } });
-      if (n.type === 'doc' && !n.map && api.popoutOpen) items.push({ label: S.popped && S.popped.has(n.id) ? 'Show its window' : 'Open in its own window', action: () => popOut(n.id) });
+      if (n.type === 'doc' && !n.map && api.popoutOpen) items.push({ label: S.popped && S.popped.has(n.id) ? 'Show its window' : 'Open in a new window', action: () => popOut(n.id) });
       { const fn = findNode(n.id); const nx = fn.list[fn.index + 1];
         if (n.type === 'doc' && nx && nx.type === 'doc' && !nx.root) items.push({ label: `Merge with next (“${nx.title.length > 24 ? nx.title.slice(0, 24) + '…' : nx.title}”)…`, action: () => mergeWithNext(n.id) });
         if (n.type === 'folder') items.push({ label: 'Merge folder into one document…', action: () => mergeFolder(n.id) }); }
@@ -1212,7 +1223,6 @@
   }
 
   async function openDoc(id, opts = {}) {
-    if (S.popped && S.popped.has(id)) { const f0 = findNode(id); api.popoutOpen(S.slug, id, f0 ? f0.node.title : ''); toast(`“${esc(f0 ? f0.node.title : 'That chapter')}” is open in its own window.`); return; }
     await flushSave();
     const f = findNode(id); if (!f) return;
     if (f.node.map && window.UnwipMaps) { S.selectedId = id; renderBinder(); return window.UnwipMaps.open(id); }
@@ -4261,7 +4271,6 @@
       if (!id) { toast('Add a character sheet or a note first, then open it beside your chapter.'); return; }
     }
     if (id === S.docId) { toast('That document is already open on the left.'); return; }
-    if (S.popped && S.popped.has(id)) { api.popoutOpen(S.slug, id, (findNode(id) || { node: {} }).node.title); toast('That one is open in its own window.'); return; }
     S.splitId = id; S.project.splitId = id; scheduleMeta();
     $('#split-pane').classList.remove('hidden');
     $('#btn-split').classList.add('on');
@@ -4312,16 +4321,13 @@
   async function popOut(id) {
     if (!api.popoutOpen) return;
     const f = findNode(id); if (!f || f.node.map || f.node.type !== 'doc') return;
-    if (id === S.splitId) await closeSplit();
-    if (id === S.docId) {
-      await flushSave();
-      S.docId = null; S.emptyNote = `“${f.node.title || 'Untitled'}” is open in its own window. Pick another chapter in the binder, or close that window to carry on with it here.`; showEmpty(true);
-    }
+    if (id === S.docId) await flushSave();
+    if (id === S.splitId) await flushSplit();
     S.popped = S.popped || new Set(); S.popped.add(id); renderBinder();
     await api.popoutOpen(S.slug, id, f.node.title);
   }
   if (api.popoutOpen) {
-    const pb = document.createElement('button'); pb.className = 'icon-btn small'; pb.id = 'sp-pop'; pb.title = 'Open in its own window (for a second screen)'; pb.textContent = '⧉';
+    const pb = document.createElement('button'); pb.className = 'icon-btn small'; pb.id = 'sp-pop'; pb.title = 'Open in a new window (keeps it here too)'; pb.textContent = '⧉';
     $('#sp-open').before(pb); pb.onclick = () => { if (S.splitId) popOut(S.splitId); };
     let wordsT = null;
     api.onPopout(async d => {
@@ -4331,8 +4337,21 @@
       const f = findNode(d.id);
       if (f && typeof d.words === 'number') { f.node.words = d.words; f.node.mod = Date.now(); S.dirtySinceBackup = true; clearTimeout(wordsT); wordsT = setTimeout(() => { if (!S.project || S.slug !== d.slug) return; scheduleMeta(); updateStatus(); renderBinder(); }, 800); }
       else renderBinder();
-      if (d.back || (!d.open && !S.docId)) { if (f) openDoc(d.id); }
+      if (d.saved) await takeInWindowChange(d.id);
+      if (d.back && f && S.docId !== d.id) openDoc(d.id);
     });
+    // the same chapter open here too: show what was written in the other window (not while typing here)
+    async function takeInWindowChange(id) {
+      if (!S.slug || (id !== S.docId && id !== S.splitId)) return;
+      const html = await api.loadDoc(S.slug, id);
+      if (id === S.docId && !S.dirty && html !== editor.innerHTML) {
+        const sc = editorWrap.scrollTop; editor.innerHTML = html; S.loadedHTML = html; resyncWords(); markScenes(editor); editorWrap.scrollTop = sc;
+      }
+      if (id === S.splitId && !S.splitDirty && html !== spEd.innerHTML) { const sc = spEd.scrollTop; spEd.innerHTML = html; spFoot(); spEd.scrollTop = sc; }
+    }
+    // moving to another window saves what's typed here first, so it shows there straight away; coming back checks
+    window.addEventListener('blur', () => { if (S.popped && S.popped.size) { flushSave(); flushSplit(); } });
+    window.addEventListener('focus', () => { if (S.popped && S.popped.size) for (const id of [S.docId, S.splitId]) if (id && S.popped.has(id)) takeInWindowChange(id); });
   }
   $('#btn-split').onclick = () => S.splitId ? closeSplit() : openSplit(null);
 

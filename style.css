@@ -2222,3 +2222,6 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .po-main .page { margin: 0 auto; max-width: var(--page-width, 720px); }
 .po-main .editor { min-height: 70vh; outline: none; }
 .tr-pop { margin-left: 6px; font-size: 12px; color: var(--accent); }
+.lib-group { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; margin: 14px 2px -4px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-weight: 600; }
+.lib-group:first-child { margin-top: 0; }
+.lib-group small { font-weight: 400; color: var(--muted); font-size: 12.5px; }

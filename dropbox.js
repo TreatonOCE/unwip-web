@@ -328,6 +328,9 @@ window.UnwipDropbox = (function () {
   // ---------------------------------------------------------------- where books go, and deleting them
   const origCreate = F.createProject, origDelete = F.deleteProject, origRestore = F.restoreDeleted;
   const inDropbox = slug => connected() && !st.localOnly.some(x => x.toLowerCase() === String(slug).toLowerCase());
+  // on the main screen, books in Dropbox come first, then the ones kept on this device only
+  const origList = F.listProjects;
+  F.listProjects = async () => (await origList()).map(p => ({ ...p, ...(inDropbox(p.slug) ? { place: 'Dropbox', placeRank: 0 } : { place: `This ${DEVICE}`, placeRank: 3 }) }));
   F.projectPlaces = async () => connected() ? [{ path: 'dropbox', label: 'Dropbox', note: 'also on your PC and other devices', main: true }, { path: 'local', label: `This ${DEVICE} only`, note: 'not synced' }] : [];
   F.createProject = async (title, template, place) => {
     const slug = await origCreate(title, template);

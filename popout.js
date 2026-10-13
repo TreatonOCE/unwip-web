@@ -36,6 +36,7 @@
   }
   window.__flush = async () => { await save(); await saving; return 1; };
 
+  window.addEventListener('blur', () => { if (dirty) save(); });
   editor.addEventListener('input', () => { dirty = true; $('#po-saved').textContent = ''; clearTimeout(timer); timer = setTimeout(save, 700); showCount(); });
   editor.addEventListener('paste', e => {
     e.preventDefault();
@@ -50,7 +51,7 @@
   api.onExternalChange(async info => {
     if (info.id !== id || dirty) return;
     const html = await api.loadDoc(slug, id);
-    if (html && html !== lastSaved && html !== editor.innerHTML) { editor.innerHTML = html; lastSaved = html; showCount(); $('#po-saved').textContent = 'Updated from your other device'; }
+    if (html && html !== lastSaved && html !== editor.innerHTML) { const top = $('.po-main').scrollTop; editor.innerHTML = html; lastSaved = html; showCount(); $('.po-main').scrollTop = top; $('#po-saved').textContent = 'Up to date'; }
   });
 
   (async () => {
