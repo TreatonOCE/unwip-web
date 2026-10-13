@@ -2249,3 +2249,22 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .dbi-ic { flex: none; }
 /* before and after on a phone: two short panes, with room around them to scroll the window */
 @media (max-width: 640px) { .simp-page { height: 30vh; } .simp { padding: 0 6px; } }
+/* PC: the sync button, easy to spot on a big screen */
+.dbx-pill.pcs-pill { height: 38px; padding: 0 4px 0 14px; font-size: 14px; color: var(--text); gap: 8px; background: color-mix(in srgb, #0061fe 7%, var(--paper)); border: 1.5px solid color-mix(in srgb, #0061fe 45%, var(--line)); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.dbx-pill.pcs-pill svg { width: 18px; height: 18px; color: #0061fe; }
+.dbx-pill.pcs-pill .pcs-act { margin-left: 4px; padding: 0 12px; height: 28px; display: inline-flex; align-items: center; border-radius: 99px; background: #0061fe; color: #fff; font-weight: 600; font-size: 13px; }
+.dbx-pill.pcs-pill:hover .pcs-act { background: #0050d6; }
+.dbx-pill.pcs-pill.off { padding-right: 14px; background: var(--paper); border-color: var(--line); color: var(--muted); }
+.dbx-pill.pcs-pill.off svg { color: var(--muted); }
+.dbx-pill.pcs-pill.warn, .dbx-pill.pcs-pill.news { background: color-mix(in srgb, #d97706 10%, var(--paper)); border-color: color-mix(in srgb, #d97706 55%, var(--line)); color: var(--text); }
+.dbx-pill.pcs-pill.warn .pcs-act, .dbx-pill.pcs-pill.news .pcs-act { background: #d97706; }
+:root[data-theme="dark"] .dbx-pill.pcs-pill svg { color: #6aa8ff; }
+.pcs-mini { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 10px; margin-left: 8px; border-radius: 99px; border: 1.5px solid color-mix(in srgb, #0061fe 45%, var(--line)); background: color-mix(in srgb, #0061fe 7%, var(--paper)); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.pcs-mini svg { color: #0061fe; }
+.pcs-mini:hover { background: color-mix(in srgb, #0061fe 14%, var(--paper)); }
+.pcs-mini.busy svg { animation: pulse 1.2s ease-in-out infinite; }
+.pcs-mini.off { border-color: var(--line); background: transparent; color: var(--muted); font-weight: 400; }
+.pcs-mini.off svg { color: var(--muted); }
+.pcs-mini.warn, .pcs-mini.news { border-color: color-mix(in srgb, #d97706 55%, var(--line)); background: color-mix(in srgb, #d97706 10%, var(--paper)); }
+.pcs-mini .dbx-warn { position: static; font-size: 12px; margin: 0; }
+:root[data-theme="dark"] .pcs-mini svg { color: #6aa8ff; }

@@ -26,8 +26,8 @@ window.UnwipPCSync = (function () {
     if (head) {
       let pill = document.getElementById('pc-sync-pill');
       if (!pill) { pill = document.createElement('button'); pill.id = 'pc-sync-pill'; head.insertBefore(pill, head.firstChild); pill.onclick = click; }
-      pill.className = 'dbx-pill ' + s.cls; pill.hidden = !s.text;
-      pill.innerHTML = CLOUD + (s.cls === 'warn' || s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : '') + `<span>${esc(s.text)}</span>`;
+      pill.className = 'dbx-pill pcs-pill ' + s.cls; pill.hidden = !s.text;
+      pill.innerHTML = CLOUD + (s.cls === 'warn' || s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : '') + `<span>${esc(s.text)}</span>` + (status && status.provider !== 'none' ? `<span class="pcs-act">${busy ? 'Checking…' : '↻ Sync now'}</span>` : '');
       pill.title = s.long || s.text;
     }
     // beside the book's name while writing
@@ -35,8 +35,8 @@ window.UnwipPCSync = (function () {
     if (tb) {
       let mini = document.getElementById('pc-sync-mini');
       if (!mini) { mini = document.createElement('button'); mini.id = 'pc-sync-mini'; tb.appendChild(mini); mini.onclick = click; }
-      mini.className = 'icon-btn dbx-mini ' + s.cls; mini.hidden = !s.text;
-      mini.innerHTML = CLOUD + (s.cls === 'warn' || s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : '');
+      mini.className = 'pcs-mini ' + s.cls; mini.hidden = !s.text;
+      mini.innerHTML = CLOUD + (s.cls === 'warn' || s.cls === 'news' ? '<b class="dbx-warn">⚠</b>' : '') + `<span class="pcs-lab">${status && status.provider !== 'none' ? (busy ? 'Checking…' : 'Sync') : 'This PC'}</span>`;
       mini.title = (s.long || s.text) + (S.slug && status && status.provider !== 'none' ? '' : '');
     }
   }
