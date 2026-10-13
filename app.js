@@ -197,7 +197,7 @@
       card.innerHTML = `<div class="pc-top"><div><div class="pc-spine"></div><h3>${esc(p.title)}</h3></div>
           ${goal ? dial({ pct: p.words / goal, big: Math.floor(p.words / goal * 100) + '%', small: '', size: 58, track: 6 }) : ''}</div>
         ${pace ? `<div class="pc-pace">${esc(pace)}</div>` : ''}
-        <div class="pc-meta">${fmt(p.words)}${goal ? ' / ' + fmt(goal) : ''} words · ${when}${p.dev && S.device && p.dev !== S.device ? ` · on ${esc(p.dev)}` : ''}</div><button class="icon-btn small pc-more" title="More">${I.dots}</button>`;
+        <div class="pc-meta">${fmt(p.words)}${goal ? ' / ' + fmt(goal) : ''} words · ${when}${p.dev && S.device && p.dev !== S.device ? ` · on ${esc(p.dev)}` : ''}${p.place ? ` · <span class="pc-place">${esc(p.place)}</span>` : ''}</div><button class="icon-btn small pc-more" title="More">${I.dots}</button>`;
       card.onclick = e => { if (!e.target.closest('.pc-more')) openProject(p.slug); };
       $('.pc-more', card).onclick = e => {
         e.stopPropagation();
@@ -207,20 +207,74 @@
           { label: 'Backups…', action: () => window.UnwipSync && window.UnwipSync.backupsDialog(p.slug, p.title) },
           { label: 'Save a full backup file…', action: async () => { const f = await api.backupExport(p.slug); if (f) toast('Full backup saved, including images and snapshots.'); } },
           { sep: true },
-          { label: 'Move to Recycle Bin…', danger: true, action: async () => {
-            if (await confirmBox('Delete project?', `"${esc(p.title)}" will be moved to the Windows Recycle Bin. You can restore it from there.`, 'Move to Recycle Bin', true)) {
-              await api.deleteProject(p.slug); showLibrary();
-            }
-          } }
+          { label: 'Delete…', danger: true, action: () => deleteBook(p) }
         ]);
       };
       grid.appendChild(card);
     }
+    renderBin();
+  }
+  // ---- deleting a book: it goes to Deleted books (on this screen), where it can be restored
+  async function deleteBook(p) {
+    // the phone/iPad version with Dropbox may offer "this device only" or "everywhere" (dropbox.js)
+    const choices = api.deleteChoices ? await api.deleteChoices(p.slug) : null;
+    const where = p.place && /dropbox|onedrive|drive/i.test(p.place) ? ` It’s in ${esc(p.place)}, so it leaves your other devices too (they keep it in their Deleted books).` : '';
+    const v = await modal({ title: 'Delete this book?', body: `<p>“${esc(p.title)}” goes to <b>Deleted books</b>, at the bottom of this screen. You can bring it back from there any time.${choices ? '' : where}</p>${choices ? `<p class="hint">${choices.note}</p>` : ''}`,
+      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, ...(choices ? choices.buttons.map((b, i) => ({ label: b, value: 'c' + i, kind: i === choices.buttons.length - 1 ? 'danger primary' : 'ghost' })) : [{ label: 'Delete', value: 'c0', kind: 'danger primary' }])] });
+    if (!v) return;
+    try { await api.deleteProject(p.slug, { how: +v.slice(1) }); } catch (e) { toast(`Couldn’t delete it: ${esc(e.message || e)}`, 'warn', 9000); }
+    showLibrary();
+    toast(`“${esc(p.title)}” is in Deleted books.`);
+  }
+  async function renderBin() {
+    const el = $('#lib-bin'); if (!el) return;
+    const list = api.deletedProjects ? await api.deletedProjects().catch(() => []) : [];
+    el.innerHTML = list.length ? `<button class="link-btn" id="lib-bin-open">🗑️ Deleted books (${list.length})</button>` : '';
+    if (list.length) $('#lib-bin-open').onclick = () => binDialog();
+  }
+  async function binDialog() {
+    const body = document.createElement('div'); body.className = 'bin-box';
+    const draw = async () => {
+      const list = await api.deletedProjects().catch(() => []);
+      if (!list.length) { body.innerHTML = '<p class="hint">Nothing in Deleted books.</p>'; return; }
+      const when = t => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+      body.innerHTML = `<p class="hint">Deleted books stay here until you delete them forever. Bring one back and it’s just as it was.</p>
+        <div class="bin-list">${list.map(b => `<div class="bin-row" data-id="${esc(b.id)}"><div><b>${esc(b.title)}</b><span>${fmt(b.words)} words · deleted ${when(b.at)}${b.by ? ` on ${esc(b.by)}` : ''}${b.place ? ` · ${esc(b.place)}` : ''}</span></div>
+          <button class="btn small" data-a="restore">Bring back</button><button class="btn small ghost danger-text" data-a="purge">Delete forever</button></div>`).join('')}</div>`;
+      body.querySelectorAll('.bin-row button').forEach(btn => btn.onclick = async () => {
+        const id = btn.closest('.bin-row').dataset.id, b = list.find(x => x.id === id);
+        if (btn.dataset.a === 'restore') { await api.restoreDeleted(id); toast(`“${esc(b.title)}” is back.`); }
+        else if (await confirmBox('Delete forever?', `“${esc(b.title)}” will be removed from Unwip for good${api.web ? '' : ' (Windows keeps it in its Recycle Bin for a while)'}.`, 'Delete forever', true)) await api.purgeDeleted(id);
+        await draw();
+      });
+    };
+    await draw();
+    await modal({ title: 'Deleted books', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
+    showLibrary();
+  }
+  // ---- where a new book is kept: offered when there's more than one place it could go
+  async function placeField(id = 'np-place') {
+    const places = api.projectPlaces ? await api.projectPlaces().catch(() => []) : [];
+    if (places.length < 2 && !api.pickPlace) return { html: '', read: async () => null };
+    const last = (S.settings || {}).newBookPlace;
+    const pick = places.find(x => x.path === last) || places.find(x => x.main) || places[0];
+    const html = `<div class="field"><label>Keep it in</label><select id="${id}">${places.map((x, i) => `<option value="${i}" ${x === pick ? 'selected' : ''}>${esc(x.label)}${x.note ? ` (${esc(x.note)})` : ''}</option>`).join('')}${api.pickPlace ? '<option value="pick">Another folder…</option>' : ''}</select></div>`;
+    return { html, read: async body => {
+      const v = $('#' + id, body).value;
+      const place = v === 'pick' ? await api.pickPlace() : (places[+v] || {}).path;
+      if (place) S.settings = await api.setSettings({ newBookPlace: place }).catch(() => S.settings);
+      return place || null;
+    } };
   }
   $('#btn-new-project').onclick = async () => {
-    const title = await promptText('New project', 'Project title', '');
+    const pf = await placeField();
+    const body = document.createElement('div');
+    body.innerHTML = `<div class="field"><label>Project title</label><input type="text" id="np-title"></div>${pf.html}`;
+    const ok = await modal({ title: 'New project', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Create', value: true, kind: 'primary' }], onOpen: () => setTimeout(() => $('#np-title', body).focus(), 50) });
+    const title = ok ? $('#np-title', body).value.trim() : '';
     if (!title) return;
-    const slug = await api.createProject(title, newProjectTemplate());
+    const place = await pf.read(body);
+    const slug = await api.createProject(title, newProjectTemplate(), place);
     openProject(slug);
   };
   $('#btn-open-folder').onclick = () => api.revealProject(null);
@@ -264,6 +318,7 @@
     // older versions counted pasted text as written words, so start progress tracking fresh
     if (project.statsVersion !== 2) { project.stats.days = {}; project.statsVersion = 2; }
     S.slug = slug; S.project = project;
+    S.popped = new Set(api.popoutList ? await api.popoutList(slug).catch(() => []) : []);
     $('#library').classList.add('hidden');
     $('#workspace').classList.remove('hidden');
     $('#project-title').textContent = project.title;
@@ -273,7 +328,7 @@
     S.sessionTyped = 0;
     S.project.totalWords = total; scheduleMeta(); // refresh a stale total straight away
     renderBinder();
-    const first = project.lastDoc && findNode(project.lastDoc) ? project.lastDoc : firstDocId();
+    const first = project.lastDoc && findNode(project.lastDoc) && !S.popped.has(project.lastDoc) ? project.lastDoc : firstDocId();
     if (first) await openDoc(first); else showEmpty(true);
     updateStatus();
     api.backup(slug).catch(() => {});
@@ -326,6 +381,7 @@
     await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null;
     setRevise(false);
     await flushSave();
+    if (S.slug && api.popoutClose && S.popped && S.popped.size) await api.popoutClose(S.slug).catch(() => {});
     if (troubleRetry && !(await confirmBox('Not saved yet', 'Unwip still can’t save this book (the warning at the top says why). If you leave now, Unwip keeps trying in the background while it stays open, but it’s safest to fix the problem first.', 'Leave anyway'))) return false;
     if (S.metaTimer && S.slug) await saveMetaNow().catch(() => {});   // a rename or move made just before leaving
     if (S.slug) await api.backup(S.slug).catch(() => {});
@@ -419,6 +475,7 @@
   }
   function rootIcon(n) { if (n.icon) return iconHTML(n, ''); const r = ROOTS.find(x => x.kind === n.kind); return r ? I[r.icon] : I.tag; }
   function renderBinder() {
+    if (!S.project) return;
     const tree = $('#binder-tree');
     // a rename box is open: redrawing now would throw it away (the "flicker" on double-click), so wait for it
     if (S.renaming && tree.contains(S.renaming)) { S.binderPending = true; return; }
@@ -435,7 +492,7 @@
       const icon = n.root ? rootIcon(n) : iconHTML(n, n.type === 'folder' ? (n.open ? I.folderOpen : I.folder) : I.doc);
       const showCount = n.id === ms.id || isInside(n.id, ms);
       const count = showCount ? folderWords(n) : 0;
-      row.innerHTML = `<span class="tr-chev ${n.open ? 'open' : ''} ${n.type === 'folder' && (hasKids || n.root) ? '' : 'none'}">${I.chevron}</span><span class="tr-icon">${icon}</span><span class="tr-title">${esc(n.title || 'Untitled')}</span>${n.series && S.project.series ? `<span class="tr-series" title="Shared with the series “${esc(S.project.series)}”">${I.series}</span>` : ''}${n.fav ? `<span class="tr-fav" title="Favourite">★</span>` : ''}${n.type === 'doc' && statusOf(n.status) && S.mode === 'detailed' ? `<span class="st-dot" style="--st:${statusColor(n.status)}" title="${esc(statusName(n.status))}"></span>` : ''}${showCount && count ? `<span class="tr-count">${fmt(count)}</span>` : ''}${n.root && n.kind !== 'trash' && n.kind !== 'conflicts' ? `<button class="tr-add" title="Add a new ${n.kind === 'manuscript' ? 'chapter' : newTitleFor(n).replace(/^New /, '')} to ${esc(n.title)}">+</button>` : ''}`;
+      row.innerHTML = `<span class="tr-chev ${n.open ? 'open' : ''} ${n.type === 'folder' && (hasKids || n.root) ? '' : 'none'}">${I.chevron}</span><span class="tr-icon">${icon}</span><span class="tr-title">${esc(n.title || 'Untitled')}</span>${S.popped && S.popped.has(n.id) ? '<span class="tr-pop" title="Open in its own window">⧉</span>' : ''}${n.series && S.project.series ? `<span class="tr-series" title="Shared with the series “${esc(S.project.series)}”">${I.series}</span>` : ''}${n.fav ? `<span class="tr-fav" title="Favourite">★</span>` : ''}${n.type === 'doc' && statusOf(n.status) && S.mode === 'detailed' ? `<span class="st-dot" style="--st:${statusColor(n.status)}" title="${esc(statusName(n.status))}"></span>` : ''}${showCount && count ? `<span class="tr-count">${fmt(count)}</span>` : ''}${n.root && n.kind !== 'trash' && n.kind !== 'conflicts' ? `<button class="tr-add" title="Add a new ${n.kind === 'manuscript' ? 'chapter' : newTitleFor(n).replace(/^New /, '')} to ${esc(n.title)}">+</button>` : ''}`;
       row.draggable = !n.root;
       tree.appendChild(row);
       if (n.type === 'folder' && n.open) for (const c of n.children || []) build(c, depth + 1);
@@ -565,6 +622,7 @@
       if (n.type === 'doc' && !n.map && window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn into separate sheets…', action: () => window.UnwipSheets.convert([n.id]) });
       if (n.type === 'doc' || n.type === 'folder') items.push({ label: 'Remove empty lines…', action: () => tidyBlankLines(n.id) });
       if (n.type === 'doc' && n.id !== S.docId) items.push({ label: 'Open in split view', action: () => { if (S.view !== 'write') setView('write'); openSplit(n.id); } });
+      if (n.type === 'doc' && !n.map && api.popoutOpen) items.push({ label: S.popped && S.popped.has(n.id) ? 'Show its window' : 'Open in its own window', action: () => popOut(n.id) });
       { const fn = findNode(n.id); const nx = fn.list[fn.index + 1];
         if (n.type === 'doc' && nx && nx.type === 'doc' && !nx.root) items.push({ label: `Merge with next (“${nx.title.length > 24 ? nx.title.slice(0, 24) + '…' : nx.title}”)…`, action: () => mergeWithNext(n.id) });
         if (n.type === 'folder') items.push({ label: 'Merge folder into one document…', action: () => mergeFolder(n.id) }); }
@@ -1149,10 +1207,12 @@
   function showEmpty(on) {
     $('#page').classList.toggle('hidden', on);
     $('#empty-state').classList.toggle('hidden', !on);
+    if (on) { const p = $('#empty-state p'); if (p) p.textContent = S.emptyNote || 'Select a document in the binder, or create a new one.'; S.emptyNote = null; }
     if (on) { editor.innerHTML = ''; updateStatus(); if (window.CSS && CSS.highlights) clearRvHighlights(); }
   }
 
   async function openDoc(id, opts = {}) {
+    if (S.popped && S.popped.has(id)) { const f0 = findNode(id); api.popoutOpen(S.slug, id, f0 ? f0.node.title : ''); toast(`“${esc(f0 ? f0.node.title : 'That chapter')}” is open in its own window.`); return; }
     await flushSave();
     const f = findNode(id); if (!f) return;
     if (f.node.map && window.UnwipMaps) { S.selectedId = id; renderBinder(); return window.UnwipMaps.open(id); }
@@ -4201,6 +4261,7 @@
       if (!id) { toast('Add a character sheet or a note first, then open it beside your chapter.'); return; }
     }
     if (id === S.docId) { toast('That document is already open on the left.'); return; }
+    if (S.popped && S.popped.has(id)) { api.popoutOpen(S.slug, id, (findNode(id) || { node: {} }).node.title); toast('That one is open in its own window.'); return; }
     S.splitId = id; S.project.splitId = id; scheduleMeta();
     $('#split-pane').classList.remove('hidden');
     $('#btn-split').classList.add('on');
@@ -4247,6 +4308,32 @@
   $('#sp-doc').onclick = spPicker;
   $('#sp-close').onclick = closeSplit;
   $('#sp-open').onclick = async () => { const id = S.splitId; await closeSplit(); if (S.view !== 'write') setView('write'); openDoc(id); };
+  // ---- a chapter in its own window, for a second screen (PC)
+  async function popOut(id) {
+    if (!api.popoutOpen) return;
+    const f = findNode(id); if (!f || f.node.map || f.node.type !== 'doc') return;
+    if (id === S.splitId) await closeSplit();
+    if (id === S.docId) {
+      await flushSave();
+      S.docId = null; S.emptyNote = `“${f.node.title || 'Untitled'}” is open in its own window. Pick another chapter in the binder, or close that window to carry on with it here.`; showEmpty(true);
+    }
+    S.popped = S.popped || new Set(); S.popped.add(id); renderBinder();
+    await api.popoutOpen(S.slug, id, f.node.title);
+  }
+  if (api.popoutOpen) {
+    const pb = document.createElement('button'); pb.className = 'icon-btn small'; pb.id = 'sp-pop'; pb.title = 'Open in its own window (for a second screen)'; pb.textContent = '⧉';
+    $('#sp-open').before(pb); pb.onclick = () => { if (S.splitId) popOut(S.splitId); };
+    let wordsT = null;
+    api.onPopout(async d => {
+      if (!S.slug || d.slug !== S.slug) return;
+      S.popped = S.popped || new Set();
+      if (d.open) S.popped.add(d.id); else S.popped.delete(d.id);
+      const f = findNode(d.id);
+      if (f && typeof d.words === 'number') { f.node.words = d.words; f.node.mod = Date.now(); S.dirtySinceBackup = true; clearTimeout(wordsT); wordsT = setTimeout(() => { if (!S.project || S.slug !== d.slug) return; scheduleMeta(); updateStatus(); renderBinder(); }, 800); }
+      else renderBinder();
+      if (d.back || (!d.open && !S.docId)) { if (f) openDoc(d.id); }
+    });
+  }
   $('#btn-split').onclick = () => S.splitId ? closeSplit() : openSplit(null);
 
   // ================================================================== QUOTES
@@ -4331,7 +4418,7 @@
   window.__folio = { S, openProject, openDoc, copyDocForDocs, compileManuscript, flushSave, addNode, setWriter, insertCleanHTML };
   window.__unwip = {
     S, api, I, $, $$, esc, fmt, countWords, today, editor, editorWrap, on, emit,
-    modal, toast, toastAction, confirmBox, promptText, showMenu, quoteToast,
+    modal, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
     findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave, refreshSnapCount,
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,

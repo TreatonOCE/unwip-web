@@ -298,8 +298,31 @@
       project.modified = Date.now(); project.savedBy = window.UNWIP_VERSION || 'web';
       await FS.write(`${pdir(slug)}/project.json`, JSON.stringify(project, null, 2)); return true;
     },
-    // deleting keeps a copy in a hidden “_Deleted” folder (the browser has no Recycle Bin)
-    async deleteProject(slug) { await FS.copyTree(pdir(slug), `${LIB}/_Deleted/${Date.now()} ${slug}`); await FS.removeTree(pdir(slug)); return true; },
+    // deleting moves the book into Unwip's own Deleted books (a hidden “_Deleted” folder), to bring back later
+    async deleteProject(slug) {
+      const p = await FS.json(`${pdir(slug)}/project.json`, {}), to = `${LIB}/_Deleted/${Date.now()} ${slug}`;
+      await FS.copyTree(pdir(slug), to); await FS.write(`${to}/.deleted.json`, JSON.stringify({ title: p.title || slug, at: Date.now(), by: deviceName }));
+      await FS.removeTree(pdir(slug)); return true;
+    },
+    async deletedProjects() {
+      const out = [];
+      for (const d of (await FS.list(`${LIB}/_Deleted`)).dirs) {
+        const p = await FS.json(`${LIB}/_Deleted/${d}/project.json`, null); if (!p) continue;
+        const meta = await FS.json(`${LIB}/_Deleted/${d}/.deleted.json`, {});
+        out.push({ id: d, title: p.title || d.replace(/^\d+\s/, ''), words: p.totalWords || 0, at: +(/^(\d{12,})\s/.exec(d) || [])[1] || meta.at || 0, by: meta.by && meta.by !== deviceName ? meta.by : '', slug: d.replace(/^\d{12,}\s/, '') });
+      }
+      return out.sort((a, b) => b.at - a.at);
+    },
+    async restoreDeleted(id) {
+      if (/[/\\]/.test(id)) throw new Error('Not found');
+      const from = `${LIB}/_Deleted/${id}`, p = await FS.json(`${from}/project.json`, null); if (!p) throw new Error('Not found');
+      const slug = await uniqueSlug(id.replace(/^\d{12,}\s/, '') || p.title || 'Restored book');
+      await FS.copyTree(from, pdir(slug)); await FS.remove(`${pdir(slug)}/.deleted.json`); await FS.removeTree(from);
+      // copyTree writes past the change tracking: touch the project file so Dropbox (if used) notices it
+      await FS.write(`${pdir(slug)}/project.json`, (await FS.text(`${pdir(slug)}/project.json`)));
+      return slug;
+    },
+    async purgeDeleted(id) { if (/[/\\]/.test(id)) throw new Error('Not found'); await FS.removeTree(`${LIB}/_Deleted/${id}`); return true; },
     revealProject: async () => '',
     loadDoc: async (slug, id) => (await FS.text(`${pdir(slug)}/docs/${safeId(id)}.html`)) || '',
     saveDoc: async (slug, id, html) => { await FS.write(`${pdir(slug)}/docs/${safeId(id)}.html`, html); return true; },

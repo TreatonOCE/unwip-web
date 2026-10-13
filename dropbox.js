@@ -206,6 +206,7 @@ window.UnwipDropbox = (function () {
     // what's here
     const local = {};
     for (const p of await FS.keys(LOCAL)) { const rel = p.slice(LOCAL.length); if (tracked(rel)) local[rel.toLowerCase()] = { rel }; }
+    await binDeletedElsewhere(remote, local);
     const keys = [...new Set([...Object.keys(remote), ...Object.keys(local), ...Object.keys(st.records)])]
       .sort((a, b) => (/^[^/]+\/project\.json$/.test(b) ? 1 : 0) - (/^[^/]+\/project\.json$/.test(a) ? 1 : 0) || (/\/docs\//.test(b) ? 1 : 0) - (/\/docs\//.test(a) ? 1 : 0));
     const todo = keys.length; let done = 0; progress = { phase: 'files', done, todo, down: 0, up: 0 }; renderSoon();
@@ -323,6 +324,59 @@ window.UnwipDropbox = (function () {
     if (!e || Date.now() - Date.parse(e.server_modified) > 180000) return null;
     try { const t = JSON.parse(new TextDecoder().decode(await download(e.path_lower))); return t.by !== DEVICE ? t : null; } catch { return null; }
   };
+
+  // ---------------------------------------------------------------- where books go, and deleting them
+  const origCreate = F.createProject, origDelete = F.deleteProject, origRestore = F.restoreDeleted;
+  const inDropbox = slug => connected() && !st.localOnly.some(x => x.toLowerCase() === String(slug).toLowerCase());
+  F.projectPlaces = async () => connected() ? [{ path: 'dropbox', label: 'Dropbox', note: 'also on your PC and other devices', main: true }, { path: 'local', label: `This ${DEVICE} only`, note: 'not synced' }] : [];
+  F.createProject = async (title, template, place) => {
+    const slug = await origCreate(title, template);
+    if (place === 'local' && connected()) { st.localOnly = [...new Set([...st.localOnly, slug])]; await persist(); }
+    return slug;
+  };
+  F.deleteChoices = async slug => inDropbox(slug) ? { note: `It’s also in Dropbox. Delete it on this ${DEVICE} only (it stays on your PC and other devices), or everywhere (they keep it in their Deleted books).`, buttons: [`This ${DEVICE} only`, 'Everywhere'] } : null;
+  F.deleteProject = async (slug, opts = {}) => {
+    const synced = inDropbox(slug);
+    if (synced) await sync().catch(() => {});                 // whatever was written last goes to Dropbox first
+    await origDelete(slug);
+    if (synced && opts.how === 1) {
+      const pre = String(slug).toLowerCase() + '/';
+      for (const k of Object.keys(st.records)) if (k.startsWith(pre)) delete st.records[k];
+      await persist();
+      const r = await rpc('/files/move_v2', { from_path: `${REMOTE}/${slug}`, to_path: `${REMOTE}/_Deleted/${Date.now()} ${slug}`, autorename: true, allow_ownership_transfer: false });
+      if (!r.ok && r.status !== 409) throw new Error('Deleted here, but Dropbox couldn’t be told (' + r.status + '). Try again later from Deleted books.');
+    }
+    st.localOnly = st.localOnly.filter(x => x.toLowerCase() !== String(slug).toLowerCase()); await persist();
+    return true;
+  };
+  // bringing back a book deleted on this device only: Dropbox still has it, up to date, so it comes from there
+  F.restoreDeleted = async id => {
+    const name = String(id).replace(/^\d{12,}\s/, ''), here = (st.removedHere || []).find(x => x.toLowerCase() === name.toLowerCase());
+    if (here && connected()) { st.removedHere = st.removedHere.filter(x => x !== here); await persist(); await F.purgeDeleted(id); await sync(); return here; }
+    return origRestore(id);
+  };
+  // a whole book deleted on another device: keep this device's copy in Deleted books before it goes from here
+  async function binDeletedElsewhere(remote, local) {
+    const gone = [];
+    for (const k of Object.keys(st.records)) {
+      const m = /^([^/]+)\/project\.json$/.exec(k); if (!m || remote[k] || !local[k]) continue;
+      const slug = local[k].rel.split('/')[0], U = window.__unwip;
+      let wasOpen = false; try { if (U && U.S.slug && U.S.slug.toLowerCase() === slug.toLowerCase()) { wasOpen = true; await U.leaveProject(); } } catch {}
+      const title = ((await FS.json(`${LOCAL}${slug}/project.json`, {})) || {}).title || slug;
+      const to = `${LOCAL}_Deleted/${Date.now()} ${slug}`;
+      await FS.copyTree(`${LOCAL}${slug}`, to); await rawWrite(`${to}/.deleted.json`, JSON.stringify({ title, at: Date.now(), by: 'another device' }));
+      await FS.removeTree(`${LOCAL}${slug}`);
+      for (const r of Object.keys(st.records)) if (r.startsWith(m[1] + '/')) delete st.records[r];
+      for (const r of Object.keys(local)) if (r.startsWith(m[1] + '/')) delete local[r];
+      gone.push(title);
+      if (wasOpen) try { U.showLibrary(); } catch {}
+    }
+    if (gone.length) {
+      await persist();
+      try { const U = window.__unwip; U.toast(`${gone.map(t => `“${esc(t)}”`).join(', ')} ${gone.length === 1 ? 'was' : 'were'} deleted on another device. ${gone.length === 1 ? 'It’s' : 'They’re'} in Deleted books here too, to bring back if you need.`, 'warn', 12000); } catch {}
+    }
+    return gone;
+  }
 
   // ---------------------------------------------------------------- connecting
   const standalone = () => !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));

@@ -55,6 +55,7 @@ window.UnwipScriv = (function () {
   async function mapScreen(data, scan, conv, rows) {
     const { hits: titleHits, total: titleTotal } = titleScan(conv.roots, conv.docs);
     const body = document.createElement('div'); body.className = 'sim';
+    const pf = U.placeField ? await U.placeField('sim-place') : { html: '', read: async () => null };
     body.innerHTML = `
       <p class="hint">Step 2 of 3. Here’s what’s in <b>${esc(data.name)}</b> and where each part will go. Change anything with the lists on the right, or untick what you don’t want. Your Scrivener project isn’t changed, and everything goes into a <b>new</b> Unwip project.</p>
       <div class="sim-grid">
@@ -67,7 +68,7 @@ window.UnwipScriv = (function () {
       <p class="sim-not"><b>Not imported:</b> ${esc(scan.notImported.join(', '))}.</p>
       ${titleHits.length && window.UnwipTitles ? window.UnwipTitles.choiceHTML(titleHits, titleTotal, 'sim-tt') : titleTotal ? `<p class="sim-small"><b>Chapter titles:</b> ${titleTotal === 1 ? 'your chapter doesn’t start with its title' : `none of the ${titleTotal} chapters start with their title`} typed into the text, so there’s nothing to tidy. Unwip shows each chapter’s binder name as its heading.</p>` : ''}
       <div class="sim-foot">
-        <div class="field"><label>New project name</label><input type="text" id="sim-name" value="${esc(data.name)}"></div>
+        <div class="field"><label>New project name</label><input type="text" id="sim-name" value="${esc(data.name)}"></div>${pf.html}
         <div class="field"><label>Empty lines between paragraphs</label><select id="sim-blank"><option value="keep">Keep them where they are, as in Scrivener</option><option value="tidy">Take them out (Unwip spaces paragraphs itself; two or more in a row become a scene break)</option></select></div>
         <label class="check"><input type="checkbox" id="sim-mem" checked><span>Remember these choices for folders with the same names</span></label>
         <p class="sim-small">Comes across: text with its formatting, folders and order, synopses, document notes, ${scan.labels.length ? 'labels, ' : ''}${scan.statuses.length ? 'status, ' : ''}icons and pictures${conv.docFont ? `, and your main font (${esc(conv.docFont)}${conv.docSize ? ' ' + conv.docSize + 'pt' : ''})` : ''}.</p>
@@ -86,7 +87,7 @@ window.UnwipScriv = (function () {
     const tt = body.querySelector('[name="sim-tt"]:checked'); rows.titles = tt ? tt.value : 'leave';
     rows.blank = blankChoice = $('#sim-blank', body).value;
     if (v === 'preview') return { preview: true };
-    return { name, mem, titles: rows.titles, blank: rows.blank };
+    return { name, mem, titles: rows.titles, blank: rows.blank, place: await pf.read(body) };
   }
 
   // the same chapter as Scrivener had it, and as it will look in Unwip
@@ -161,7 +162,7 @@ window.UnwipScriv = (function () {
     if (Object.keys(L).length) tpl.scrivLayout = L;
     let slug = null;
     try {
-    slug = await api.createProject(v.name, tpl);
+    slug = await api.createProject(v.name, tpl, v.place);
     const project = await api.openProject(slug);
     const ids = Object.keys(res.docs);
     if (window.UnwipImages) for (const id of ids) {

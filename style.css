@@ -2201,3 +2201,24 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .chg-bar.cq-bar > .cq-acts { grid-column: 2; display: flex; flex-direction: row; gap: 6px; flex-wrap: wrap; flex: none; }
 .cq-bar .cq-acts .btn { width: auto; }
 :root[data-theme="dark"] .chg-bar.cq-bar { background: #3a2c17; color: #f0d9b5; }
+/* Deleted books */
+.lib-bin { margin: 18px 0 4px; text-align: center; }
+.lib-bin .link-btn { color: var(--muted); font-size: 13.5px; }
+.lib-bin .link-btn:hover { color: var(--text); }
+.bin-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 55vh; overflow: auto; }
+.bin-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; }
+.bin-row b { display: block; }
+.bin-row span { font-size: 12.5px; color: var(--muted); }
+.bin-row .btn.danger-text { margin-right: 0; }
+.pc-place { color: var(--accent); }
+@media (max-width: 560px) { .bin-row { grid-template-columns: 1fr 1fr; } .bin-row > div { grid-column: 1 / -1; } }
+/* A chapter in its own window */
+.popout-body { display: flex; flex-direction: column; height: 100vh; margin: 0; background: var(--bg); }
+.po-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--panel, var(--bg)); }
+.po-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.po-tools { display: flex; align-items: center; gap: 6px; }
+.po-count, .po-saved { font-size: 12.5px; color: var(--muted); margin: 0 6px; white-space: nowrap; }
+.po-main { flex: 1; overflow: auto; padding: 28px 16px 80px; }
+.po-main .page { margin: 0 auto; max-width: var(--page-width, 720px); }
+.po-main .editor { min-height: 70vh; outline: none; }
+.tr-pop { margin-left: 6px; font-size: 12px; color: var(--accent); }
