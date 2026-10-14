@@ -15,6 +15,7 @@ window.UnwipCommand = (function () {
   // [label, extra words people might type, shortcut, run, available?]
   const ACTIONS = () => [
     ['Take a snapshot', 'save version backup copy', 'Ctrl+Shift+S', () => U.takeSnapshot(''), needDoc],
+    ['Build: maps, magic, runes, sigils and arms (without leaving this book)', 'build world map magic system rune runes sigil arms coat heraldry worldbuilding', '', () => window.UnwipBuild && window.UnwipBuild.fromBook(), inProject],
     ['Proof of writing', 'record replay screen video recording timelapse proof human written no ai authorship creator', '', () => window.UnwipProof && window.UnwipProof.open(), inProject],
     ['Screen video: pause or resume', 'pause resume screen video recording recorder stop break', '', () => { const P = window.UnwipProof; if (!P) return; if (P._V.rec) P.pauseVideo(!P._V.paused); else P.open(); }, inProject],
     ['Replay: watch how this book was written', 'replay playback recording proof timelapse report', '', () => window.UnwipProof && window.UnwipProof.recordings(), inProject],

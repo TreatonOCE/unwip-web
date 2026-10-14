@@ -4707,6 +4707,17 @@
   // ================================================================== START
   (async function start() {
     try { S.settings = await api.getSettings(); } catch { S.settings = {}; }
+    // a Build piece in its own window (PC/Mac, opened from inside a book): show just that piece
+    const buildWin = new URLSearchParams(location.search).get('buildwin');
+    if (buildWin) {
+      window.UNWIP_BUILDWIN = true; document.body.classList.add('buildwin');
+      $('#library').classList.add('hidden'); $('#workspace').classList.add('hidden');
+      try { await Fonts.loadImported(await api.importedFonts()); } catch {}
+      if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
+      window.__flush = () => window.UnwipBuild ? window.UnwipBuild.flush() : true;
+      if (window.UnwipBuild) await window.UnwipBuild.open(buildWin, 'window');
+      return;
+    }
     S.view = 'write';
     let m = 'focused'; try { m = localStorage.getItem('folio-mode') || 'focused'; } catch {}
     S.mode = m; document.body.classList.toggle('detailed', m === 'detailed'); $$('#mode-switch button').forEach(b => b.classList.toggle('on', b.dataset.m === m));

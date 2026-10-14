@@ -106,22 +106,31 @@ window.UnwipBuild = (function () {
       it.data = { v: 2, active: 0, sections: [{ name: k === 'town' ? 'Town' : 'Main map', ...window.UnwipMaps.blank('parchment', k) }] };
     }
     await put(it);
-    open(it.id);
+    await open(it.id);
+    return true;
   }
 
   // ================================================================== THE BUILD SCREEN
   let cur = null, saveT = null, active = null;
+  // where Build was opened from: null (the Build page), 'book' (from inside a book: Done goes back to the chapter) or
+  // 'window' (its own window on the PC/Mac, next to the book: Done closes the window)
+  let ret = null;
   const screen = $('#build-screen'), top = $('#bd-top'), main = $('#bd-main');
   function show(on) {
-    $('#library').classList.toggle('hidden', on); screen.classList.toggle('hidden', !on);
+    if (ret === 'book') $('#workspace').classList.toggle('hidden', on);
+    else if (ret === 'window') { $('#library').classList.add('hidden'); $('#workspace').classList.add('hidden'); }
+    else $('#library').classList.toggle('hidden', on);
+    screen.classList.toggle('hidden', !on);
     document.title = on ? (cur && cur.title || 'Build') + ' — Unwip' : 'Unwip — Write to finish';
   }
   function saved(t) { const el = $('#bd-saved'); if (el) el.textContent = t; }
   function changed() { if (!cur) return; saved('Saving…'); clearTimeout(saveT); saveT = setTimeout(saveNow, 600); }
   async function saveNow() { clearTimeout(saveT); saveT = null; if (!cur) return; await put(cur); saved('Saved'); }
-  async function open(id) {
-    const it = await get(id); if (!it) { U.toast('Couldn’t open that.', 'warn'); render(); return; }
+  async function open(id, from) {
+    const it = await get(id); if (!it) { U.toast('Couldn’t open that.', 'warn'); if (!ret && !from) render(); return; }
     await close(true);
+    if (from !== undefined) ret = from || null;
+    if (ret === 'book' && U.flushSave) await U.flushSave();
     cur = it; main.innerHTML = ''; show(true);
     if (it.kind === 'map') return openMap(it);
     const ed = editors[it.kind]; if (!ed) { U.toast('This needs a newer Unwip.', 'warn'); return close(); }
@@ -132,11 +141,11 @@ window.UnwipBuild = (function () {
     $('#bd-acts').innerHTML = `<span class="bd-extra"></span>
       <button class="btn small ghost" id="bd-copy" title="Copy a picture of it, ready to paste into a chapter">Copy picture</button>
       <button class="btn small ghost" id="bd-png" title="Save a picture of it as a PNG file">Save PNG…</button>
-      <button class="btn small" id="bd-add" title="Put it into one of your books">Add to book…</button>
-      <button class="btn primary small" id="bd-done">Done</button>`;
+      ${ret === 'window' ? '' : '<button class="btn small" id="bd-add" title="Put it into one of your books">Add to book…</button>'}
+      <button class="btn primary small" id="bd-done" title="${ret === 'book' ? 'Save and go back to your chapter' : ret === 'window' ? 'Save and close this window' : 'Save and go back to Build'}">${ret === 'book' ? 'Back to the book' : 'Done'}</button>`;
     $('#bd-copy').onclick = async () => { const c = ed.picture && await ed.picture(cur); if (c) copyCanvas(c); };
     $('#bd-png').onclick = async () => { const c = ed.picture && await ed.picture(cur); if (c) savePNG(c, cur.title); };
-    $('#bd-add').onclick = async () => { await saveNow(); addToBook(cur); };
+    if ($('#bd-add')) $('#bd-add').onclick = async () => { await saveNow(); addToBook(cur); };
     $('#bd-done').onclick = () => close();
     active = ed;
     await ed.open(cur, main, { changed, extra: $('.bd-extra', top), items: () => items, get, KINDS, svgCanvas, svgURL });
@@ -160,20 +169,49 @@ window.UnwipBuild = (function () {
         if (gen) gen.before(b);
         const t = v.querySelector('.mp-title'); if (t) { t.title = 'Double-click to rename'; t.ondblclick = async () => { const n = await U.promptText('Rename map', 'Name', it.title); if (n) { it.title = n; t.textContent = n; await put(it); } }; }
       },
-      unmount: () => { cur = null; top.classList.remove('hidden'); show(false); render(); },
+      unmount: () => { cur = null; top.classList.remove('hidden'); const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r !== 'book') render(); },
       inBook: false
     };
     active = null;
     M.open(it.id, host);
   }
   async function close(quiet) {
-    if (!cur) { if (!quiet) { show(false); render(); } return; }
+    if (!cur) { if (!quiet) { const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r !== 'book') render(); } return; }
     if (cur.kind === 'map') { await window.UnwipMaps.close(true); return; }
     await saveNow();
     if (active && active.close) try { active.close(); } catch {}
     active = null; cur = null; main.innerHTML = '';
-    if (!quiet) { show(false); render(); }
+    if (!quiet) { const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r !== 'book') render(); }
   }
+  // for the window on the PC/Mac: save before it closes
+  async function flush() { if (cur && cur.kind !== 'map') await saveNow(); return true; }
+
+  // ================================================================== FROM INSIDE A BOOK
+  // Build without leaving the chapter: pick a piece (or start a new one) and it opens over the book; "Back to the book"
+  // returns to the same place. On a PC or Mac it can open in its own window instead, to keep beside the chapter.
+  async function fromBook() {
+    await refresh();
+    const canWin = !!api.buildWindow;
+    const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    const body = document.createElement('div'); body.className = 'bd-pick';
+    body.innerHTML = `<p class="hint">Your world’s maps, magic, runes, sigils and coats of arms. ${canWin ? 'Open one here, or in its own window (⧉) to keep beside your chapter.' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
+      ${items.length ? ORDER.filter(k => by(k).length).map(k => `<h4>${KINDS[k].plural}</h4><div class="bd-pick-list">${by(k).map(x => `<div class="bd-pick-row" data-id="${x.id}">
+          <button type="button" class="bd-pick-open" data-open="${x.id}"><span class="bd-pick-th">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : KINDS[k].icon}</span><span><b>${esc(x.title || 'Untitled')}</b><small>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</small></span></button>
+          ${canWin ? `<button type="button" class="icon-btn bd-pick-win" data-win="${x.id}" title="Open in its own window">⧉</button>` : ''}</div>`).join('')}</div>`).join('') : '<p class="lib-empty">Nothing built yet.</p>'}
+      <h4>Start something new</h4><div class="bd-pick-new">${ORDER.map(k => `<button type="button" class="btn small" data-new="${k}">${KINDS[k].icon} ${esc(KINDS[k].name)}</button>`).join('')}</div>`;
+    let go = null, close2 = () => {};
+    body.addEventListener('click', e => {
+      const o = e.target.closest('[data-open]'), w = e.target.closest('[data-win]'), n = e.target.closest('[data-new]');
+      if (o) go = () => open(o.dataset.open, 'book');
+      else if (w) go = () => api.buildWindow(w.dataset.win, (items.find(x => x.id === w.dataset.win) || {}).title || 'Build');
+      else if (n) go = () => createFrom(n.dataset.new);
+      else return;
+      close2();
+    });
+    await U.modal({ title: 'Build', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }], onOpen: back => { close2 = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });
+    if (go) await go();
+  }
+  async function createFrom(kind) { ret = 'book'; if (!(await create(kind))) ret = null; }
 
   // ================================================================== CHANGED ON ANOTHER DEVICE
   // A sync brought in a newer copy (phone and iPad), or Dropbox's own app changed the file (PC). The piece on screen
@@ -212,7 +250,8 @@ window.UnwipBuild = (function () {
     const ok = await U.modal({ title: `Add “${it.title}” to a book`, body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Add', value: true, kind: 'primary' }] });
     if (!ok) return;
     const slug = $('#ab-p', body).value, how = isMap ? ($('input[name="ab-how"]:checked', body) || {}).value : 'copy';
-    const project = await api.openProject(slug); if (!project) return;
+    const here = U.S.slug === slug && U.S.project;
+    const project = here ? U.S.project : await api.openProject(slug); if (!project) return;
     const root = project.binder.find(n => n.root && n.kind === ROOT) || project.binder.find(n => n.root && n.kind === 'notes') || project.binder.find(n => n.root && n.kind === 'manuscript');
     const node = { id: U.uid(), type: 'doc', title: it.title || KINDS[it.kind].name, words: 0, icon: isMap ? '🗺️' : undefined };
     if (isMap) {
@@ -227,12 +266,13 @@ window.UnwipBuild = (function () {
     }
     if (!node.icon) delete node.icon;
     root.children = root.children || []; root.children.push(node); root.open = true;
-    await api.saveProjectMeta(slug, project);
+    if (here) { U.scheduleMeta(); U.renderBinder(); } else await api.saveProjectMeta(slug, project);
     U.toast(`Added to <b>${esc(project.title)}</b> › ${esc(root.title)}${isMap && how === 'link' ? ' (linked)' : ''}.`, '', 5000);
   }
 
   // what a book can borrow from Build (runes and sigils as coat-of-arms charges, alphabets for a sigil's ring)
   async function all(kind) { await refresh(); const out = []; for (const h of items.filter(x => !kind || x.kind === kind)) { const it = await get(h.id); if (it) out.push(it); } return out; }
 
-  return { KINDS, editors, render, refresh, open, close, create, readMap, writeMap, get, put, all, svgCanvas, svgURL, copyCanvas, savePNG, canvasBytes, addToBook, get items() { return items; } };
+  { const bb = document.getElementById('btn-build-book'); if (bb) bb.onclick = () => fromBook(); }
+  return { KINDS, editors, render, refresh, open, close, create, fromBook, flush, get from() { return ret; }, readMap, writeMap, get, put, all, svgCanvas, svgURL, copyCanvas, savePNG, canvasBytes, addToBook, get items() { return items; } };
 })();

@@ -46,6 +46,7 @@ window.UnwipMobile = (function () {
   pfoot.innerHTML = `
     <button class="m-tab revise" id="m-revise"><span>Revise</span></button>
     <button class="m-tab stuck" id="m-stuck"><span>Spark</span></button>
+    <button class="m-tab" id="m-build"><span>Build</span></button>
     <button class="m-icon" id="m-cmdk" aria-label="Find anything">${IC.search}</button>
     <button class="m-icon" id="m-notes" aria-label="Comments &amp; footnotes">${IC.note}</button>
     <button class="m-icon" id="m-style" aria-label="Manuscript style">${IC.aa}</button>
@@ -56,6 +57,7 @@ window.UnwipMobile = (function () {
   $('#m-revise').onclick = () => click('#btn-revise');
   $('#m-cmdk').onclick = () => window.UnwipCommand && window.UnwipCommand.open();
   $('#m-stuck').onclick = () => click('#btn-stuck');
+  $('#m-build').onclick = () => window.UnwipBuild && window.UnwipBuild.fromBook();
   $('#m-notes').onclick = () => click('#btn-notes');
   $('#m-style').onclick = () => click('#btn-style');
   $('#m-more').onclick = e => {

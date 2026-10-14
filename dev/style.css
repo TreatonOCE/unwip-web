@@ -2713,3 +2713,15 @@ body.writer .pf-remind { bottom: 18px; }
 @keyframes tw-spin { 0% { opacity: 0; transform: scale(.1) rotate(-540deg); } 100% { opacity: 1; transform: none; } }
 @keyframes tw-scatter { 0% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, -1em)) rotate(var(--rot, 0deg)) scale(1.3); } 100% { opacity: 1; transform: none; } }
 :root[data-theme="dark"] { --ink-blot: #fff; }
+
+/* Build from inside a book */
+.bd-pick h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.bd-pick-list { display: flex; flex-direction: column; gap: 4px; }
+.bd-pick-row { display: flex; align-items: center; gap: 6px; }
+.bd-pick-open { flex: 1; display: flex; align-items: center; gap: 12px; text-align: left; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--text); cursor: pointer; }
+.bd-pick-open:hover { border-color: var(--accent, #5b7bd5); }
+.bd-pick-open b { display: block; } .bd-pick-open small { color: var(--muted); }
+.bd-pick-th { width: 46px; height: 34px; border-radius: 6px; overflow: hidden; display: grid; place-items: center; background: var(--panel); flex: none; font-size: 18px; }
+.bd-pick-th img { width: 100%; height: 100%; object-fit: cover; }
+.bd-pick-win { font-size: 17px; }
+.bd-pick-new { display: flex; flex-wrap: wrap; gap: 6px; }

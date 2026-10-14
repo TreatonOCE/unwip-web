@@ -369,7 +369,7 @@ window.UnwipSync = (function () {
   }
   // At start-up: books in Dropbox › Unwip while the phone/iPad use Dropbox › Apps › Unwip. Say so, and offer the move.
   setTimeout(async () => {
-    if (api.web || !api.libraryInfo) return;
+    if (api.web || !api.libraryInfo || window.UNWIP_BUILDWIN) return;
     let info; try { info = await api.libraryInfo(); } catch { return; }
     const norm = p => String(p || '').replace(/[\\/]+$/, '').toLowerCase();
     const cur = (info.places || []).find(p => norm(p.path) === norm(info.path)), shared = (info.places || []).find(p => p.shared);
