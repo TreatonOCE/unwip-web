@@ -1,4 +1,4 @@
-window.UNWIP_VERSION = "0.43.36";
+window.UNWIP_VERSION = "0.43.37";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;

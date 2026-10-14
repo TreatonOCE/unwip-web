@@ -2359,3 +2359,9 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 #btn-settle.settle-new { font-weight: 600; }
 .m-phone #btn-settle.settle-tour { display: none; }   /* the tour points at the computer layout */
 @media (max-width: 720px) { #btn-settle { padding: 5px 10px; font-size: 13px; } }
+
+/* welcome setup, first screen: a small wordmark and slogan above the question */
+.in-hello { display: flex; align-items: baseline; gap: 14px; margin: 0 0 10px; color: var(--text); }
+.in-hello svg { width: 120px; height: auto; display: block; }
+.in-hello .in-slogan { margin: 0; }
+.in-custom { margin: 14px 0 0; font-size: 13.5px; }

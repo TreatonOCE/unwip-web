@@ -70,7 +70,9 @@ window.UnwipIntro = (function () {
 
   // ================================================================== THE SETUP
   let ans = null, step = 0, root = null;
-  const STEPS = ['welcome', 'from', 'layout', 'structure', 'look', 'goal', 'ready'];
+  // Two screens: where you're coming from (which sets everything else), then getting your book in.
+  // "Change layout, font or colours…" adds the detailed screens for anyone who wants them.
+  const steps = () => ans.custom ? ['from', 'layout', 'structure', 'look', 'goal', 'ready'] : ['from', 'ready'];
 
   function start() {
     const look = window.UnwipLook ? window.UnwipLook.look : {};
@@ -95,18 +97,15 @@ window.UnwipIntro = (function () {
 
   function render() {
     const f = FROM[ans.from] || null;
-    const name = STEPS[step];
+    const STEPS = steps(), name = STEPS[step];
     let h = '';
-    if (name === 'welcome') h = `
-      <div class="in-hero">${($('.brand-wordmark') || {}).outerHTML || '<h1>unwip</h1>'}<p class="in-slogan">Write to finish</p></div>
-      <h2>Welcome. Let’s set Unwip up for you.</h2>
-      <p class="in-lead">Six quick questions, about a minute. You can change every answer later in Settings, and run this again from Settings › Help.</p>
-      <p class="in-small">Everything stays on your computer. No account, no AI, works offline.</p>`;
-    else if (name === 'from') h = `
-      <h2>What have you written with before?</h2>
-      <p class="in-lead">Unwip will borrow the parts that feel familiar.</p>
+    if (name === 'from') h = `
+      <div class="in-hello">${($('.brand-wordmark') || {}).outerHTML || '<b>unwip</b>'}<span class="in-slogan">Write to finish</span></div>
+      <h2>Welcome. What have you written with before?</h2>
+      <p class="in-lead">Pick one and Unwip sets itself up to feel familiar: layout, font and how books are organised. No account, no AI, and it works offline.</p>
       <div class="in-grid">${choose(Object.entries(FROM).map(([id, x]) => [id, x.name, x.blurb]), ans.from, 'from', id => `<em>${FROM[id].icon}</em>`)}</div>
-      ${f ? `<div class="in-map"><h3>Coming from ${esc(f.name)}: where things are</h3><table>${f.map.map(([a, b]) => `<tr><td>${esc(a)}</td><td>→</td><td>${esc(b)}</td></tr>`).join('')}</table><p>${esc(f.tip)}</p></div>` : ''}`;
+      ${f ? `<div class="in-map"><h3>Coming from ${esc(f.name)}: where things are</h3><table>${f.map.map(([a, b]) => `<tr><td>${esc(a)}</td><td>→</td><td>${esc(b)}</td></tr>`).join('')}</table><p>${esc(f.tip)}</p></div>` : ''}
+      <p class="in-custom"><button class="link-btn" type="button" id="in-custom">${ans.custom ? 'Use the simple setup instead' : 'Change layout, font or colours…'}</button></p>`;
     else if (name === 'layout') h = `
       <h2>Which layout feels like home?</h2>
       <p class="in-lead">${f ? `We’ve picked the one closest to ${esc(f.name)}. ` : ''}Switch any time with the Focused / Detailed buttons at the top.</p>
@@ -136,7 +135,8 @@ window.UnwipIntro = (function () {
       if (ans.from === 'obsidian') actions.push(['vault', '🗂️ Bring in my Obsidian vault', 'Pick the vault folder (or any folder of chapter files). Sub-folders come too.']);
       if (ans.from !== 'scrivener') actions.push(['files', ans.from === 'word' ? '📝 Bring in my Word files' : '📁 Bring in my book from files', 'One file or one per chapter: Word, LibreOffice, RTF, text or Markdown. Chapters are found automatically.']);
       h = `
-      <h2>All set</h2>
+      <h2>${ans.custom ? 'All set' : 'Let’s get your book in'}</h2>
+      ${ans.custom ? '' : `<p class="in-lead">Set up like ${esc((FROM[ans.from] || FROM.new).name)}. Change any of this later in Settings.</p>`}
       <ul class="in-summary">
         <li><b>Layout</b> ${esc(LAYOUTS[ans.layout].name)}</li>
         <li><b>Books organised as</b> ${esc(STRUCT[ans.structure].name.toLowerCase())}</li>
@@ -150,15 +150,15 @@ window.UnwipIntro = (function () {
         ['blank', '📖 A blank book', 'Name it and start writing.']
       ], ans.action, 'action')}</div>`;
     }
-    const canNext = name === 'welcome' || name === 'goal' || name === 'look' ||
+    const canNext = name === 'goal' || name === 'look' ||
       (name === 'from' && ans.from) || (name === 'layout' && ans.layout) || (name === 'structure' && ans.structure) || (name === 'ready' && ans.action);
     root.innerHTML = `<div class="in-card">
-      <div class="in-top"><div class="in-dots">${STEPS.map((_, i) => `<i class="${i === step ? 'on' : i < step ? 'done' : ''}"></i>`).join('')}</div><button class="in-skip" id="in-skip">${step === 0 ? 'Skip setup' : 'Skip'}</button></div>
+      <div class="in-top"><div class="in-dots">${STEPS.map((_, i) => `<i class="${i === step ? 'on' : i < step ? 'done' : ''}"></i>`).join('')}</div><button class="in-skip" id="in-skip">Skip setup</button></div>
       <div class="in-body">${h}</div>
       <div class="in-foot">${step ? '<button class="btn ghost" id="in-back">Back</button>' : '<span></span>'}
         ${name === 'ready'
           ? `<div class="in-end"><button class="btn" id="in-go" ${canNext ? '' : 'disabled'}>Start writing</button><button class="btn primary" id="in-tour" ${canNext ? '' : 'disabled'}>Start with a quick tour</button></div>`
-          : `<button class="btn primary" id="in-next" ${canNext ? '' : 'disabled'}>${step === 0 ? 'Let’s go' : 'Next'}</button>`}</div>
+          : `<button class="btn primary" id="in-next" ${canNext ? '' : 'disabled'}>Next</button>`}</div>
     </div>`;
     wire();
   }
@@ -179,6 +179,7 @@ window.UnwipIntro = (function () {
     $$('[data-goal]', r).forEach(b => b.onclick = () => { ans.goal = +b.dataset.goal; render(); });
     $$('[data-action]', r).forEach(b => b.onclick = () => { ans.action = b.dataset.action; render(); });
     const au = $('#in-author', r); if (au) au.oninput = () => { ans.author = au.value; };
+    const cu = $('#in-custom', r); if (cu) cu.onclick = () => { if (!ans.from) pickFrom('new'); ans.custom = !ans.custom; if (ans.custom) step = 1; render(); };
     $('#in-skip', r).onclick = skip;
     const back = $('#in-back', r); if (back) back.onclick = () => { step--; render(); };
     const next = $('#in-next', r); if (next) next.onclick = () => {
@@ -477,7 +478,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     const settled = !!(S.settings && S.settings.settledIn);
     b.className = 'btn ' + (settled ? 'settle-tour' : 'primary settle-new');
     b.textContent = settled ? 'Take a tour' : 'Let’s get you settled in';
-    b.title = settled ? 'A quick walk round the buttons, in the example book' : 'A few questions to set Unwip up the way you like to write';
+    b.title = settled ? 'A quick walk round the buttons, in the example book' : 'Tell Unwip what you wrote with before, and bring your book in';
     b.onclick = () => settled ? tourExample() : start();
   }
   settleButton();
