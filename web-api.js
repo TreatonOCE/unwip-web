@@ -513,10 +513,13 @@
     async importDocx() { const [f] = await pickFiles({ accept: '.docx' }); return f ? { name: baseName(f.name), bytes: await bytesOf(f) } : null; },
     async importFiles() { const fs = await pickFiles({ accept: '.docx,.odt,.rtf,.txt,.md,.markdown,.text,.htm,.html', multiple: true }); return fs.length ? Promise.all(fs.map(async f => ({ name: baseName(f.name), ext: extOf(f.name), bytes: await bytesOf(f) }))) : null; },
     async importFolder() {
-      const fs = (await pickFiles({ multiple: true, directory: 'webkitdirectory' in document.createElement('input') })).filter(f => /\.(docx|odt|rtf|txt|md|markdown|text|htm|html)$/i.test(f.name) && !/^[~.]/.test(f.name));
+      // sub-folders come too (hidden ones like .obsidian and .trash don't); each file remembers its sub-folder
+      const segs = f => (f.webkitRelativePath || f.name).split('/');
+      const fs = (await pickFiles({ multiple: true, directory: 'webkitdirectory' in document.createElement('input') }))
+        .filter(f => /\.(docx|odt|rtf|txt|md|markdown|text|htm|html)$/i.test(f.name) && !/\.excalidraw\.md$/i.test(f.name) && !segs(f).some(x => /^[~.]/.test(x)));
       if (!fs.length) return null;
-      const folder = ((fs[0].webkitRelativePath || '').split('/')[0]) || 'Chapters';
-      return { folder, files: await Promise.all(fs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(async f => ({ name: baseName(f.name), ext: extOf(f.name), bytes: await bytesOf(f) }))) };
+      const folder = segs(fs[0]).length > 1 ? segs(fs[0])[0] : 'Chapters';
+      return { folder, files: await Promise.all(fs.slice(0, 3000).map(async f => ({ name: baseName(f.name), ext: extOf(f.name), dir: segs(f).slice(1, -1).join('/'), bytes: await bytesOf(f) }))) };
     },
     async mediaPick(slug) { const out = []; for (const f of await pickFiles({ accept: 'image/*', multiple: true })) out.push({ file: await window.folio.mediaAdd(slug, await bytesOf(f), extOf(f.name)), name: f.name }); return out; },
     async mediaAdd(slug, bytes, ext) {

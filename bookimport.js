@@ -39,6 +39,8 @@ window.UnwipBookImport = (function () {
 
   // Markdown (Obsidian, Ulysses, iA Writer, Notion, Bear exports)
   function mdInline(s) {
+    // Obsidian: embedded notes/pictures ![[…]] and %%hidden comments%% go; ==highlights== keep their words
+    s = s.replace(/!\[\[[^\]]*\]\]/g, '').replace(/%%.*?%%/g, '').replace(/==(.+?)==/g, '$1');
     s = esc(s);
     s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<b><i>$1</i></b>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/__(.+?)__/g, '<b>$1</b>');
     s = s.replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1<i>$2</i>').replace(/(^|[^_\w])_(?!\s)(.+?)_(?!\w)/g, '$1<i>$2</i>');
@@ -47,6 +49,8 @@ window.UnwipBookImport = (function () {
   }
   function mdToHTML(t) {
     t = t.replace(/\r\n?/g, '\n').replace(/^---\n[\s\S]*?\n---\n/, '');   // drop a front-matter block
+    t = t.replace(/%%[\s\S]*?%%/g, '');                                   // Obsidian comments over several lines
+    t = t.replace(/^(>\s*)\[![\w-]+\][+-]?\s*/gm, '$1');                    // Obsidian callouts: "> [!note] Title" keeps "Title"
     const out = []; let para = [];
     const flush = () => { if (para.length) { out.push(`<p>${mdInline(para.join(' '))}</p>`); para = []; } };
     for (const raw of t.split('\n')) {
@@ -352,7 +356,7 @@ window.UnwipBookImport = (function () {
     const units = [];
     for (const src of sources) {
       const blocks = toBlocks(src.html);
-      units.push({ name: src.name, blocks, words: blocks.reduce((a, b) => a + b.words, 0) });
+      units.push({ name: src.name, dir: src.dir || '', blocks, words: blocks.reduce((a, b) => a + b.words, 0) });
     }
     return units;
   }
@@ -402,8 +406,21 @@ window.UnwipBookImport = (function () {
       if (!c.on && merged.length) { const p = merged[merged.length - 1]; p.html += htmlOf(c.unit, [...c.head, ...c.body]); continue; }
       merged.push({ ...c, html: htmlOf(c.unit, c.body) });
     }
+    // files from sub-folders go into matching folders in the binder
+    const folders = {};
+    const home = dir => {
+      if (!dir || !opts.folders) return nodes;
+      if (folders[dir]) return folders[dir].children;
+      const i = dir.lastIndexOf('/'), up = home(i < 0 ? '' : dir.slice(0, i));
+      folders[dir] = { id: U.uid(), type: 'folder', title: dir.slice(i + 1), holds: 'chapters', open: false, children: [] };
+      up.push(folders[dir]); return folders[dir].children;
+    };
+    let lastDir = '';
     for (const c of merged) {
-      if (c.part && opts.parts) { part = { id: U.uid(), type: 'folder', title: c.title, holds: 'chapters', open: true, children: [] }; nodes.push(part);
+      const dir = (c.unit && c.unit.dir) || '';
+      if (dir !== lastDir) { part = null; lastDir = dir; }
+      const into = home(dir);
+      if (c.part && opts.parts) { part = { id: U.uid(), type: 'folder', title: c.title, holds: 'chapters', open: true, children: [] }; into.push(part);
         if (c.html.replace(/<[^>]+>/g, '').trim()) part.children.push(mkDoc(c.title + ' (opening)', c.html)); continue; }
       let node;
       const d = document.createElement('div'); d.innerHTML = c.html;
@@ -415,7 +432,7 @@ window.UnwipBookImport = (function () {
         for (const k of kids) { if (SCENE.test(k.textContent.trim()) && k.textContent.trim().length < 20) push(); else cur.push(k.outerHTML); }
         push();
       } else node = mkDoc(c.title, c.html);
-      (part && !c.front ? part.children : nodes).push(node);
+      (part && !c.front ? part.children : into).push(node);
     }
     return { nodes, docs };
   }
@@ -452,7 +469,7 @@ window.UnwipBookImport = (function () {
     const total = units.reduce((a, u) => a + u.words, 0);
     if (!total) { U.toast('There were no words in that to import.', 'warn', 6000); return; }
     let method = 'auto';
-    const st = { scenes: S.settings.structure === 'scenes' || S.settings.structure === 'parts', parts: true,
+    const st = { scenes: S.settings.structure === 'scenes' || S.settings.structure === 'parts', parts: true, folders: true,
       dest: ctx.parentId && S.slug ? 'here' : 'new', title: ctx.title || (multi ? (ctx.folder || 'My book') : fileTitle(sources[0].name)) };
     let p = plan(units, method, multi);
     const bt = !multi && !ctx.title && (p.chapters.find(c => c.bookTitle) || {}).bookTitle;
@@ -472,6 +489,7 @@ window.UnwipBookImport = (function () {
       const chs = p.chapters, onCount = chs.filter(c => c.on).length;
       const hasScenes = units.some(u => u.blocks.some(b => b.scene));
       const hasParts = chs.some(c => c.part);
+      const nDirs = new Set(units.map(u => u.dir).filter(Boolean).flatMap(d => d.split('/').map((_, i, a) => a.slice(0, i + 1).join('/')))).size, hasDirs = nDirs > 0;
       const warn = warnings(chs);
       ov.innerHTML = `<div class="bi-card">
         <div class="bi-head"><h2>Bring in your book</h2><button class="in-skip" data-x>Cancel</button></div>
@@ -484,6 +502,7 @@ window.UnwipBookImport = (function () {
             <option value="none"${method === 'none' ? ' selected' : ''}>Don’t split${multi ? ' (each file stays whole)' : ''}</option></select></div>
           ${hasScenes ? `<label class="bi-check"><input type="checkbox" id="bi-scenes"${st.scenes ? ' checked' : ''}> Also split each chapter into scenes at * * *</label>` : ''}
           ${hasParts ? `<label class="bi-check"><input type="checkbox" id="bi-parts"${st.parts ? ' checked' : ''}> Put chapters inside their Part folders</label>` : ''}
+          ${hasDirs ? `<label class="bi-check"><input type="checkbox" id="bi-dirs"${st.folders ? ' checked' : ''}> Keep the sub-folders as folders (${nDirs} of them)</label>` : ''}
           ${p.notes.length || warn.length ? `<div class="bi-warn">${[...p.notes.map(esc), ...warn].map(x => `<p>${x}</p>`).join('')}</div>` : ''}
           <div class="bi-list-head"><span>${onCount} document${onCount === 1 ? '' : 's'}. Untick a line to join it to the one above. Click a name to change it.</span></div>
           <div class="bi-list">${chs.map((c, i) => `<div class="bi-item${c.on ? '' : ' off'}${c.part ? ' part' : ''}" data-i="${i}">
@@ -492,7 +511,7 @@ window.UnwipBookImport = (function () {
               <span class="bi-words">${c.words.toLocaleString()}</span>
               <span class="bi-snip">${esc(firstWords(c))}</span></div>`).join('')}</div>
           <div class="bi-dest">
-            <label class="bi-radio"><input type="radio" name="bi-dest" value="new"${st.dest === 'new' ? ' checked' : ''}> As a new project called <input id="bi-ptitle" value="${esc(st.title)}"></label>
+            <label class="bi-radio"><input type="radio" name="bi-dest" value="new"${st.dest === 'new' ? ' checked' : ''}> As a new book called <input id="bi-ptitle" value="${esc(st.title)}"></label>
             ${S.slug ? `<label class="bi-radio"><input type="radio" name="bi-dest" value="here"${st.dest === 'here' ? ' checked' : ''}> Into “${esc(ctx.parentId ? (U.findNode(ctx.parentId) || { node: { title: 'this folder' } }).node.title : 'Manuscript')}” in ${esc(S.project.title)}</label>` : ''}
           </div>
         </div>
@@ -505,6 +524,7 @@ window.UnwipBookImport = (function () {
       $('#bi-method', ov).onchange = e => { method = e.target.value; p = plan(units, method, multi); render(); };
       const sc = $('#bi-scenes', ov); if (sc) sc.onchange = () => { st.scenes = sc.checked; };
       const pa = $('#bi-parts', ov); if (pa) pa.onchange = () => { st.parts = pa.checked; };
+      const di = $('#bi-dirs', ov); if (di) di.onchange = () => { st.folders = di.checked; };
       $$('[data-on]', ov).forEach(cb => cb.onchange = () => { p.chapters[+cb.closest('.bi-item').dataset.i].on = cb.checked; const top = $('.bi-list', ov).scrollTop; render(); $('.bi-list', ov).scrollTop = top; });
       $$('[data-t]', ov).forEach(inp => inp.oninput = () => { p.chapters[+inp.closest('.bi-item').dataset.i].title = inp.value; });
       $$('[name="bi-dest"]', ov).forEach(r => r.onchange = () => { st.dest = r.value; });
@@ -522,8 +542,15 @@ window.UnwipBookImport = (function () {
   // ================================================================== WAYS IN
   async function readFiles(files) {
     const sources = [], bad = [];
-    files = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-    for (const f of files) { try { const html = await fileToHTML(f); sources.push({ name: f.name, html }); } catch (e) { bad.push(`${f.name}: ${e.message}`); } }
+    // in folder order: a folder's own files first, then its sub-folders, each sorted 1, 2, … 10 (not 1, 10, 2)
+    const cmp = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    const key = f => (f.dir ? f.dir.split('/') : []);
+    files = [...files].sort((a, b) => {
+      const A = key(a), B = key(b);
+      for (let i = 0; i < Math.min(A.length, B.length); i++) { const c = cmp(A[i], B[i]); if (c) return c; }
+      return A.length - B.length || cmp(a.name, b.name);
+    });
+    for (const f of files) { try { const html = await fileToHTML(f); sources.push({ name: f.name, html, dir: f.dir || '' }); } catch (e) { bad.push(`${f.dir ? f.dir + '/' : ''}${f.name}: ${e.message}`); } }
     if (bad.length) U.toast(bad.map(esc).join('<br>'), 'warn', 9000);
     return sources;
   }
