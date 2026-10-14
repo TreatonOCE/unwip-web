@@ -411,5 +411,7 @@ Ideas:
     c.style.top = Math.max(10, Math.min(H - ch - 10, y)) + 'px';
   }
 
-  return { start, tour, endTour };
+  // the example book on its own (for screenshots and tests): scenes in chapters, laid out for a Scrivener user
+  const example = async (o = {}) => { ans = { from: 'scrivener', layout: 'desk', structure: 'scenes', goal: 1000, ...o }; await makeExample(); };
+  return { start, tour, endTour, example };
 })();
