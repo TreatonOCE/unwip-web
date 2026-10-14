@@ -1031,10 +1031,10 @@
   $('#btn-help').onclick = () => window.UnwipHelp && window.UnwipHelp.open();
   $('#btn-add-doc').onclick = () => addHere('doc');
   $('#btn-add-folder').onclick = () => addHere('folder');
-  // maps go in the selected folder, or in Places
+  // maps go in the selected folder, or at the bottom of the binder like new documents
   $('#btn-add-map').onclick = () => {
     const sel = S.selectedId && findNode(S.selectedId);
-    const target = sel && sel.node.type === 'folder' && rootOf(sel.node.id).kind !== 'trash' ? sel.node.id : (findNode('root-places') ? 'root-places' : 'root-notes');
+    const target = sel && sel.node.type === 'folder' && rootOf(sel.node.id).kind !== 'trash' ? sel.node.id : null;   // nothing chosen: the bottom, like documents
     if (window.UnwipMaps) window.UnwipMaps.create(target);
   };
   $('#btn-new').addEventListener('mouseenter', updateAddHints);

@@ -568,9 +568,42 @@ window.UnwipMaps = (function () {
     const ew = $('#editor-wrap'); ew.classList.add('hidden'); ew.after(view);
     cv = $('canvas', view); ctx = cv.getContext('2d');
     buildTools(); resize(); fit(); setTool('select'); draw();
-    cv.addEventListener('pointerdown', pointerDown); cv.addEventListener('pointermove', pointerMove); window.addEventListener('pointerup', pointerUp);
+    // touch screens: one finger uses the tool, two fingers pinch to zoom and drag to move around (a stroke the first
+    // finger had just started is taken back, so a pinch never leaves a stray mark)
+    const touches = new Map(); let pinch = null;
+    const two = () => { const [a, b] = [...touches.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+    cv.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch') {
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size >= 2) {
+          if (!pinch) {
+            const busy = !!((T && T.busy) || (drawing && !drawing.pan));
+            if (T && T.busy && T.cancel) T.cancel();
+            drawing = null;
+            if (busy) { const last = undo.pop(); if (last) restore(last); }
+            const m = two(); pinch = { d0: m.d, z0: cam.z, x0: m.x, y0: m.y, cx: cam.x, cy: cam.y }; autoFitOff();
+          }
+          return;
+        }
+      }
+      if (pinch) return;
+      pointerDown(e);
+    });
+    cv.addEventListener('pointermove', e => {
+      if (e.pointerType === 'touch' && touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch) {
+        if (touches.size < 2) return;
+        const m = two(), r = cv.getBoundingClientRect(), z = Math.min(4, Math.max(0.25, pinch.z0 * m.d / pinch.d0));
+        const wx = (pinch.x0 - r.left - pinch.cx) / pinch.z0, wy = (pinch.y0 - r.top - pinch.cy) / pinch.z0;
+        cam.z = z; cam.x = m.x - r.left - wx * z; cam.y = m.y - r.top - wy * z; redraw(); return;
+      }
+      pointerMove(e);
+    });
+    const lift = e => { touches.delete(e.pointerId); if (pinch) { if (!touches.size) pinch = null; return; } pointerUp(e); };
+    window.addEventListener('pointerup', lift); window.addEventListener('pointercancel', lift);
+    view.addEventListener('gesturestart', e => e.preventDefault());   // Safari's own page zoom
     cv.addEventListener('wheel', wheel, { passive: false }); cv.addEventListener('dblclick', dblclick);
-    let autoFit = true;
+    let autoFit = true; const autoFitOff = () => { autoFit = false; };
     new ResizeObserver(() => { if (!view) return; if (autoFit) fit(); resize(); }).observe($('.mp-stage', view));
     cv.addEventListener('pointerdown', () => { autoFit = false; }); cv.addEventListener('wheel', () => { autoFit = false; });
     buildTools();
@@ -697,10 +730,11 @@ window.UnwipMaps = (function () {
     let kind = 'world';
     if (T) { kind = await U.modal({ title: 'New map', body: '<p>What kind of map?</p><p class="hint">A <b>world or region</b> map has coastlines, mountains, forests and towns. A <b>town or city</b> map has streets, buildings and walls. One map can hold both: add sections with “+ Section”.</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: '🏘️ Town or city', value: 'town', kind: 'ghost' }, { label: '🗺️ World or region', value: 'world', kind: 'primary' }] }); if (!kind) return; }
     const title = await U.promptText('New map', 'Name of the map', kind === 'town' ? 'Map of the city' : 'Map of the world'); if (!title) return;
-    const home = S.project.binder.find(n => n.root && n.kind === 'places') || S.project.binder.find(n => n.root && n.kind === 'notes') || S.project.binder[0];
-    const f = U.findNode(parentId) || U.findNode(home.id);
+    // like a new document: inside the chosen folder, or (nothing chosen) at the bottom of the binder, under
+    // "New — drag into place"
+    const f = parentId ? U.findNode(parentId) : null;
     const node = { id: U.uid(), type: 'doc', title, words: 0, map: true, icon: '🗺️' };
-    (f.node.children = f.node.children || []).push(node); f.node.open = true;
+    if (f) { (f.node.children = f.node.children || []).push(node); f.node.open = true; } else S.project.binder.push(node);
     await api.saveDoc(S.slug, node.id, JSON.stringify(blank('parchment', kind)));
     U.scheduleMeta(); U.renderBinder();
     U.openDoc(node.id);

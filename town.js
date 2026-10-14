@@ -12,8 +12,9 @@ window.UnwipTownFactory = function (M) {
     ['street', ICON('<path d="M4 20 C8 13 12 11 20 4" stroke-width="5" stroke="#a08560"/><path d="M4 20 C8 13 12 11 20 4" stroke-width="1.5" stroke="#fff" stroke-dasharray="2 3"/>'), 'Street: drag to draw. Streets join up where they meet. Pick alley, street or main road above'],
     ['building', ICON('<rect x="4" y="9" width="7" height="10" fill="#c79a6b"/><rect x="13" y="5" width="7" height="14" fill="#b98a5e"/>'), 'Building: drag to draw one, or click inside a block of streets to fill it with buildings'],
     ['wall', ICON('<path d="M3 17 L12 7 L21 12" stroke-width="3.5"/><circle cx="3" cy="17" r="2.6" fill="#fff"/><circle cx="12" cy="7" r="2.6" fill="#fff"/><circle cx="21" cy="12" r="2.6" fill="#fff"/>'), 'Town wall: drag to draw. Towers appear along it and gates where streets cross. Finish near the start to close it'],
-    ['water', '🌊', 'Water: paint rivers, a harbour or canals (or rub them out). Brush size below'],
-    ['area', ICON('<path d="M4 8 L10 4 L20 7 L18 18 L7 19 Z" fill="#b9c48a"/>'), 'Area: draw around a park, market square, fields or a graveyard'],
+    ['water', '🌊', 'Water: paint rivers, a harbour or canals. Brush size below'],
+    ['land', '🟫', 'Land: paint ground over water, for a coast, a riverbank or an island town. To start from open sea, use “Flood the map with water” above'],
+    ['area', ICON('<path d="M4 8 L10 4 L20 7 L18 18 L7 19 Z" fill="#b9c48a"/>'), 'Area: paint a park, market square, fields or a graveyard with the brush (or switch to “Draw around”)'],
     ['landmark', '🏰', 'Landmark: castle, temple, tower, gate, well, market stalls, statue or bridge. Pick one above, then click'],
     ['frame', ICON('<rect x="3" y="5" width="18" height="14"/><rect x="6" y="8" width="12" height="8" stroke-width="1"/>'), 'Frame: drag out a box for your map edge, an inset or a title box'],
     ['pin', '📍', 'Pin: mark a place. You can link it to a Places sheet'],
@@ -22,11 +23,13 @@ window.UnwipTownFactory = function (M) {
   const OPTS = {
     street: { key: 'streetW', def: 'street', items: [['alley', 'Alley'], ['street', 'Street'], ['main', 'Main road']] },
     building: { key: 'density', def: 'normal', label: 'Block fill', items: [['sparse', 'Sparse'], ['normal', 'Normal'], ['dense', 'Dense']], hint: 'Drag for one building · click inside streets to fill the block' },
-    area: { key: 'areaK', def: 'park', items: [['park', 'Park'], ['market', 'Market square'], ['field', 'Fields'], ['grave', 'Graveyard']] },
+    area: { key: 'areaK', def: 'park', items: [['park', 'Park'], ['market', 'Market square'], ['field', 'Fields'], ['grave', 'Graveyard']],
+      more: { key: 'areaMode', def: 'paint', items: [['paint', 'Paint'], ['around', 'Draw around']] } },
+    land: { key: 'landMode', def: 'paint', items: [['paint', 'Paint land']], acts: [['flood', 'Flood the map with water'], ['dry', 'Clear all water']], hint: 'Brush size below' },
     landmark: { key: 'markK', def: 'castle', items: [['castle', 'Castle'], ['temple', 'Temple'], ['tower', 'Tower'], ['gate', 'Gate'], ['well', 'Well'], ['stalls', 'Market stalls'], ['statue', 'Statue'], ['bridge', 'Bridge']] },
-    water: { key: 'waterOn', def: 'paint', items: [['paint', 'Paint water'], ['dry', 'Rub out']] }
+    water: { key: 'waterOn', def: 'paint', items: [['paint', 'Paint water'], ['dry', 'Rub out water']] }
   };
-  const opt = {}; for (const [t, o] of Object.entries(OPTS)) opt[o.key] = o.def;
+  const opt = {}; for (const [t, o] of Object.entries(OPTS)) { opt[o.key] = o.def; if (o.more) opt[o.more.key] = o.more.def; }
   const WIDTH = { alley: 8, street: 14, main: 24 };
   const COL = {
     parchment: { ground: '#efe2c4', street: '#e2cfa6', bld: '#b98a5e', bld2: '#9c6b45', park: '#b9c48a', field: '#dccd95', plaza: '#e9dcbc', grave: '#c9caa6', wall: '#5a4632', water: '#a9bcb8' },
@@ -195,9 +198,11 @@ window.UnwipTownFactory = function (M) {
     const S2 = st();
     if (tool === 'street') { const n = nearestStreet(p.x, p.y, 18); td = { street: { w: opt.streetW, pts: [n ? [r1(n.x), r1(n.y)] : [r1(p.x), r1(p.y)]] } }; return true; }
     if (tool === 'wall') { td = { wall: { pts: [[r1(p.x), r1(p.y)]] } }; return true; }
+    if (tool === 'area' && opt.areaMode === 'paint') { td = { areaPaint: { k: opt.areaK, w: Math.max(6, M.brush * K), pts: [[r1(p.x), r1(p.y)]] } }; M.redraw(); return true; }
     if (tool === 'area') { td = { area: { k: opt.areaK, pts: [[r1(p.x), r1(p.y)]] } }; return true; }
+    if (tool === 'land') { td = { brush: true, on: false, last: p }; M.paint(p.x, p.y, false); M.redraw(); return true; }
     if (tool === 'building') { const n = nearestStreet(p.x, p.y, 70); td = { bld: { x0: p.x, y0: p.y, x1: p.x, y1: p.y, ang: n ? n.ang : 0 } }; return true; }
-    if (tool === 'water') { td = { brush: true, last: p }; M.paint(p.x, p.y, opt.waterOn === 'paint'); M.redraw(); return true; }
+    if (tool === 'water') { td = { brush: true, on: opt.waterOn === 'paint', last: p }; M.paint(p.x, p.y, td.on); M.redraw(); return true; }
     if (tool === 'landmark') {
       const k = opt.markK, s = { k: 't-' + k, x: r1(p.x), y: r1(p.y), s: 1 };
       const n = nearestStreet(p.x, p.y, 60); if (n && ['gate', 'bridge', 'stalls'].includes(k)) s.rot = r1(k === 'bridge' ? n.ang : n.ang + Math.PI / 2);
@@ -208,7 +213,8 @@ window.UnwipTownFactory = function (M) {
   }
   function pointerMove(p) {
     if (!td) return false;
-    if (td.brush) { M.paint(p.x, p.y, opt.waterOn === 'paint', td.last); td.last = p; M.redraw(); return true; }
+    if (td.brush) { M.paint(p.x, p.y, td.on, td.last); td.last = p; M.redraw(); return true; }
+    if (td.areaPaint) { const l = td.areaPaint.pts[td.areaPaint.pts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) > 3) { td.areaPaint.pts.push([r1(p.x), r1(p.y)]); M.redraw(); } return true; }
     const path = td.street || td.wall || td.area;
     if (path) { const l = path.pts[path.pts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) > 8) { path.pts.push([r1(p.x), r1(p.y)]); M.redraw(); } return true; }
     if (td.bld) { td.bld.x1 = p.x; td.bld.y1 = p.y; M.redraw(); return true; }
@@ -232,6 +238,10 @@ window.UnwipTownFactory = function (M) {
       let pts = simplify(d.wall.pts, 3); if (pts.length < 2) { M.undoPop(); M.redraw(); return true; }
       const a = pts[0], b = pts[pts.length - 1]; if (pts.length > 3 && Math.hypot(a[0] - b[0], a[1] - b[1]) < 30) pts[pts.length - 1] = [a[0], a[1]];
       S2.walls.push({ pts }); M.select({ type: 'wall', i: S2.walls.length - 1 });
+    } else if (d.areaPaint) {
+      const pts = strokeOutline(d.areaPaint.pts, d.areaPaint.w);
+      if (!pts || pts.length < 3) { M.undoPop(); M.redraw(); return true; }
+      S2.areas.push({ k: d.areaPaint.k, pts }); M.select({ type: 'area', i: S2.areas.length - 1 });
     } else if (d.area) {
       const pts = simplify(d.area.pts, 2.5); if (pts.length < 3 || bbox(pts).w * bbox(pts).h < 300) { M.undoPop(); M.redraw(); return true; }
       S2.areas.push({ k: d.area.k, pts }); M.select({ type: 'area', i: S2.areas.length - 1 });
@@ -247,15 +257,53 @@ window.UnwipTownFactory = function (M) {
     if (td.street && td.street.pts.length > 1) drawStreets(g, P, [td.street]);
     if (td.wall && td.wall.pts.length > 1) drawWall(g, td.wall, P);
     if (td.area && td.area.pts.length > 2) { g.save(); g.globalAlpha = 0.7; drawArea(g, td.area, P, 0); g.restore(); }
+    if (td.areaPaint) { const c = C(P), a = td.areaPaint; g.save(); g.globalAlpha = 0.75; g.strokeStyle = { park: c.park, market: c.plaza, field: c.field, grave: c.grave }[a.k] || c.park; g.lineWidth = a.w; g.lineCap = 'round'; g.lineJoin = 'round';
+      if (a.pts.length === 1) { g.beginPath(); g.arc(a.pts[0][0], a.pts[0][1], a.w / 2, 0, 7); g.fillStyle = g.strokeStyle; g.fill(); } else { line(g, a.pts); g.stroke(); } g.restore(); }
     if (td.bld && Math.hypot(td.bld.x1 - td.bld.x0, td.bld.y1 - td.bld.y0) >= 8) drawBuilding(g, { pts: bldRect(td.bld) }, P, 0);
   }
-  const brushy = tool => tool === 'water';
+  const brushy = tool => tool === 'water' || tool === 'land' || (tool === 'area' && opt.areaMode === 'paint');
+  // a painted brush stroke becomes an ordinary area shape: drawn onto a small grid, then its outline traced
+  function strokeOutline(pts, w) {
+    const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]), pad = w / 2 + 3;
+    const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad, bw = Math.max(...xs) + pad - x0, bh = Math.max(...ys) + pad - y0;
+    const sc = Math.max(1, Math.max(bw, bh) / 360), gw = Math.ceil(bw / sc) + 2, gh = Math.ceil(bh / sc) + 2;
+    const cnv = document.createElement('canvas'); cnv.width = gw; cnv.height = gh; const g = cnv.getContext('2d');
+    g.fillStyle = g.strokeStyle = '#000'; g.lineWidth = w / sc; g.lineCap = 'round'; g.lineJoin = 'round';
+    const X = q => (q[0] - x0) / sc + 1, Y = q => (q[1] - y0) / sc + 1;
+    if (pts.length === 1) { g.beginPath(); g.arc(X(pts[0]), Y(pts[0]), w / sc / 2, 0, 7); g.fill(); }
+    else { g.beginPath(); g.moveTo(X(pts[0]), Y(pts[0])); for (const q of pts.slice(1)) g.lineTo(X(q), Y(q)); g.stroke(); }
+    const d = g.getImageData(0, 0, gw, gh).data, on = (x, y) => x >= 0 && y >= 0 && x < gw && y < gh && d[(y * gw + x) * 4 + 3] > 100;
+    let sx = -1, sy = -1; for (let y = 0; y < gh && sx < 0; y++) for (let x = 0; x < gw; x++) if (on(x, y)) { sx = x; sy = y; break; }
+    if (sx < 0) return null;
+    // Moore-neighbour tracing round the outside of the shape
+    const D = [[-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1]];
+    const out = [[sx, sy]]; let cx = sx, cy = sy, bx = sx - 1, by = sy;
+    for (let n = 0; n < 40000; n++) {
+      let k = D.findIndex(([dx, dy]) => cx + dx === bx && cy + dy === by), found = false;
+      for (let j = 1; j <= 8; j++) { const [dx, dy] = D[(k + j) % 8]; const nx = cx + dx, ny = cy + dy;
+        if (on(nx, ny)) { const [pdx, pdy] = D[(k + j - 1) % 8]; bx = cx + pdx; by = cy + pdy; cx = nx; cy = ny; found = true; break; } }
+      if (!found || (cx === sx && cy === sy)) break;
+      out.push([cx, cy]);
+    }
+    const world = out.map(([x, y]) => [r1((x - 1 + 0.5) * sc + x0), r1((y - 1 + 0.5) * sc + y0)]);
+    return simplify(world, Math.max(1.2, sc * 0.8));
+  }
+  // one-click helpers for the Land tool
+  const ACTS = {
+    flood: () => { M.push(); M.mctx.globalCompositeOperation = 'source-over'; M.mctx.fillStyle = '#000'; M.mctx.fillRect(0, 0, MW, MH); M.landDirty(); M.changed(); M.schedule(); M.toast('The map is all water now. Paint land with the Land brush. Undo (Ctrl+Z) brings it back.'); },
+    dry: () => { M.push(); M.mctx.clearRect(0, 0, MW, MH); M.landDirty(); M.changed(); M.schedule(); M.toast('All water cleared. Undo (Ctrl+Z) brings it back.'); }
+  };
   function optionsBar(tool, el) {
     const o = OPTS[tool];
     if (!o) { el.innerHTML = ''; el.classList.add('hidden'); return; }
     el.classList.remove('hidden');
-    el.innerHTML = (o.label ? `<span class="mp-opt-l">${o.label}</span>` : '') + o.items.map(([v, l]) => `<button type="button" class="chip ${opt[o.key] === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('') + (o.hint ? `<span class="mp-opt-h">${o.hint}</span>` : '');
-    el.querySelectorAll('.chip').forEach(b => b.onclick = () => { opt[o.key] = b.dataset.v; optionsBar(tool, el); });
+    const chips = (key, items) => items.map(([v, l]) => `<button type="button" class="chip ${opt[key] === v ? 'on' : ''}" data-k="${key}" data-v="${v}">${l}</button>`).join('');
+    el.innerHTML = (o.label ? `<span class="mp-opt-l">${o.label}</span>` : '') + chips(o.key, o.items)
+      + (o.more ? `<span class="mp-opt-sep"></span>${chips(o.more.key, o.more.items)}` : '')
+      + (o.acts ? `<span class="mp-opt-sep"></span>${o.acts.map(([a, l]) => `<button type="button" class="chip act" data-a="${a}">${l}</button>`).join('')}` : '')
+      + (o.hint ? `<span class="mp-opt-h">${o.hint}</span>` : '');
+    el.querySelectorAll('.chip[data-k]').forEach(b => b.onclick = () => { opt[b.dataset.k] = b.dataset.v; optionsBar(tool, el); M.redraw(); });
+    el.querySelectorAll('.chip[data-a]').forEach(b => b.onclick = () => ACTS[b.dataset.a] && ACTS[b.dataset.a]());
   }
 
   // ---------------------------------------------------------------- filling a block with buildings
@@ -473,5 +521,5 @@ window.UnwipTownFactory = function (M) {
   }
 
   return { TOOLS, LISTS, renderBase, renderUnder, stamp, stampBounds, hit, bounds, moveBy, drawOne, pointerDown, pointerMove, pointerUp, drawPreview, optionsBar, brushy, fillBlock, generate, randomDialog,
-    blank: () => ({ streets: [], buildings: [], walls: [], areas: [] }), get busy() { return !!td; } };
+    blank: () => ({ streets: [], buildings: [], walls: [], areas: [] }), get busy() { return !!td; }, cancel: () => { td = null; } };
 };
