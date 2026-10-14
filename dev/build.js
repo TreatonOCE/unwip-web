@@ -95,7 +95,7 @@ window.UnwipBuild = (function () {
       } }
     ]);
   }
-  async function create(kind) {
+  async function create(kind, opts = {}) {
     const def = { map: 'Map of the world', magic: 'Magic system', runes: 'Runes', sigil: 'Sigil', arms: 'House' }[kind];
     const title = await U.promptText(`New ${KINDS[kind].name.toLowerCase()}`, kind === 'arms' ? 'Whose arms are these? (a house, order or city)' : 'Name', def);
     if (!title) return;
@@ -106,6 +106,7 @@ window.UnwipBuild = (function () {
       it.data = { v: 2, active: 0, sections: [{ name: k === 'town' ? 'Town' : 'Main map', ...window.UnwipMaps.blank('parchment', k) }] };
     }
     await put(it);
+    if (opts.noOpen) return it;
     await open(it.id);
     return true;
   }
@@ -194,16 +195,17 @@ window.UnwipBuild = (function () {
     const canWin = !!api.buildWindow;
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const body = document.createElement('div'); body.className = 'bd-pick';
-    body.innerHTML = `<p class="hint">Your world’s maps, magic, runes, sigils and coats of arms. ${canWin ? 'Open one here, or in its own window (⧉) to keep beside your chapter.' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
+    body.innerHTML = `<p class="hint">Your world’s maps, magic, runes, sigils and coats of arms. ${canWin ? 'Each opens in its own window, so you can keep it beside your chapter. (↩ opens it in this window instead.)' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
       ${items.length ? ORDER.filter(k => by(k).length).map(k => `<h4>${KINDS[k].plural}</h4><div class="bd-pick-list">${by(k).map(x => `<div class="bd-pick-row" data-id="${x.id}">
           <button type="button" class="bd-pick-open" data-open="${x.id}"><span class="bd-pick-th">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : KINDS[k].icon}</span><span><b>${esc(x.title || 'Untitled')}</b><small>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</small></span></button>
-          ${canWin ? `<button type="button" class="icon-btn bd-pick-win" data-win="${x.id}" title="Open in its own window">⧉</button>` : ''}</div>`).join('')}</div>`).join('') : '<p class="lib-empty">Nothing built yet.</p>'}
+          ${canWin ? `<button type="button" class="icon-btn bd-pick-win" data-here="${x.id}" title="Open it in this window instead, over the chapter">↩</button>` : ''}</div>`).join('')}</div>`).join('') : '<p class="lib-empty">Nothing built yet.</p>'}
       <h4>Start something new</h4><div class="bd-pick-new">${ORDER.map(k => `<button type="button" class="btn small" data-new="${k}">${KINDS[k].icon} ${esc(KINDS[k].name)}</button>`).join('')}</div>`;
     let go = null, close2 = () => {};
     body.addEventListener('click', e => {
-      const o = e.target.closest('[data-open]'), w = e.target.closest('[data-win]'), n = e.target.closest('[data-new]');
-      if (o) go = () => open(o.dataset.open, 'book');
-      else if (w) go = () => api.buildWindow(w.dataset.win, (items.find(x => x.id === w.dataset.win) || {}).title || 'Build');
+      const o = e.target.closest('[data-open]'), h = e.target.closest('[data-here]'), n = e.target.closest('[data-new]');
+      const inWindow = id => api.buildWindow(id, (items.find(x => x.id === id) || {}).title || 'Build');
+      if (h) go = () => open(h.dataset.here, 'book');
+      else if (o) go = () => canWin ? inWindow(o.dataset.open) : open(o.dataset.open, 'book');
       else if (n) go = () => createFrom(n.dataset.new);
       else return;
       close2();
@@ -211,7 +213,10 @@ window.UnwipBuild = (function () {
     await U.modal({ title: 'Build', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }], onOpen: back => { close2 = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });
     if (go) await go();
   }
-  async function createFrom(kind) { ret = 'book'; if (!(await create(kind))) ret = null; }
+  async function createFrom(kind) {
+    if (api.buildWindow) { const it = await create(kind, { noOpen: true }); if (it) api.buildWindow(it.id, it.title); return; }   // PC/Mac: its own window
+    ret = 'book'; if (!(await create(kind))) ret = null;
+  }
 
   // ================================================================== CHANGED ON ANOTHER DEVICE
   // A sync brought in a newer copy (phone and iPad), or Dropbox's own app changed the file (PC). The piece on screen
