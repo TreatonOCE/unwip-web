@@ -289,7 +289,9 @@
     const places = api.projectPlaces ? await api.projectPlaces().catch(() => []) : [];
     if (places.length < 2 && !api.pickPlace) return { html: '', read: async () => null };
     const last = (S.settings || {}).newBookPlace;
-    const pick = places.find(x => x.path === last) || places.find(x => x.main) || places[0];
+    // on a phone or iPad, "this device only" is never the remembered default: it's easy to pick once and then forget,
+    // and a book kept there doesn't sync
+    const pick = (last === 'local' ? null : places.find(x => x.path === last)) || places.find(x => x.main) || places[0];
     const html = `<div class="field"><label>Keep it in</label><select id="${id}">${places.map((x, i) => `<option value="${i}" ${x === pick ? 'selected' : ''}>${esc(x.label)}${x.note ? ` (${esc(x.note)})` : ''}</option>`).join('')}${api.pickPlace ? '<option value="pick">Another folder…</option>' : ''}</select></div>`;
     return { html, read: async body => {
       const v = $('#' + id, body).value;
