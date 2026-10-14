@@ -386,12 +386,13 @@ window.UnwipProof = (function () {
       </div>
       <table class="pf-table"><thead><tr><th>When</th><th>Writing time</th><th>Typed</th><th>Pasted</th><th>Chapters</th><th></th></tr></thead><tbody>
       ${st.sessions.map((r, j) => `<tr><td>${new Date(r.started).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}<small>${esc(r.device)}</small></td><td>${dur(r.active)}</td><td>${fmt(r.typedWords)} words</td><td>${r.pastes ? `${fmt(r.pastedWords)} words (${r.pastes})` : '–'}</td><td>${r.chapters}</td>
-        <td class="pf-acts"><button class="btn small" data-play="${j}">▶ Play</button><button class="icon-btn small" data-del="${j}" title="Delete this recording">✕</button></td></tr>`).join('')}
+        <td class="pf-acts"><button class="btn small" data-play="${j}">▶ Play</button><button class="btn small" data-vid="${j}" title="Save this session as a video, at real speed or faster">🎬 Video</button><button class="icon-btn small" data-del="${j}" title="Delete this recording">✕</button></td></tr>`).join('')}
       </tbody></table>
       ${st.resync ? `<p class="pf-small">${st.resync} time${st.resync === 1 ? '' : 's'} a chapter had changed while Replay wasn’t watching it (written with Replay off, in another window or on another device); the replay jumps to the new text there and the report says so.</p>` : ''}`;
     const go = await U.modal({ title: `Replays of “${S.project.title}”`, body, wide: true,
       onOpen: back => {
         $$('[data-play]', back).forEach(b => b.onclick = () => { back.querySelector('.m-foot .btn').click(); play([sessions[+b.dataset.play]]); });
+        $$('[data-vid]', back).forEach(b => b.onclick = () => { back.querySelector('.m-foot .btn').click(); timelapse([sessions[+b.dataset.vid]], 'speed'); });
         $$('[data-del]', back).forEach(b => b.onclick = async () => {
           const s = sessions[+b.dataset.del];
           if (!await U.confirmBox('Delete this recording?', `The replay from ${new Date(s.started).toLocaleString()} will be deleted. Your writing isn’t touched.`, 'Delete', true)) return;
@@ -399,7 +400,7 @@ window.UnwipProof = (function () {
           await api.proofDelete(S.slug, s.id); back.querySelector('.m-foot .btn').click(); recordings();
         });
       },
-      buttons: [{ label: 'Close', value: null, kind: 'ghost' }, { label: 'Make a timelapse video…', value: 'video' }, { label: 'Save a report…', value: 'report' }, { label: '▶ Play all', value: 'play', kind: 'primary' }] });
+      buttons: [{ label: 'Close', value: null, kind: 'ghost' }, { label: 'Make a video…', value: 'video' }, { label: 'Save a report…', value: 'report' }, { label: '▶ Play all', value: 'play', kind: 'primary' }] });
     if (go === 'play') play(sessions);
     else if (go === 'report') saveReport(sessions);
     else if (go === 'video') timelapse(sessions);
@@ -451,28 +452,40 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     for (const t of ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4;codecs=avc1', 'video/mp4']) if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
     return '';
   }
-  async function timelapse(sessions) {
+  // a video of the replay: a timelapse squeezed into a set length, or at the replay's own speed (1× is as it was
+  // typed, with long pauses cut down to 3 seconds, the same as the player)
+  const vlen = ms => { const m = Math.round(ms / 60000); return ms < 60000 ? (n => `${n} second${n === 1 ? '' : 's'}`)(Math.max(1, Math.round(ms / 1000))) : m < 60 ? `${m} minute${m === 1 ? '' : 's'}` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+  async function timelapse(sessions, pick) {
     const type = videoType();
     if (!type || !HTMLCanvasElement.prototype.captureStream) { U.toast('This browser can’t make videos. Try Unwip on a computer.', 'warn', 7000); return; }
+    const total0 = pfPrep(sessions).total;
     const body = document.createElement('div'); body.className = 'pf-dialog';
+    const speeds = [1, 2, 4, 16];
     body.innerHTML = `<p>Turns the replay into a video you can share, with the words appearing as they were written.</p>
-      <div class="pf-q"><b>Length</b>${[30, 60, 180].map((s, j) => `<label><input type="radio" name="tl-len" value="${s}"${j === 1 ? ' checked' : ''}> ${s < 60 ? s + ' seconds' : s / 60 + ' minute' + (s > 60 ? 's' : '')}</label>`).join('')}</div>
+      <div class="pf-q"><b>As it was written</b>${speeds.map(x => `<label><input type="radio" name="tl-len" value="x${x}"${pick === 'speed' && x === 1 ? ' checked' : ''}> ${x === 1 ? 'Real speed (1×)' : x + '× speed'} · ${vlen(total0 / x)}</label>`).join('')}</div>
+      <div class="pf-q"><b>Timelapse</b>${[30, 60, 180].map(s => `<label><input type="radio" name="tl-len" value="${s}"${pick !== 'speed' && s === 60 ? ' checked' : ''}> ${s < 60 ? s + ' seconds' : s / 60 + ' minute' + (s > 60 ? 's' : '')}</label>`).join('')}</div>
       <div class="pf-q"><b>Shape</b><label><input type="radio" name="tl-shape" value="wide" checked> Wide (YouTube, computers)</label><label><input type="radio" name="tl-shape" value="tall"> Tall (TikTok, Reels, Shorts)</label></div>
-      <p class="pf-small">It’s made in real time, so a 1-minute video takes about a minute. Keep Unwip in front while it’s made (a hidden window draws fewer pictures, so the video gets jumpy). Timelapse videos are small (a few MB a minute).</p>`;
-    const ok = await U.modal({ title: 'Make a timelapse video', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Make the video', value: true, kind: 'primary' }] });
+      <p class="pf-small">Pauses longer than 3 seconds are cut down to 3, like in the player. The video is made in real time, so a 20-minute video takes 20 minutes to make: keep Unwip open and in front while it’s made (a hidden window draws fewer pictures, so the video gets jumpy). You can stop part-way and keep what’s made so far. They’re small files, a few MB a minute.</p>
+      <p class="pf-warn hidden" id="tl-long"><b>That’s a long video.</b> It’s kept in memory until it’s saved, so for anything over an hour, make it from one session at a time (the 🎬 button next to each one in the list).</p>`;
+    const longWarn = () => { const v = ($('input[name="tl-len"]:checked', body) || {}).value || ''; $('#tl-long', body).classList.toggle('hidden', !(v[0] === 'x' && total0 / +v.slice(1) > 3600000)); };
+    $$('input[name="tl-len"]', body).forEach(r => r.onchange = longWarn); longWarn();
+    const ok = await U.modal({ title: 'Make a video of the replay', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Make the video', value: true, kind: 'primary' }] });
     if (!ok) return;
-    const secs = +($('input[name="tl-len"]:checked', body) || {}).value || 60, tall = (($('input[name="tl-shape"]:checked', body) || {}).value) === 'tall';
+    const lenV = ($('input[name="tl-len"]:checked', body) || {}).value || '60', speed = lenV[0] === 'x' ? +lenV.slice(1) : 0;
+    const secs = speed ? Math.max(3, total0 / 1000 / speed) : +lenV || 60, tall = (($('input[name="tl-shape"]:checked', body) || {}).value) === 'tall';
     const W = tall ? 1080 : 1920, H = tall ? 1920 : 1080;
     const data = pfPrep(sessions), ev = data.ev;
     if (!ev.length) return;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
     const stream = cv.captureStream(30);
-    const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 4e6 });
+    const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: speed ? 2e6 : 4e6 });
     const parts = []; rec.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
     const prog = document.createElement('div'); prog.className = 'pf-prog';
-    prog.innerHTML = `<b>Making your timelapse…</b><div class="pf-bar"><i></i></div><button class="btn small">Cancel</button>`;
+    prog.innerHTML = `<b>Making your ${speed ? 'video' : 'timelapse'}…</b><span class="pf-left"></span><div class="pf-bar"><i></i></div>${speed ? '<button class="btn small" data-keep>Stop and save</button>' : ''}<button class="btn small" data-cancel>Cancel</button>`;
     document.body.appendChild(prog);
-    let cancelled = false; $('button', prog).onclick = () => { cancelled = true; };
+    let cancelled = false, cut = false;
+    $('[data-cancel]', prog).onclick = () => { cancelled = true; };
+    const keep = $('[data-keep]', prog); if (keep) keep.onclick = () => { cut = true; };
     const book = S.project ? S.project.title : '';
     const css = getComputedStyle(document.body);
     const ink = '#26231e', paper = '#fbf8f1', accent = '#34528a', pasteBg = 'rgba(238,96,56,.22)';
@@ -512,7 +525,8 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     // falls behind, frames are skipped rather than the whole video stretching out longer and slower than chosen).
     rec.start(1000);
     const t0 = performance.now();
-    for (let fr = 0; fr <= frames && !cancelled;) {
+    let leftAt = 0;
+    for (let fr = 0; fr <= frames && !cancelled && !cut;) {
       const vnow = total * fr / frames;
       while (i < ev.length && ev[i].vt + ev[i].dur <= vnow) pfApply(docs, ev[i++]);
       const e = i < ev.length && ev[i].vt <= vnow ? ev[i] : ev[Math.max(0, i - 1)];
@@ -542,6 +556,7 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
       g.fillText(`${pfWords(text).toLocaleString()} words`, PAD, H - (tall ? 120 : 70));
       const tag = 'Written in Unwip'; g.fillText(tag, W - PAD - g.measureText(tag).width, H - (tall ? 120 : 70));
       $('.pf-bar i', prog).style.width = Math.round(100 * fr / frames) + '%';
+      if (performance.now() - leftAt > 1000) { leftAt = performance.now(); const left = (frames - fr) / 30 * 1000; $('.pf-left', prog).textContent = left > 60000 ? `about ${vlen(left)} left` : ''; }
       const due = t0 + (fr + 1) * 1000 / 30, now = performance.now();
       if (due > now) await new Promise(r => setTimeout(r, due - now)); else await new Promise(r => setTimeout(r, 0));
       fr = fr >= frames ? frames + 1 : Math.min(frames, Math.max(fr + 1, Math.floor((performance.now() - t0) * 30 / 1000)));
@@ -549,9 +564,10 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     await new Promise(r => { rec.onstop = r; rec.stop(); });
     stream.getTracks().forEach(t => t.stop());
     prog.remove();
-    if (cancelled) { U.toast('Timelapse cancelled.'); return; }
+    if (cancelled) { U.toast(speed ? 'Video cancelled.' : 'Timelapse cancelled.'); return; }
     const blob = new Blob(parts, { type: type.split(';')[0] });
-    await api.exportBinary(await seekable(new Uint8Array(await blob.arrayBuffer()), type), `Timelapse - ${book}`, /mp4/.test(type) ? 'mp4' : 'webm', 'Video');
+    const day = new Date(sessions[0].started).toLocaleDateString('en-CA');
+    await api.exportBinary(await seekable(new Uint8Array(await blob.arrayBuffer()), type), speed ? `Replay ${speed}x - ${book} ${day}${sessions.length > 1 ? ' (' + sessions.length + ' sessions)' : ''}` : `Timelapse - ${book}`, /mp4/.test(type) ? 'mp4' : 'webm', 'Video');
   }
 
   // a recorded WebM gets its length and an index, so players can skip through it (left as it was if that fails)

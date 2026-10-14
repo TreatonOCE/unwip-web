@@ -2735,3 +2735,5 @@ body.writer .pf-remind { bottom: 18px; }
 /* Build's top bar: the title gives way so "Saving…" never slides under the Record button */
 .bd-top .tb-left .pl-title { flex: 0 1 auto; min-width: 60px; }
 #bd-saved { flex: none; white-space: nowrap; }
+.pf-left { font-size: 12px; color: var(--muted); margin-top: -4px; } .pf-left:empty { display: none; }
+.pf-table .pf-acts { white-space: nowrap; } .pf-table .pf-acts .btn + .btn { margin-left: 4px; }
