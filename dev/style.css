@@ -2726,3 +2726,5 @@ body.writer .pf-remind { bottom: 18px; }
 .bd-pick-win { font-size: 17px; }
 .bd-pick-new { display: flex; flex-wrap: wrap; gap: 6px; }
 .ctx-menu { max-height: calc(100vh - 16px); overflow-y: auto; }
+.mp-selbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; gap: 4px; padding: 5px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.mp-selbar.hidden { display: none; }

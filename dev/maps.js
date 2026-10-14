@@ -288,7 +288,7 @@ window.UnwipMaps = (function () {
   function renderItems(g, P, skip) {
     st.paths.forEach((p, i) => { if (!(skip && skip.type === 'path' && skip.i === i)) drawPath(g, p, P); });
     if (isTown()) T.renderUnder(g, P, skip);
-    st.stamps.map((s, i) => [s, i]).sort((a, b) => a[0].y - b[0].y).forEach(([s, i]) => { if (!(skip && skip.type === 'stamp' && skip.i === i)) stamp(g, s, P); });
+    st.stamps.map((s, i) => [s, i]).sort((a, b) => ((a[0].z || 0) - (b[0].z || 0)) || a[0].y - b[0].y).forEach(([s, i]) => { if (!(skip && skip.type === 'stamp' && skip.i === i)) stamp(g, s, P); });
     (st.boxes || []).forEach((b, i) => { if (!(skip && skip.type === 'box' && skip.i === i)) drawRectFrame(g, P, b.x, b.y, b.w, b.h, b.f); });
     st.labels.forEach((l, i) => { if (!(skip && skip.type === 'label' && skip.i === i)) drawLabel(g, l, P); });
     st.pins.forEach((p, i) => { if (!(skip && skip.type === 'pin' && skip.i === i)) drawPin(g, p, P); });
@@ -351,7 +351,7 @@ window.UnwipMaps = (function () {
     if (drawing && drawing.path) drawPath(ctx, drawing.path, P);
     if (drawing && drawing.box) { const b = norm(drawing.box); drawRectFrame(ctx, P, b.x, b.y, b.w, b.h, b.f); }
     if (isTown()) T.drawPreview(ctx, P);
-    syncFrameSelect();
+    syncFrameSelect(); renderSelBar();
     if ((BRUSHY.includes(tool) || (isTown() && T.brushy(tool))) && hover) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 1.5 / cam.z; ctx.beginPath(); ctx.arc(hover.x, hover.y, brush * K / 2, 0, 7); ctx.stroke(); ctx.restore(); }
   }
   let itemsSkip = null, raf = 0;
@@ -550,10 +550,34 @@ window.UnwipMaps = (function () {
     if (h.type === 'label') { push(); addLabel(null, st.labels[h.i]); }
     if (h.type === 'pin') { const pin = st.pins[h.i]; if (pin.placeId && host.inBook && U.findNode(pin.placeId)) { close().then(() => U.openDoc(pin.placeId)); } else { push(); addPin(null, pin); } }
   }
+  // ================================================================== LAYERS: bring forward / send back
+  // Things of one kind are drawn in order (landmarks: nearer the bottom of the map in front, unless you've moved one).
+  const LIST_OF = () => ({ stamp: 'stamps', pin: 'pins', label: 'labels', path: 'paths', box: 'boxes', ...(T ? T.LISTS : {}) });
+  function reorder(how) {
+    if (!sel) return;
+    const key = LIST_OF()[sel.type], list = key && st[key]; if (!list || !list[sel.i]) return;
+    push();
+    if (sel.type === 'stamp') {
+      const o = list[sel.i], zs = list.map(x => x.z || 0);
+      if (how === 'front') o.z = Math.max(...zs) + 1; else if (how === 'back') o.z = Math.min(...zs) - 1;
+      else o.z = (o.z || 0) + (how === 'up' ? 1 : -1);
+    } else {
+      const [o] = list.splice(sel.i, 1);
+      const to = how === 'front' ? list.length : how === 'back' ? 0 : Math.max(0, Math.min(list.length, sel.i + (how === 'up' ? 1 : -1)));
+      list.splice(to, 0, o); sel = { type: sel.type, i: to };
+    }
+    itemsDirty = true; changed(); schedule(); renderSelBar();
+  }
+  // a small bar over the map while something is selected: layers and delete (also on right-click, and [ ] keys)
+  function renderSelBar() {
+    const bar = view && view.querySelector('.mp-selbar'); if (!bar) return;
+    const show = !!(sel && tool === 'select' && LIST_OF()[sel.type]);
+    bar.classList.toggle('hidden', !show);
+  }
   function removeSel() {
     if (!sel) return; push();
     const list = { stamp: 'stamps', pin: 'pins', label: 'labels', path: 'paths', box: 'boxes', ...(T ? T.LISTS : {}) }[sel.type];
-    st[list].splice(sel.i, 1); sel = null; changed(); schedule();
+    st[list].splice(sel.i, 1); sel = null; changed(); schedule(); renderSelBar();
   }
 
   // ================================================================== A PICTURE OF ANY MAP (split view)
@@ -627,7 +651,7 @@ window.UnwipMaps = (function () {
       <div class="mp-tabs" id="mp-tabs"></div>
       <div class="mp-body"><div class="mp-tools"><div class="mp-toollist"></div>
         <div class="mp-brush" data-tip="Brush size: how big the land, water, forest and mountain brushes paint"><span class="mp-brush-ic">🖌️</span><input type="range" id="mp-size" min="4" max="60" value="${brush}" orient="vertical"><span class="mp-brush-n" id="mp-size-n">${brush}</span></div></div>
-        <div class="mp-stage"><canvas></canvas><div class="mp-opts hidden" id="mp-opts"></div><div class="mp-hint">Scroll to zoom · drag empty space to move around · double-click a pin or label to edit it</div></div></div>`;
+        <div class="mp-stage"><canvas></canvas><div class="mp-opts hidden" id="mp-opts"></div><div class="mp-selbar hidden"><button type="button" class="btn small" data-layer="front" title="Bring to front (Shift+])">⇈ Front</button><button type="button" class="btn small" data-layer="up" title="Bring forward (])">↑ Forward</button><button type="button" class="btn small" data-layer="down" title="Send backward ([)">↓ Backward</button><button type="button" class="btn small" data-layer="back" title="Send to back (Shift+[)">⇊ Back</button><button type="button" class="btn small ghost" data-layer="del" title="Delete">🗑</button></div><div class="mp-hint">Scroll to zoom · drag empty space to move around · double-click a pin or label to edit it</div></div></div>`;
     host.mount(view);
     cv = $('canvas', view); ctx = cv.getContext('2d');
     buildTools(); resize(); fit(); setTool('select'); draw();
@@ -666,6 +690,15 @@ window.UnwipMaps = (function () {
     window.addEventListener('pointerup', lift); window.addEventListener('pointercancel', lift);
     view.addEventListener('gesturestart', e => e.preventDefault());   // Safari's own page zoom
     cv.addEventListener('wheel', wheel, { passive: false }); cv.addEventListener('dblclick', dblclick);
+    view.querySelector('.mp-selbar').addEventListener('click', e => { const b = e.target.closest('[data-layer]'); if (!b) return; if (b.dataset.layer === 'del') removeSel(); else reorder(b.dataset.layer); });
+    cv.addEventListener('contextmenu', e => {
+      const p = world(e), h = hit(p.x, p.y); if (!h || !LIST_OF()[h.type]) return;
+      e.preventDefault(); sel = h; setTool('select'); redraw();
+      U.showMenu(e.clientX, e.clientY, [
+        { label: 'Bring to front', action: () => reorder('front') }, { label: 'Bring forward', action: () => reorder('up') },
+        { label: 'Send backward', action: () => reorder('down') }, { label: 'Send to back', action: () => reorder('back') },
+        { sep: true }, { label: 'Delete', danger: true, action: () => removeSel() }]);
+    });
     let autoFit = true; const autoFitOff = () => { autoFit = false; };
     new ResizeObserver(() => { if (!view) return; if (autoFit) fit(); resize(); }).observe($('.mp-stage', view));
     cv.addEventListener('pointerdown', () => { autoFit = false; }); cv.addEventListener('wheel', () => { autoFit = false; });
@@ -779,6 +812,7 @@ window.UnwipMaps = (function () {
     const ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && e.key.toLowerCase() === 'z') { e.preventDefault(); e.stopPropagation(); $('#mp-undo', view).click(); }
     else if (ctrl && e.key.toLowerCase() === 'y') { e.preventDefault(); e.stopPropagation(); $('#mp-redo', view).click(); }
+    else if (!ctrl && !e.altKey && (e.key === ']' || e.key === '[' || e.key === '}' || e.key === '{') && sel) { e.preventDefault(); e.stopPropagation(); const fwd = e.key === ']' || e.key === '}'; reorder(e.shiftKey || e.key === '}' || e.key === '{' ? (fwd ? 'front' : 'back') : (fwd ? 'up' : 'down')); }
     else if (!ctrl && !e.altKey && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_') && turnable(sel)) { e.preventDefault(); e.stopPropagation(); push(); scaleBy(turnable(sel), e.key === '-' || e.key === '_' ? 1 / 1.15 : 1.15); changed(); schedule(); }
     else if (!ctrl && !e.altKey && e.key.toLowerCase() === 'r' && turnable(sel)) { e.preventDefault(); e.stopPropagation(); push(); const o = turnable(sel); o.rot = snapAngle((o.rot || 0) + (e.shiftKey ? -1 : 1) * Math.PI / 12); if (!o.rot) delete o.rot; changed(); schedule(); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) { e.preventDefault(); e.stopPropagation(); removeSel(); }
