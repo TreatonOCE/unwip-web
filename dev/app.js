@@ -2969,8 +2969,17 @@
 
   // only the revision highlights (other modules use their own: focus fading, letter animations, comments)
   function clearRvHighlights() { if (!(window.CSS && CSS.highlights)) return; for (const k of [...CSS.highlights.keys()]) if (k.startsWith('rv-')) CSS.highlights.delete(k); }
+  // Revise or the side panel next to a split view squeezes the chapter into a thin strip: close the split view
+  // (a chapter popped out into its own window is left alone). Revise always closes it; other panels only when the
+  // chapter would get too narrow to write in.
+  function makeRoom(always) {
+    if (!S.splitId || $('#split-pane').classList.contains('hidden')) return;
+    const go = () => { closeSplit(); toast('Split view closed to make room. Open it again with the split button (Ctrl+\\).', '', 5000); };
+    if (always) return go();
+    requestAnimationFrame(() => { const pg = editor.closest('.page') || editor; const w = pg.getBoundingClientRect().width; if (w && w < 480) go(); });
+  }
   function setRevise(on) {
-    if (on) emit('revise', true);
+    if (on) { emit('revise', true); makeRoom(true); }
     S.revise = !!on;
     $('#revise-panel').classList.toggle('hidden', !on);
     $('#btn-revise').classList.toggle('on', !!on);
@@ -4747,7 +4756,7 @@
   // test hooks (used by the automated checks, harmless otherwise)
   window.__folio = { S, openProject, openDoc, copyDocForDocs, compileManuscript, flushSave, addNode, setWriter, insertCleanHTML };
   window.__unwip = {
-    S, api, I, $, $$, esc, fmt, countWords, today, editor, editorWrap, on, emit,
+    S, api, I, $, $$, esc, fmt, makeRoom, countWords, today, editor, editorWrap, on, emit,
     modal, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
     findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave, refreshSnapCount,
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,

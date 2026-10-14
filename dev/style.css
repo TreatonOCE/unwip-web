@@ -2309,13 +2309,13 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 /* the Record button: an empty ring while idle (so it never looks like it's already recording); solid red with a
    pulsing dot only while Replay or a screen video is actually recording */
 /* idle: plain, in the theme's own colours, so it never looks like it's already recording. Red only while recording. */
-.statusbar .st-proof { display: inline-flex; align-items: center; gap: 7px; margin-right: 12px; height: 22px; padding: 0 11px 0 9px; border-radius: 999px;
+.statusbar .st-proof, .rec-btn { display: inline-flex; align-items: center; gap: 7px; margin-right: 12px; height: 22px; padding: 0 11px 0 9px; border-radius: 999px;
   border: 1px solid var(--line); background: transparent; color: var(--muted); font-weight: 600; font-size: 12.5px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
-.statusbar .st-proof:hover { background: var(--hover, rgba(127, 127, 127, .12)); color: var(--text); }
+.statusbar .st-proof:hover, .rec-btn:hover { background: var(--hover, rgba(127, 127, 127, .12)); color: var(--text); }
 .st-proof .pf-dot { width: 9px; height: 9px; border-radius: 50%; background: #d64535; display: inline-block; }
 .st-proof .pf-dot.off { background: transparent; border: 2px solid currentColor; box-sizing: border-box; width: 10px; height: 10px; box-shadow: none; opacity: .9; }   /* not recording: an empty ring */
-.statusbar .st-proof.on { background: #d64535; border-color: #d64535; color: #fff; }
-.statusbar .st-proof.on:hover { background: #c23b2c; }
+.statusbar .st-proof.on, .rec-btn.on { background: #d64535; border-color: #d64535; color: #fff; }
+.statusbar .st-proof.on:hover, .rec-btn.on:hover { background: #c23b2c; }
 .st-proof.on .pf-dot { background: #fff; box-shadow: none; animation: pfpulse 1.6s ease-in-out infinite; }
 @keyframes pfpulse { 50% { opacity: .35; } }
 .pf-dialog .pf-lead { margin: 0 0 14px; color: var(--muted); }
@@ -2670,7 +2670,7 @@ body.pf-alert-paused::after { box-shadow: inset 0 0 0 3px rgba(217, 130, 43, .85
 body.writer .pf-remind { bottom: 18px; }
 @keyframes pf-remind-in { from { transform: translate(-50%, 12px); opacity: 0; } }
 .pf-remind-set { display: block; margin-top: 12px; }
-.statusbar .st-proof.on.paused { background: #8a6d1f; border-color: #8a6d1f; }
+.statusbar .st-proof.on.paused, .rec-btn.on.paused { background: #8a6d1f; border-color: #8a6d1f; }
 .st-proof.on.paused .pf-dot { animation: none; background: transparent; border: 2px solid #fff; box-sizing: border-box; }
 
 /* editing the sheet of Characters, Places or Items: only the fields and headings */
@@ -2728,3 +2728,7 @@ body.writer .pf-remind { bottom: 18px; }
 .ctx-menu { max-height: calc(100vh - 16px); overflow-y: auto; }
 .mp-selbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; gap: 4px; padding: 5px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .mp-selbar.hidden { display: none; }
+
+/* the Record button in the library, Build and Play top bars: a touch taller to sit with the other buttons */
+.rec-btn { height: 30px; margin-right: 6px; font-size: 13px; white-space: nowrap; flex: none; }
+@media (max-width: 640px) { .rec-btn .rb-label { display: none; } .rec-btn { padding: 0 9px; } }

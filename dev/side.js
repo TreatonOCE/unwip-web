@@ -62,6 +62,7 @@ window.UnwipSide = (function () {
   function sync() {
     const c = current();
     const pb = $('#btn-panel'); if (pb) pb.classList.toggle('on', !!c);
+    if (c && U.makeRoom) U.makeRoom(false);
     const n = new Set($$('#editor span.cmt[data-cid]').map(x => x.dataset.cid)).size + $$('#editor sup.fn').length;
     $$('[data-n]').forEach(x => { x.textContent = n ? ` ${n}` : ''; });
   }

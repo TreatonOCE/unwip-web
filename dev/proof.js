@@ -234,13 +234,20 @@ window.UnwipProof = (function () {
   }
   U.on('project', () => { remindHidden = null; stop().then(() => { if (onFor(S.slug)) start(); }); renderRemind(); });
   U.on('doc', () => setTimeout(watchDoc, 0));
-  U.on('leave', () => { stop(); stopVideo(); setTimeout(renderRemind, 0); });
+  U.on('leave', () => { stop(); setTimeout(renderRemind, 0); });   // a screen video keeps going: it isn't about one book
   document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
   window.addEventListener('beforeunload', () => { flush(); });
 
   // ================================================================== STATUS BAR
   let btn = null;
   function renderStatus() {
+    // the main menu, Build and Play have their own Record button: it only ever shows the screen video (Replay is
+    // for the writing inside a book)
+    document.querySelectorAll('.rec-btn').forEach(b => {
+      b.classList.toggle('on', !!V.rec); b.classList.toggle('paused', !!V.paused);
+      b.innerHTML = V.rec ? `<i class="pf-dot${V.paused ? ' off' : ''}"></i>${V.paused ? 'Paused · ' : ''}${clock(recorded())}` : '<i class="pf-dot off"></i><span class="rb-label">Record</span>';
+      b.title = V.rec ? (V.paused ? 'The screen video is paused. Click to resume or stop.' : 'Recording a screen video. Click to pause or stop.') : 'Proof of writing: record a video of your screen (also works in Build and Play)';
+    });
     btn = btn || document.getElementById('st-proof'); if (!btn) return;
     btn.classList.toggle('on', R.on || !!V.rec);
     btn.classList.toggle('paused', !!V.paused);
@@ -304,7 +311,7 @@ window.UnwipProof = (function () {
   const canVideo = () => !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && window.MediaRecorder);
 
   async function open() {
-    if (!S.slug) { U.toast('Open a book first.'); return; }
+    const inBook = !!S.slug;   // from the main menu, Build or Play: just the screen video (Replay belongs to a book)
     if (V.rec) {
       const canPause = typeof V.rec.pause === 'function';
       const go = await U.modal({ title: V.paused ? 'Screen video paused' : 'Screen video recording',
@@ -313,7 +320,7 @@ window.UnwipProof = (function () {
       if (go === 'pause') pauseVideo(!V.paused); else if (go === 'stop') stopVideo();
       return;
     }
-    const list = await api.proofList(S.slug).catch(() => []);
+    const list = inBook ? await api.proofList(S.slug).catch(() => []) : [];
     const info = !api.web && api.videoInfo ? await api.videoInfo().catch(() => null) : null;
     let qi = 1;
     const body = document.createElement('div'); body.className = 'pf-dialog';
@@ -321,7 +328,8 @@ window.UnwipProof = (function () {
       const q = QUALITY[qi], hour = perHour(q);
       body.innerHTML = `
         <p class="pf-lead">Show how you wrote it: a replay of your writing, or a video of your screen.</p>
-        <div class="pf-card">
+        ${inBook ? '' : '<p class="pf-small">A screen video keeps recording as you move between your books, Build and Play. <b>Replay</b> (a record of every change in a book) is switched on inside a book: open it and click Record in the bar at the bottom.</p>'}
+        <div class="pf-card${inBook ? '' : ' hidden'}">
           <h3>Replay <span class="pf-tag">small files</span></h3>
           <p>While it’s on, Unwip notes every change you make in this book, with the time: typing, deleting and pasting. Play it back, save a report anyone can open that shows what was typed and what was pasted, or turn it into a timelapse video. A long writing day is about 1 MB.</p>
           <div class="pf-row">
@@ -338,12 +346,12 @@ window.UnwipProof = (function () {
           ${info && info.free != null ? `<p class="pf-small">Free space: <b>${size(info.free)}</b>, about ${Math.max(0, Math.floor(info.free / hour))} hours at this quality. Videos are saved in <b>${esc(info.folder)}</b>.${api.platform === 'darwin' ? ' The first time, your Mac may ask you to allow screen recording for Unwip.' : ''}</p>` : ''}
           ${api.web ? `<p class="pf-small">${window.showSaveFilePicker ? 'You’ll choose where to save it first, and it’s written there as you go.' : 'This browser keeps the video in memory until you stop, then downloads it, so keep browser recordings short (under about 30 minutes).'}</p>` : ''}
           <div class="pf-row"><button class="btn primary" id="pf-video">⏺ Start screen video</button></div>
-          <label class="switch-line pf-remind-set"><input type="checkbox" id="pf-remind"${remindOn(S.slug) ? ' checked' : ''}> Remind me when this book isn’t being recorded <span class="pf-small">(a red “Not recording” sign stays on screen until you start or resume a screen video)</span></label>`
+          ${inBook ? '' : '<span hidden>'}<label class="switch-line pf-remind-set"><input type="checkbox" id="pf-remind"${remindOn(S.slug) ? ' checked' : ''}> Remind me when this book isn’t being recorded <span class="pf-small">(a red “Not recording” sign stays on screen until you start or resume a screen video)</span></label>${inBook ? '' : '</span>'}`
           : `<p>${/iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)) ? 'iPhones and iPads don’t let web apps record the screen. Use the built-in recorder instead: open Control Centre and tap <b>Screen Recording</b> (add it in Settings › Control Centre if it isn’t there). Replay above works here.' : 'This browser can’t record the screen. Replay above still works.'}</p>`}
         </div>
         <p class="pf-small">Nothing is uploaded anywhere. Replays stay with the book (and in Dropbox if the book is there); videos stay where you save them.</p>`;
-      $('#pf-replay', body).onchange = async e => { await setReplay(e.target.checked); U.toast(e.target.checked ? 'Replay is on for this book: everything you write from now is recorded.' : 'Replay is off for this book.'); };
-      $('#pf-list', body).onclick = () => { closeDlg(); recordings(); };
+      if (inBook) $('#pf-replay', body).onchange = async e => { await setReplay(e.target.checked); U.toast(e.target.checked ? 'Replay is on for this book: everything you write from now is recorded.' : 'Replay is off for this book.'); };
+      if (inBook) $('#pf-list', body).onclick = () => { closeDlg(); recordings(); };
       $$('input[name="pf-q"]', body).forEach(r => r.onchange = () => { qi = +r.value; draw(); });
       const vb = $('#pf-video', body); if (vb) vb.onclick = () => { closeDlg(); startVideo(QUALITY[qi], info); };
       const rm = $('#pf-remind', body); if (rm) rm.onchange = () => setRemind(rm.checked);
@@ -589,7 +597,7 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     V.rec = rec;
     V.timer = setInterval(renderStatus, 1000);
     renderStatus();
-    U.toast(`Screen video recording. Click <b>${clock(0)}</b> in the bottom bar to pause or stop.`, '', 6000);
+    U.toast(`Screen video recording. Click the timer (<b>${clock(0)}</b>) at any time to pause or stop. It keeps going in other books, Build and Play.`, '', 6000);
   }
   function stopVideo() { if (V.rec && V.rec.state !== 'inactive') { try { V.rec.stop(); } catch {} } if (V.stream) V.stream.getTracks().forEach(t => t.stop()); }
   async function finishVideo() {
@@ -605,7 +613,7 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
   }
 
   // the button in the bottom bar
-  document.addEventListener('click', e => { if (e.target.closest('#st-proof')) open(); });
+  document.addEventListener('click', e => { if (e.target.closest('#st-proof, .rec-btn')) open(); });
   renderStatus();
 
   const REPORT_CSS = `
