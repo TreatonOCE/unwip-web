@@ -134,7 +134,7 @@
       }
       const onKey = e => {
         if (e.key === 'Escape') { e.stopPropagation(); close(null); }
-        if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !e.target.isContentEditable) {
+        if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !e.target.isContentEditable && !(e.target.closest && e.target.closest('[data-own-enter]'))) {
           const primary = foot.querySelector('.primary'); if (primary) { e.preventDefault(); primary.click(); }
         }
       };
@@ -685,6 +685,7 @@
     if (n.root) {
       if (window.UnwipSeries && n.kind !== 'manuscript' && n.kind !== 'trash') items.push({ sep: true }, { label: 'Series bible (share with other books)…', action: () => window.UnwipSeries.open() });
       items.push({ sep: true }, { label: 'Change icon…', action: () => iconPicker(n.id) }, { label: 'New template section (Factions, Magic, Creatures…)…', action: () => templateGallery() });
+      if (SHEETS[n.kind]) items.push({ label: 'Edit the sheet (fields and headings)…', action: () => editSheet(n) });
       if (n.custom) items.push({ label: 'Edit this section…', action: () => editSection(n) }, { label: 'Save as one of my templates…', action: () => editSection(n, true) }, { label: 'Remove this section…', danger: true, action: () => deleteSection(n) });
     }
     if (n.kind === 'trash') items.push({ label: 'Empty Trash…', danger: true, disabled: !(n.children || []).length, action: emptyTrash });
@@ -744,7 +745,7 @@
   }
   function sheetFor(root) {
     if (!root) return null;
-    if (SHEETS[root.kind]) return { fields: SHEETS[root.kind], sections: SHEET_SECTIONS[root.kind] };
+    if (SHEETS[root.kind]) return { fields: root.fields || SHEETS[root.kind], sections: root.sections || SHEET_SECTIONS[root.kind] };   // Characters, Places and Items can have their sheet changed too
     if (root.custom) return { fields: root.fields || ['Name', 'Aliases'], sections: root.sections || ['Description', 'Notes'] };
     return null;
   }
@@ -889,7 +890,8 @@
       <div class="tg-prev" id="tg-prev"></div></div>`;
     const show = i => { pick = i; const [ic, , sg, f, sc] = list[i]; $('#tg-prev', body).innerHTML = `<div class="tg-cap">Each new entry looks like this:</div>` + sheetPreviewHTML(ic, sg, f, sc); $$('.tg-item', body).forEach(b => b.classList.toggle('on', +b.dataset.i === i)); };
     show(0);
-    $$('.tg-item', body).forEach(b => { b.onmouseenter = () => show(+b.dataset.i); b.onclick = () => show(+b.dataset.i); b.ondblclick = () => $('.modal-back .m-foot .primary').click(); });
+    // click to choose (hovering doesn't change the choice), double-click to add it straight away
+    $$('.tg-item', body).forEach(b => { b.onclick = () => show(+b.dataset.i); b.ondblclick = () => $('.modal-back .m-foot .primary').click(); });
     $$('.tg-del', body).forEach(x => x.onclick = async e => {
       e.stopPropagation();
       const t = (S.settings.myTemplates || []).find(y => y.id === x.dataset.del); if (!t) return;
@@ -941,22 +943,24 @@
     const f = existing || { title: '', singular: '', fields: ['Name', 'Aliases'], sections: ['Description', 'Notes'] };
     let icon = f.icon || '';
     const isMine = !!(S.settings.myTemplates || []).find(t => t.title.toLowerCase() === (f.title || '').toLowerCase());
-    body.className = 'cs-dlg';
-    body.innerHTML = `<p>Make a section for anything your story needs: factions, magic systems, creatures, ships, gods… Each new entry starts from the sheet you set up here.</p>
+    body.className = 'cs-dlg' + (opts.sheetOnly ? ' sheet-only' : '');
+    body.innerHTML = `<p>${opts.sheetOnly ? `Change what every new entry in “${esc(f.title)}” starts with: add fields like Class or Role, or headings like Goals. Your existing entries can get the new ones too (you’ll be asked next).` : 'Make a section for anything your story needs: factions, magic systems, creatures, ships, gods… Each new entry starts from the sheet you set up here.'}</p>
       <div class="cs-cols"><div class="form-grid">
         <div class="field full cs-name"><label>Section name</label><div class="cs-row"><button type="button" class="cs-icon" id="cs-icon" title="Choose an icon">${iconMarkup(icon) || '🗂️'}</button><input type="text" id="cs-title" value="${esc(f.title)}" placeholder="e.g. Factions"></div></div>
-        <div class="field"><label>One entry is called a…</label><input type="text" id="cs-single" value="${esc(f.singular || '')}" placeholder="e.g. Faction"></div>
+        <div class="field cs-single-f"><label>One entry is called a…</label><input type="text" id="cs-single" value="${esc(f.singular || '')}" placeholder="e.g. Faction"></div>
         <div class="field full"><label>Fields at the top of each sheet (comma separated). Keep “Name” and “Aliases” for name suggestions.</label><input type="text" id="cs-fields" value="${esc(f.fields.join(', '))}"></div>
         <div class="field full"><label>Headings below (comma separated)</label><input type="text" id="cs-sections" value="${esc(f.sections.join(', '))}"></div>
-        ${opts.offerSave || opts.forceSave ? `<label class="check full"><input type="checkbox" id="cs-save" ${!existing || isMine || opts.forceSave ? 'checked' : ''}> Save as one of my templates, so I can add it to other projects from + New</label>` : ''}
+        ${(opts.offerSave || opts.forceSave) && !opts.sheetOnly ? `<label class="check full"><input type="checkbox" id="cs-save" ${!existing || isMine || opts.forceSave ? 'checked' : ''}> Save as one of my templates, so I can add it to other projects from + New</label>` : ''}
       </div><div class="cs-prev"><div class="tg-cap">Each new entry looks like this:</div><div id="cs-sheet"></div></div></div>`;
     const list = id => $('#' + id, body).value.split(',').map(x => x.trim()).filter(Boolean);
     const read = () => { const title = $('#cs-title', body).value.trim(); return { title, singular: $('#cs-single', body).value.trim() || title.replace(/s$/i, '') || 'Entry', fields: list('cs-fields'), sections: list('cs-sections'), icon }; };
     const redraw = () => { const r = read(); $('#cs-sheet', body).innerHTML = sheetPreviewHTML(icon || '🗂️', r.singular, r.fields, r.sections); };
     body.addEventListener('input', redraw); redraw();
     $('#cs-icon', body).onclick = async () => { const r = await pickIcon(icon, read().title || 'this section'); if (!r) return; icon = r.icon; $('#cs-icon', body).innerHTML = iconMarkup(icon) || '🗂️'; redraw(); };
-    const ok = await modal({ title: existing && existing.id ? `Edit “${existing.title}”` : existing ? `Set up “${existing.title}”` : 'New template section', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: existing && existing.id ? 'Save' : 'Create section', value: true, kind: 'primary' }] });
+    const ok = await modal({ title: opts.sheetOnly ? `The sheet for “${existing.title}”` : existing && existing.id ? `Edit “${existing.title}”` : existing ? `Set up “${existing.title}”` : 'New template section', body, wide: true,
+      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, ...(opts.resetTo ? [{ label: 'Back to the standard sheet', value: 'reset', kind: 'ghost' }] : []), { label: existing && existing.id ? 'Save' : 'Create section', value: true, kind: 'primary' }] });
     if (!ok) return null;
+    if (ok === 'reset') return { ...opts.resetTo, reset: true };
     const r = read();
     if (!r.title) return null;
     if (!r.icon) delete r.icon;
@@ -978,9 +982,71 @@
     toast(`Added “${esc(r.title)}”. Hover it and click + to add an entry.`);
   }
   async function editSection(n, forceSave) {
+    const was = sheetFor(n);
     const r = await sectionDialog(n, { offerSave: true, forceSave }); if (!r) return;
     Object.assign(n, r); if (!r.icon) delete n.icon;
     scheduleMeta(); renderBinder(); scheduleNames();
+    await offerSheetUpdate(n, was);
+  }
+  // Characters, Places and Items: change the fields and headings their new entries start with
+  async function editSheet(n) {
+    const was = sheetFor(n), std = { fields: SHEETS[n.kind], sections: SHEET_SECTIONS[n.kind] };
+    const custom = !!(n.fields || n.sections);
+    const r = await sectionDialog({ title: n.title, singular: (NEW_TITLE[n.kind] || 'entry').replace(/^New /i, ''), fields: was.fields, sections: was.sections, icon: '', id: n.id }, { sheetOnly: true, resetTo: custom ? std : null });
+    if (!r) return;
+    const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+    if (r.reset || (same(r.fields, std.fields) && same(r.sections, std.sections))) { delete n.fields; delete n.sections; }
+    else { n.fields = r.fields.length ? r.fields : std.fields; n.sections = r.sections; }
+    scheduleMeta(); scheduleNames();
+    toast(`New ${esc((NEW_TITLE[n.kind] || 'entries').replace(/^New /i, '').toLowerCase())} sheets in “${esc(n.title)}” will start with the ${r.reset ? 'standard' : 'new'} fields and headings.`, '', 5000);
+    await offerSheetUpdate(n, was);
+  }
+  // after a sheet changes: add the new fields and headings to the entries already there (never removes anything)
+  async function offerSheetUpdate(root, was) {
+    const now = sheetFor(root); if (!now || !was) return;
+    const lc = a => new Set(a.map(x => x.trim().toLowerCase()));
+    const oldF = lc(was.fields), oldS = lc(was.sections);
+    const addF = now.fields.filter(f => !oldF.has(f.trim().toLowerCase())), addS = now.sections.filter(x => !oldS.has(x.trim().toLowerCase()));
+    if (!addF.length && !addS.length) return;
+    const docs = []; walkTree(root.children || [], d => { if (d.type === 'doc' && !d.map) docs.push(d); });
+    if (!docs.length) return;
+    const what = [...addF, ...addS].map(x => `“${esc(x)}”`).join(', ');
+    if (!(await confirmBox(`Add to your ${docs.length} existing ${docs.length === 1 ? 'entry' : 'entries'}?`, `Add ${what} to the ${docs.length === 1 ? 'entry' : `${docs.length} entries`} already in “${esc(root.title)}”? Nothing already written is changed or removed; any that already have it are skipped.`, 'Add them'))) return;
+    await flushSave();
+    let changedN = 0;
+    for (const d of docs) {
+      const html = d.id === S.docId ? editor.innerHTML : await api.loadDoc(S.slug, d.id).catch(() => null);
+      if (html == null) continue;
+      const box = document.createElement('div'); box.innerHTML = html;
+      const has = new Map(), heads = new Set();
+      let lastField = null;
+      for (const el of box.children) {
+        const m = el.tagName === 'P' && /^\s*([^:\n]{1,40}):/.exec(el.textContent || '');
+        const bold = el.tagName === 'P' && el.firstElementChild && /^(B|STRONG)$/.test(el.firstElementChild.tagName);
+        if (m && bold) { has.set(m[1].trim().toLowerCase(), el); if (!heads.size) lastField = el; }
+        if (/^H[1-6]$/.test(el.tagName)) heads.add((el.textContent || '').trim().toLowerCase());
+      }
+      let did = false;
+      for (const f of addF) {
+        if (has.has(f.trim().toLowerCase())) continue;
+        const p = document.createElement('p'); p.innerHTML = `<b>${esc(f)}:</b> `;
+        // in the sheet's order: after the field that comes before it, when the entry has that one
+        const k = now.fields.indexOf(f); let after = null;
+        for (let j = k - 1; j >= 0 && !after; j--) after = has.get(now.fields[j].trim().toLowerCase()) || null;
+        if (after) after.after(p); else if (k === 0 || !lastField) box.prepend(p); else lastField.after(p);
+        has.set(f.trim().toLowerCase(), p); if (!after && lastField && k !== 0) lastField = p;
+        did = true;
+      }
+      for (const x of addS) {
+        if (heads.has(x.trim().toLowerCase())) continue;
+        box.insertAdjacentHTML('beforeend', `<h2>${esc(x)}</h2><p><br></p>`); did = true;
+      }
+      if (!did) continue;
+      changedN++;
+      if (d.id === S.docId) { editor.innerHTML = box.innerHTML; scheduleSave(); }
+      else await api.saveDoc(S.slug, d.id, box.innerHTML);
+    }
+    toast(changedN ? `Added to ${changedN} ${changedN === 1 ? 'entry' : 'entries'}.` : 'They all had them already.');
   }
   async function deleteSection(n) {
     if (!(await confirmBox(`Remove “${esc(n.title)}”?`, (n.children || []).length ? `Its ${n.children.length} item(s) will be moved to the Trash first.` : 'It is empty.', 'Remove section', true))) return;
@@ -1538,6 +1604,27 @@
     return [...c.children].map(e => e.textContent).join('\n');
   }
   function resyncWords() { S.lastDocWords = countWords(editorText()); }
+  // Two hyphens become an em dash (—) as you type the second one, like Word, Scrivener and a Mac's own apps do.
+  // Undo straight after gives the two hyphens back. A setting in Settings › Writing turns it off.
+  const smartDash = () => { try { return localStorage.getItem('folio-dash') !== 'off'; } catch { return true; } };
+  let dashNext = false;
+  editor.addEventListener('beforeinput', e => {
+    dashNext = false;
+    if (e.inputType !== 'insertText' || e.data !== '-' || !smartDash()) return;
+    const sel = getSelection(); if (!sel.rangeCount || !sel.isCollapsed) return;
+    const n = sel.anchorNode, o = sel.anchorOffset;
+    dashNext = !!n && n.nodeType === 3 && o >= 1 && n.data[o - 1] === '-' && !(o > 1 && n.data[o - 2] === '-');
+  }, true);
+  editor.addEventListener('input', e => {
+    if (!dashNext || e.inputType !== 'insertText') return;
+    dashNext = false;
+    const sel = getSelection(); if (!sel.rangeCount) return;
+    const n = sel.anchorNode, o = sel.anchorOffset;
+    if (!n || n.nodeType !== 3 || o < 2 || n.data.slice(o - 2, o) !== '--') return;
+    const r = document.createRange(); r.setStart(n, o - 2); r.setEnd(n, o);
+    sel.removeAllRanges(); sel.addRange(r);
+    document.execCommand('insertText', false, '\u2014');
+  });
   editor.addEventListener('input', e => {
     trackTyping();
     ensureParagraphs();
@@ -2719,6 +2806,7 @@
         <div class="section-label">Language &amp; spelling</div>
         ${api.web ? `<div class="field full"><label>Spelling language</label><div class="hint" style="padding-top:4px">${(/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) ? 'Your iPhone or iPad checks spelling in the languages of its keyboards, and Unwip can’t change that. To check another language, add its keyboard: Settings › General › Keyboard › Keyboards › Add New Keyboard, then switch to it with the 🌐 key while you write.' : 'This browser checks spelling in your device’s languages. Add a language in your device or browser settings to check it too.'}</div></div>` : `<div class="field"><label>Spelling language</label>${sp.available.length ? `<select id="s-lang">${spellOptions(sp)}</select>` : `<div style="padding-top:8px;color:var(--muted)">${api.platform === 'darwin' ? 'Uses your Mac’s spelling languages (System Settings › Keyboard › Text Input)' : 'Uses your Windows language settings'}</div>`}</div>
         <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>`}
+        <label class="check full"><input type="checkbox" id="s-dash" ${smartDash() ? 'checked' : ''}> Turn two hyphens (--) into an em dash (—) as I type</label>
         <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
         <div class="section-label">Help</div>
         <div class="field"><label>New here, or showing someone?</label><button class="btn" id="g-intro" type="button">Welcome setup…</button></div>
@@ -2749,6 +2837,7 @@
     const v = id => $('#' + id, body).value, c = id => $('#' + id, body).checked;
     S.settings = await api.setSettings({ author: v('g-author').trim(), dailyGoal: Math.max(0, +v('g-daily') || 0), quotes: c('g-quotes'), autoUpdate: c('g-autoup') });
     try { localStorage.setItem('folio-ac', JSON.stringify({ on: c('s-ac'), min: +v('s-acmin') })); } catch {}
+    try { localStorage.setItem('folio-dash', c('s-dash') ? 'on' : 'off'); } catch {}
     const langSel = $('#s-lang', body);
     const newLangs = langSel ? [langSel.value] : sp.current;
     if ((langSel && newLangs[0] !== sp.current[0]) || c('s-spell') !== sp.enabled) {
@@ -2777,20 +2866,33 @@
   let twAnim = null;
   function typewriterScroll(instant) {
     const sel = getSelection(); if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return;
-    const r = sel.getRangeAt(0).cloneRange(); r.collapse(true);
-    let rect = r.getBoundingClientRect();
-    if (!rect.height) { const b = currentBlock(sel.anchorNode); if (b) rect = b.getBoundingClientRect(); }
     const L = window.UnwipLook;
+    // the caret's own line; a whole paragraph's box is only a last resort (its top can be many lines above the caret)
+    let rect = L && L.caretRect ? L.caretRect(sel) : null;
+    if (!rect) { const r = sel.getRangeAt(0).cloneRange(); r.collapse(true); rect = r.getBoundingClientRect(); }
+    if (!rect || !rect.height) { const b = currentBlock(sel.anchorNode); if (!b) return; const br = b.getBoundingClientRect(); rect = { top: br.top, height: Math.min(br.height, parseFloat(getComputedStyle(b).lineHeight) || 24) }; }
     const wrap = editorWrap.getBoundingClientRect();
     const target = wrap.top + wrap.height * (L ? L.typewriterPosition() : 0.45);
     const delta = rect.top - target;
     if (Math.abs(delta) < 2) return;
     cancelAnimationFrame(twAnim);
-    if (instant || !L || !L.smoothScroll()) { editorWrap.scrollTop += delta; return; }
-    const from = editorWrap.scrollTop, to = from + delta, t0 = performance.now(), dur = 160;
-    const step = now => { const k = Math.min(1, (now - t0) / dur); editorWrap.scrollTop = from + (to - from) * (1 - Math.pow(1 - k, 3)); if (k < 1) twAnim = requestAnimationFrame(step); };
+    // where it can actually go (near the top or end of a chapter the page can't move all the way): nothing to do if it's already there
+    const from = editorWrap.scrollTop, to = Math.max(0, Math.min(editorWrap.scrollHeight - editorWrap.clientHeight, from + delta));
+    if (Math.abs(to - from) < 1) return;
+    if (instant || !L || !L.smoothScroll()) { editorWrap.scrollTop = to; return; }
+    const t0 = performance.now(), dur = 160;
+    // (the first frame's clock can read a moment before t0: without the floor at 0 it moved the page the wrong way first,
+    // which was the "jumping up and down" in Writer mode)
+    const step = now => { const k = Math.max(0, Math.min(1, (now - t0) / dur)); editorWrap.scrollTop = from + (to - from) * (1 - Math.pow(1 - k, 3)); if (k < 1) twAnim = requestAnimationFrame(step); };
     twAnim = requestAnimationFrame(step);
   }
+  // When the window changes size (a Mac takes most of a second to slide into full screen, and the page's top gap is
+  // measured in screen height) keep the line you're on where it was, instead of letting the next key press yank it.
+  let twResize = 0;
+  new ResizeObserver(() => {
+    if (!typewriterActive() || document.activeElement !== editor) return;
+    cancelAnimationFrame(twResize); twResize = requestAnimationFrame(() => typewriterScroll(true));
+  }).observe(editorWrap);
   $('#btn-writer').onclick = () => setWriter(true);
 
   // ================================================================== FIND
@@ -3047,6 +3149,13 @@
     } finally { S.programmatic = false; }
     resyncWords();
     scheduleSave(); updateCountsSoon();
+    // the same as Ctrl/Cmd+Z, as a button (Ignore has one too)
+    const doc = S.docId;
+    toastAction(f.text ? `Changed to “${esc(f.text.length > 40 ? f.text.slice(0, 38) + '…' : f.text)}”.` : 'Taken out.', 'Undo', () => {
+      if (S.docId !== doc) return;
+      editor.focus(); S.programmatic = true; try { document.execCommand('undo'); } finally { S.programmatic = false; }
+      resyncWords(); scheduleSave(); updateCountsSoon(); if (S.revise) scheduleRevise();
+    }, 8000);
   }
   editorWrap.addEventListener('scroll', () => { if (!tip.classList.contains('hidden') && !tip.matches(':hover')) hideTip(); });
 
@@ -3226,6 +3335,14 @@
     return { current: cur, best: Math.max(best, cur) };
   }
   // ring dial: pct 0..1+, big centre text, small label
+  // the little copy button under Today: just the number, so it pastes cleanly into a spreadsheet
+  document.addEventListener('click', async e => {
+    const b = e.target.closest && e.target.closest('.dial-copy'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const n = b.dataset.copy || '0';
+    try { await navigator.clipboard.writeText(n); } catch { try { await api.clipboardWrite(n, n); } catch {} }
+    toast(`Copied ${fmt(+n)}.`, '', 2000);
+  });
   function dial({ pct, big, small, label, color, size = 132, track = 11 }) {
     const r = (size - track) / 2, c = 2 * Math.PI * r;
     const p = Math.max(0, Math.min(1, pct || 0));
@@ -3278,7 +3395,7 @@
     const body = document.createElement('div');
     body.innerHTML = `
       <div class="dial-row">
-        ${dial({ pct: daily ? todayW / daily : 0, big: fmt(todayW), small: daily ? `of ${fmt(daily)}` : 'words', label: 'Today' })}
+        ${dial({ pct: daily ? todayW / daily : 0, big: fmt(todayW), small: daily ? `of ${fmt(daily)}` : 'words', label: `Today <button type="button" class="dial-copy" data-copy="${todayW}" title="Copy today’s word count (${todayW}), to paste into a spreadsheet or a chat"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>` })}
         ${dial({ pct: daily ? week / (daily * 7) : 0, big: fmt(week), small: daily ? `of ${fmt(daily * 7)}` : 'words', label: 'This week', color: '#7a5cc7' })}
         ${dial({ pct: g.total ? total / g.total : 0, big: g.total ? Math.floor(total / g.total * 100) + '%' : fmt(total), small: g.total ? `${fmt(total)} / ${fmt(g.total)}` : 'words', label: 'Manuscript', color: '#c27a2c' })}
         <div class="stat-stack">
@@ -3323,7 +3440,7 @@
         ${lp.snippet ? `<span class="cc-snip">…${esc(lp.snippet.slice(-80))}<i class="cc-caret"></i></span>` : ''}
       </button>` : '') + `
       <div class="dash-card dials">
-        ${dial({ pct: daily ? todayW / daily : 0, big: fmt(todayW), small: daily ? `of ${fmt(daily)}` : 'words', label: 'Today', size: 120 })}
+        ${dial({ pct: daily ? todayW / daily : 0, big: fmt(todayW), small: daily ? `of ${fmt(daily)}` : 'words', label: `Today <button type="button" class="dial-copy" data-copy="${todayW}" title="Copy today’s word count (${todayW}), to paste into a spreadsheet or a chat"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>`, size: 120 })}
         ${dial({ pct: daily ? week / (daily * 7) : 0, big: fmt(week), small: daily ? `of ${fmt(daily * 7)}` : 'words', label: 'This week', color: '#7a5cc7', size: 120 })}
         <div class="stat-stack">
           <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>${st.current ? `day streak<br><small>best ${st.best}</small>` : st.best ? `day streak<br><small>best ${st.best} · write today to start again</small>` : `day streak<br><small>write today to start one</small>`}</span></div>
@@ -3764,6 +3881,8 @@
     document.body.classList.toggle('in-outline', v !== 'write');
     document.body.classList.toggle('in-mood', v === 'mood');
     if (v !== 'write' && S.revise) setRevise(false);
+    // back to the chapter: show what the outline or corkboard changed (synopsis and title)
+    if (v === 'write' && S.docId) { const f = findNode(S.docId); if (f) { const sy = $('#doc-synopsis'); if (sy && document.activeElement !== sy) { sy.value = f.node.synopsis || ''; requestAnimationFrame(() => { sy.style.height = 'auto'; sy.style.height = sy.scrollHeight + 'px'; }); } const t = $('#doc-title'); if (t && document.activeElement !== t && 'value' in t && t.value !== (f.node.title || '')) t.value = f.node.title || ''; } }
     if (v === 'outline') renderOutline();
     if (v === 'cork') renderCork();
     if (v === 'mood') renderMood();
@@ -3892,9 +4011,11 @@
         const order = statusOptions().map(x => x[0]); n.status = order[(order.indexOf(n.status || '') + 1) % order.length];
         scheduleMeta(); renderBinder(); renderCork();
       };
-      // only drag from the card itself, not while selecting text inside it
+      // drag from anywhere on the card, including its title and synopsis; once you've clicked into one of those to
+      // type, dragging there selects text instead
       card.addEventListener('mousedown', e => {
-        card.draggable = !e.target.closest('input, textarea');
+        const field = e.target.closest('input, textarea');
+        card.draggable = !(field && document.activeElement === field);
         if (!e.target.closest('input, textarea, button')) {
           $$('.ck-card.sel', cv).forEach(c => c.classList.remove('sel')); card.classList.add('sel');
           S.ckSelected = n.id; S.binderActive = false;
@@ -3903,24 +4024,39 @@
       });
       card.addEventListener('dragstart', e => { S.ckDrag = n.id; card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/x-folio-card', n.id); });
       card.addEventListener('dragend', () => { S.ckDrag = null; card.classList.remove('dragging'); $$('.ck-before, .ck-after', cv).forEach(c => c.classList.remove('ck-before', 'ck-after')); });
-      card.addEventListener('dragover', e => {
-        if (!S.ckDrag || S.ckDrag === n.id) return;
-        e.preventDefault();
-        const r = card.getBoundingClientRect(); const after = e.clientX > r.left + r.width / 2;
-        $$('.ck-before, .ck-after', cv).forEach(c => c.classList.remove('ck-before', 'ck-after'));
-        card.classList.add(after ? 'ck-after' : 'ck-before');
-      });
-      card.addEventListener('drop', e => {
-        if (!S.ckDrag || S.ckDrag === n.id) return;
-        e.preventDefault();
-        const after = card.classList.contains('ck-after');
-        const src = findNode(S.ckDrag); if (!src) return;
-        if (isInside(n.id, src.node)) return;
-        src.list.splice(src.index, 1);
-        const tgt = findNode(n.id);
-        tgt.list.splice(tgt.index + (after ? 1 : 0), 0, src.node);
-        S.ckDrag = null; scheduleMeta(); renderBinder(); renderCork();
-      });
+    });
+    // Dropping works anywhere over the cards, gaps included: the nearest card decides the spot, and a line shows it.
+    let ckAt = null;
+    const ckSpot = e => {
+      let best = null, bd = 1e9;
+      for (const c of $$('.ck-card', grid)) {
+        if (c.dataset.id === S.ckDrag) continue;
+        const r = c.getBoundingClientRect();
+        const dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right), dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom), d = dx * dx + dy * dy * 4;
+        if (d < bd) { bd = d; best = { card: c, after: e.clientX > r.left + r.width / 2 }; }
+      }
+      return best;
+    };
+    grid.addEventListener('dragover', e => {
+      if (!S.ckDrag) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      const at = ckSpot(e);
+      if (ckAt && at && ckAt.card === at.card && ckAt.after === at.after) return;
+      $$('.ck-before, .ck-after', cv).forEach(c => c.classList.remove('ck-before', 'ck-after'));
+      ckAt = at; if (at) at.card.classList.add(at.after ? 'ck-after' : 'ck-before');
+    });
+    grid.addEventListener('dragleave', e => { if (!grid.contains(e.relatedTarget)) { $$('.ck-before, .ck-after', cv).forEach(c => c.classList.remove('ck-before', 'ck-after')); ckAt = null; } });
+    grid.addEventListener('drop', e => {
+      if (!S.ckDrag) return;
+      e.preventDefault();
+      const at = ckSpot(e); ckAt = null;
+      if (!at) return;
+      const src = findNode(S.ckDrag), id = at.card.dataset.id; if (!src || id === S.ckDrag) return;
+      if (isInside(id, src.node)) return;
+      src.list.splice(src.index, 1);
+      const tgt = findNode(id);
+      tgt.list.splice(tgt.index + (at.after ? 1 : 0), 0, src.node);
+      S.ckDrag = null; scheduleMeta(); renderBinder(); renderCork();
     });
     // drop on a breadcrumb: move the card up to that level
     $$('.ck-crumb, .ck-root', cv).forEach(c => {
@@ -4097,13 +4233,57 @@
   function chapterList() {
     const out = []; walkTree(findNode('root-manuscript').node.children || [], n => { if (n.type === 'doc') out.push(n); }); return out;
   }
+  // an event can cover several chapters (a ball over chapters 9–12). Older events kept one, in chapterId.
+  const evChapters = e => (e.chapterIds && e.chapterIds.length ? e.chapterIds : e.chapterId ? [e.chapterId] : []).filter(id => findNode(id));
+  const setEvChapters = (e, ids) => { e.chapterIds = ids; e.chapterId = ids[0] || null; };   // chapterId too, so older versions still see the first
+  // which characters the timeline follows: several at once shows the events they're in together (or any of them)
+  const tlFilters = T => (Array.isArray(T.filters) ? T.filters : T.filter ? [T.filter] : []);
+  // names as little chips: type and press Enter or comma (suggestions from the Characters sheets), × or Backspace removes
+  function chipInput(values, suggestions, placeholder) {
+    const el = document.createElement('div'); el.className = 'chipin'; el.dataset.ownEnter = '1';   // Enter adds a name here, it doesn't close the dialog
+    let vals = [...values];
+    const draw = () => {
+      el.innerHTML = vals.map((v, i) => `<span class="chipin-c">${esc(v)}<button type="button" data-i="${i}" aria-label="Remove ${esc(v)}">×</button></span>`).join('') +
+        `<span class="chipin-w"><input type="text" class="chipin-in" placeholder="${vals.length ? '' : esc(placeholder)}" autocomplete="off" spellcheck="false"><span class="chipin-s hidden"></span></span>`;
+      const inp = $('.chipin-in', el), sug = $('.chipin-s', el);
+      let pick = 0, list = [];
+      const showSug = () => {
+        const q = inp.value.trim().toLowerCase();
+        list = suggestions.filter(n => !vals.some(v => v.toLowerCase() === n.toLowerCase()) && (!q || n.toLowerCase().includes(q))).slice(0, 8);
+        if (!list.length || (!q && document.activeElement !== inp)) { sug.classList.add('hidden'); return; }
+        pick = Math.min(pick, list.length - 1);
+        sug.innerHTML = list.map((n, i) => `<button type="button" class="${i === pick ? 'on' : ''}" data-n="${esc(n)}">${esc(n)}</button>`).join('');
+        sug.classList.remove('hidden');
+        $$('button', sug).forEach(b => b.onmousedown = e => { e.preventDefault(); add(b.dataset.n); });
+      };
+      const add = v => { v = String(v || '').replace(/,/g, ' ').trim(); if (v && !vals.some(x => x.toLowerCase() === v.toLowerCase())) vals.push(v); draw(); $('.chipin-in', el).focus(); };
+      inp.addEventListener('input', () => { if (inp.value.includes(',')) { inp.value.split(',').slice(0, -1).forEach(x => { if (x.trim() && !vals.includes(x.trim())) vals.push(x.trim()); }); const rest = inp.value.split(',').pop(); draw(); const i2 = $('.chipin-in', el); i2.value = rest; i2.focus(); return; } pick = 0; showSug(); });
+      inp.addEventListener('focus', showSug);
+      inp.addEventListener('blur', () => setTimeout(() => { if (!inp.isConnected) return; if (inp.value.trim()) add(inp.value); else sug.classList.add('hidden'); }, 120));   // (a chip just added redraws the box: the old box's blur is ignored)
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'ArrowDown' && list.length) { e.preventDefault(); pick = (pick + 1) % list.length; showSug(); }
+        else if (e.key === 'ArrowUp' && list.length) { e.preventDefault(); pick = (pick - 1 + list.length) % list.length; showSug(); }
+        else if (e.key === 'Enter' || e.key === 'Tab') {
+          const typed = inp.value.trim(), choice = !sug.classList.contains('hidden') && list[pick];
+          if (typed || (choice && e.key === 'Enter')) { e.preventDefault(); e.stopPropagation(); add(choice && (!typed || choice.toLowerCase().startsWith(typed.toLowerCase())) ? choice : typed); }
+        }
+        else if (e.key === 'Backspace' && !inp.value && vals.length) { vals.pop(); draw(); $('.chipin-in', el).focus(); }
+        else if (e.key === 'Escape' && !sug.classList.contains('hidden')) { e.stopPropagation(); sug.classList.add('hidden'); }
+      }, true);
+      $$('.chipin-c button', el).forEach(b => b.onclick = () => { vals.splice(+b.dataset.i, 1); draw(); });
+    };
+    el.addEventListener('mousedown', e => { if (e.target === el) { e.preventDefault(); $('.chipin-in', el).focus(); } });
+    draw();
+    return { el, get: () => { const t = $('.chipin-in', el); if (t && t.value.trim()) { const v = t.value.trim(); if (!vals.includes(v)) vals.push(v); } return [...vals]; } };
+  }
 
   function renderTimeline() {
     const T = tl();
     const tv = $('#timeline-view');
     const placed = T.events.filter(e => evStart(e, T) != null);
     const unplaced = T.events.filter(e => evStart(e, T) == null);
-    const shown = placed.filter(e => !T.filter || (e.chars || []).includes(T.filter));
+    const F = tlFilters(T), anyMode = T.filterAny;
+    const shown = placed.filter(e => !F.length || (anyMode ? F.some(n => (e.chars || []).includes(n)) : F.every(n => (e.chars || []).includes(n))));
     const starts = placed.map(e => evStart(e, T)), ends = placed.map(e => evEnd(e, T));
     let min = starts.length ? Math.min(...starts) : (T.mode === 'dates' ? dayNum(today()) : 1);
     let max = ends.length ? Math.max(...ends) : min + 10;
@@ -4148,7 +4328,7 @@
       <div class="tl-head">
         <div class="seg" title="How time is measured">${[['days', 'Story days'], ['dates', 'Calendar dates']].map(([k, l]) => `<button data-mode="${k}" class="${T.mode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="seg" title="Layout">${[['single', 'One line'], ['chars', 'By character']].map(([k, l]) => `<button data-lanes="${k}" class="${T.lanes === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-        <select id="tl-filter" title="Follow one character"><option value="">All characters</option>${names.map(n => `<option ${n === T.filter ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+        <button class="btn small ghost tl-fbtn ${F.length ? 'on' : ''}" id="tl-filter" title="Follow one or more characters">${F.length ? esc(F.length <= 2 ? F.join(' + ') : F.length + ' characters') + (F.length > 1 ? (anyMode ? ' (any)' : ' (together)') : '') : 'All characters'} ▾</button>
         ${T.mode === 'days' && window.UnwipCalendar ? `<button class="btn small ghost" id="tl-cal" title="Name the months, weeks, seasons and moons of your world">🌙 ${C ? esc(C.calendar.name || 'Calendar') : 'Your own calendar…'}</button>` : ''}
         <span class="mb-zoom"><input type="range" id="tl-zoom" min="10" max="160" step="5" value="${px}"></span>
         <span style="flex:1"></span>
@@ -4163,15 +4343,15 @@
               ${T.lanes === 'chars' ? `<div class="tl-lane-label">${esc(ln.label)}</div>` : ''}
               <div class="tl-track" style="margin-left:${T.lanes === 'chars' ? 140 : 0}px;width:${width}px;background-size:${px * step}px 100%">
                 ${ln.items.map(it => {
-                  const ch = it.e.chapterId && findNode(it.e.chapterId);
+                  const chIds = evChapters(it.e), ch = chIds.length ? findNode(chIds[0]) : null, chMore = chIds.length > 1 ? ` +${chIds.length - 1}` : '';
                   return `<div class="tl-ev ${it.span ? 'span' : ''}" data-id="${it.e.id}" style="left:${it.x}px;top:${it.row * ROW + 10}px;width:${it.w}px;--ev:${it.e.color || EV_COLOURS[0]}">
                     <b>${esc(it.e.title || 'Untitled event')}</b>
-                    <span>${C && evStart(it.e, T) != null ? `<em class="tl-wd">${esc(C.label(evStart(it.e, T)))}</em>` : ''}${ch ? '§ ' + esc(ch.node.title) : ''}${(it.e.chars || []).length && T.lanes !== 'chars' ? (ch ? ' · ' : '') + esc(it.e.chars.join(', ')) : ''}</span>
+                    <span>${C && evStart(it.e, T) != null ? `<em class="tl-wd">${esc(C.label(evStart(it.e, T)))}</em>` : ''}${ch ? '§ ' + esc(ch.node.title) + chMore : ''}${(it.e.chars || []).length && T.lanes !== 'chars' ? (ch ? ' · ' : '') + esc(it.e.chars.join(', ')) : ''}</span>
                   </div>`;
                 }).join('')}
               </div>
             </div>`).join('')}
-          ${!shown.length ? `<div class="tl-empty">${T.events.length ? 'No events for this character yet.' : '<b>No events yet</b>Add the key moments of your story: battles, births, journeys, betrayals. Link each to a chapter and the characters involved, then follow one character’s path with the filter above.'}</div>` : ''}
+          ${!shown.length ? `<div class="tl-empty">${T.events.length ? (F.length > 1 && !anyMode ? 'These characters aren’t in any event together yet.' : 'No events for this character yet.') : '<b>No events yet</b>Add the key moments of your story: battles, births, journeys, betrayals. Link each to a chapter and the characters involved, then follow one character’s path with the filter above.'}</div>` : ''}
         </div>
       </div>
       ${unplaced.length ? `<div class="tl-unplaced"><b>Not on the ${T.mode === 'dates' ? 'calendar' : 'timeline'} yet:</b> ${unplaced.map(e => `<button class="tl-chip" data-id="${e.id}">${esc(e.title || 'Untitled')}</button>`).join('')}<span class="hint">Click one to give it a ${T.mode === 'dates' ? 'date' : 'day'}.</span></div>` : ''}
@@ -4181,7 +4361,22 @@
       T.mode = b.dataset.mode; scheduleMeta(); renderTimeline();
     });
     $$('[data-lanes]', tv).forEach(b => b.onclick = () => { T.lanes = b.dataset.lanes; scheduleMeta(); renderTimeline(); });
-    $('#tl-filter', tv).onchange = e => { T.filter = e.target.value; scheduleMeta(); renderTimeline(); };
+    $('#tl-filter', tv).onclick = e => {
+      // tick several characters: "together" shows the events they share, "any" shows each one's events
+      const old = document.querySelector('.tl-fmenu'); if (old) { old.remove(); return; }
+      const r = e.currentTarget.getBoundingClientRect(), m = document.createElement('div'); m.className = 'tl-fmenu';
+      m.style.left = Math.min(r.left, innerWidth - 270) + 'px'; m.style.top = r.bottom + 4 + 'px';
+      const sel = new Set(tlFilters(T));
+      m.innerHTML = `<div class="seg tl-fmode">${[['', 'Together'], ['any', 'Any of them']].map(([k, l]) => `<button type="button" data-any="${k}" class="${!!T.filterAny === !!k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <div class="tl-flist">${names.length ? names.map(n => `<label class="check"><input type="checkbox" value="${esc(n)}" ${sel.has(n) ? 'checked' : ''}> ${esc(n)}</label>`).join('') : '<p class="hint">No characters yet. Add them to events, or make Characters sheets.</p>'}</div>
+        <div class="tl-ffoot"><button type="button" class="btn small ghost" data-clear>Show everyone</button></div>`;
+      document.body.appendChild(m);
+      const apply = () => { T.filters = [...m.querySelectorAll('.tl-flist input:checked')].map(i => i.value); T.filter = T.filters.length === 1 ? T.filters[0] : ''; scheduleMeta(); const keep = [m.style.left, m.style.top]; renderTimeline(); document.body.appendChild(m); [m.style.left, m.style.top] = keep; };
+      m.querySelectorAll('.tl-flist input').forEach(i => i.onchange = apply);
+      m.querySelectorAll('[data-any]').forEach(b => b.onclick = () => { T.filterAny = !!b.dataset.any; m.querySelectorAll('[data-any]').forEach(x => x.classList.toggle('on', x === b)); apply(); });
+      m.querySelector('[data-clear]').onclick = () => { m.querySelectorAll('.tl-flist input').forEach(i => { i.checked = false; }); apply(); };
+      setTimeout(() => { const off = ev => { if (!m.contains(ev.target) && !ev.target.closest('#tl-filter')) { m.remove(); document.removeEventListener('mousedown', off, true); } }; document.addEventListener('mousedown', off, true); }, 0);
+    };
     $('#tl-zoom', tv).onchange = e => { T.zoom = +e.target.value; scheduleMeta(); renderTimeline(); };
     $('#tl-add', tv).onclick = () => editEvent(null);
     const calB = $('#tl-cal', tv); if (calB) calB.onclick = async () => { if (await window.UnwipCalendar.setup()) renderTimeline(); };
@@ -4226,13 +4421,24 @@
         ${window.UnwipCalendar && window.UnwipCalendar.on ? `<div class="field full ev-world"><label>In ${esc(window.UnwipCalendar.calendar.name || 'your calendar')}</label><div class="ev-wrow"><input type="number" id="ev-wd" min="1"><select id="ev-wm">${window.UnwipCalendar.calendar.months.map((m, i) => `<option value="${i}">${esc(m[0])}</option>`).join('')}</select><input type="number" id="ev-wy" title="Year"><span id="ev-wdesc" class="hint"></span></div></div>` : ''}
         <div class="field"><label>Calendar date (optional)</label><input type="date" class="date-input" id="ev-date" value="${ev.date || ''}"></div>
         <div class="field"><label>Until date (optional)</label><input type="date" class="date-input" id="ev-enddate" value="${ev.endDate || ''}"></div>
-        <div class="field full"><label>Characters involved (comma separated)</label><input type="text" id="ev-chars" list="ev-char-list" value="${esc((ev.chars || []).join(', '))}" placeholder="e.g. Mara, Teo">
-          <datalist id="ev-char-list">${characterNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
-        <div class="field"><label>Chapter</label><select id="ev-ch"><option value="">Not linked</option>${chs.map(c => `<option value="${c.id}" ${c.id === ev.chapterId ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select></div>
+        <div class="field full"><label>Characters involved</label><div id="ev-chars-box"></div><span class="hint">Type a name and press Enter. Names from your Characters sheets are suggested.</span></div>
+        <div class="field full"><label>Chapters</label><div id="ev-chs-box" class="ev-chs"></div>
+          <select id="ev-ch-add"><option value="">+ Link a chapter…</option>${chs.map(c => `<option value="${c.id}">${esc(c.title)}</option>`).join('')}</select></div>
         <div class="field"><label>Colour</label><div class="ev-colours">${EV_COLOURS.map(c => `<button type="button" class="ev-c ${c === ev.color ? 'on' : ''}" data-c="${c}" style="background:${c}"></button>`).join('')}</div></div>
         <div class="field full"><label>Notes</label><textarea id="ev-note" rows="3" class="ev-note">${esc(ev.note || '')}</textarea></div>
       </div>`;
     let colour = ev.color;
+    const charsIn = chipInput(ev.chars || [], characterNames(), 'e.g. Mara'); $('#ev-chars-box', body).appendChild(charsIn.el);
+    // chapters: one or several (an event can span chapters 9–12)
+    let chIds = evChapters(ev);
+    const drawChs = () => {
+      const box = $('#ev-chs-box', body);
+      box.innerHTML = chIds.length ? chIds.map((id, i) => { const f = findNode(id); return `<span class="chipin-c">§ ${esc(f ? f.node.title : 'Chapter')}<button type="button" data-i="${i}" aria-label="Unlink">×</button></span>`; }).join('') : '<span class="hint">Not linked to a chapter.</span>';
+      $$('button', box).forEach(b => b.onclick = () => { chIds.splice(+b.dataset.i, 1); drawChs(); });
+      const order = chs.map(c => c.id); chIds.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    };
+    $('#ev-ch-add', body).onchange = e => { const id = e.target.value; if (id && !chIds.includes(id)) chIds.push(id); e.target.value = ''; drawChs(); };
+    drawChs();
     // your own calendar: the world date and the story day follow each other
     if (window.UnwipCalendar && window.UnwipCalendar.on) {
       const C = window.UnwipCalendar, dayIn = $('#ev-day', body), wd = $('#ev-wd', body), wm = $('#ev-wm', body), wy = $('#ev-wy', body), desc = $('#ev-wdesc', body);
@@ -4243,7 +4449,7 @@
     $$('.ev-c', body).forEach(b => b.onclick = () => { $$('.ev-c', body).forEach(x => x.classList.remove('on')); b.classList.add('on'); colour = b.dataset.c; });
     const buttons = [{ label: 'Cancel', value: null, kind: 'ghost' }];
     if (!isNew) buttons.unshift({ label: 'Delete', value: 'delete', kind: 'ghost danger-text' });
-    if (ev.chapterId && findNode(ev.chapterId)) buttons.splice(buttons.length, 0, { label: 'Open chapter', value: 'open' });
+    if (evChapters(ev).length) buttons.splice(buttons.length, 0, { label: evChapters(ev).length > 1 ? 'Open first chapter' : 'Open chapter', value: 'open' });
     buttons.push({ label: isNew ? 'Add event' : 'Save', value: 'save', kind: 'primary' });
     const res = await modal({ title: isNew ? 'New event' : 'Edit event', body, wide: true, buttons });
     if (!res) return;
@@ -4254,23 +4460,25 @@
     ev.endDay = v('ev-endday') === '' || +v('ev-endday') <= (ev.day ?? -1e9) ? null : +v('ev-endday');
     ev.date = v('ev-date') || null;
     ev.endDate = v('ev-enddate') && ev.date && v('ev-enddate') > ev.date ? v('ev-enddate') : null;
-    ev.chars = v('ev-chars').split(',').map(x => x.trim()).filter(Boolean);
-    ev.chapterId = v('ev-ch') || null;
+    ev.chars = charsIn.get();
+    setEvChapters(ev, chIds);
     ev.note = v('ev-note');
     ev.color = colour;
     if (isNew) T.events.push(ev);
     scheduleMeta(); renderTimeline();
-    if (res === 'open' && ev.chapterId) { setView('write'); openDoc(ev.chapterId); }
+    if (res === 'open' && evChapters(ev).length) { setView('write'); openDoc(evChapters(ev)[0]); }
   }
   async function addEventsFromChapters() {
     const T = tl();
-    const linked = new Set(T.events.map(e => e.chapterId).filter(Boolean));
+    const linked = new Set(T.events.flatMap(e => evChapters(e)));
     const chs = chapterList().filter(c => !linked.has(c.id));
     if (!chs.length) { toast('Every chapter already has an event.'); return; }
     if (!(await confirmBox('Add events from chapters?', `Adds an event for each of ${chs.length} chapter${chs.length === 1 ? '' : 's'} (using its synopsis and point-of-view character), one day apart. You can drag them to the right days afterwards.`, 'Add events'))) return;
     let day = T.events.reduce((a, e) => Math.max(a, e.endDay ?? e.day ?? 0), 0);
-    chs.forEach((c, i) => T.events.push({ id: uid(), title: c.synopsis ? (c.synopsis.length > 60 ? c.synopsis.slice(0, 57) + '…' : c.synopsis) : c.title, day: ++day, chars: c.pov ? [c.pov] : [], chapterId: c.id, color: EV_COLOURS[(T.events.length + i) % EV_COLOURS.length] }));
+    const added = chs.map((c, i) => ({ id: uid(), title: c.synopsis ? (c.synopsis.length > 60 ? c.synopsis.slice(0, 57) + '…' : c.synopsis) : c.title, day: ++day, chars: c.pov ? [c.pov] : [], chapterId: c.id, chapterIds: [c.id], color: EV_COLOURS[(T.events.length + i) % EV_COLOURS.length] }));
+    T.events.push(...added);
     scheduleMeta(); renderTimeline();
+    toastAction(`Added ${added.length} event${added.length === 1 ? '' : 's'}.`, 'Undo', () => { const gone = new Set(added.map(e => e.id)); const TT = tl(); TT.events = TT.events.filter(e => !gone.has(e.id)); scheduleMeta(); renderTimeline(); toast('Taken back out.'); }, 15000);
   }
 
   // ================================================================== SPLIT VIEW

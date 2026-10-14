@@ -16,6 +16,7 @@ window.UnwipCommand = (function () {
   const ACTIONS = () => [
     ['Take a snapshot', 'save version backup copy', 'Ctrl+Shift+S', () => U.takeSnapshot(''), needDoc],
     ['Proof of writing', 'record replay screen video recording timelapse proof human written no ai authorship creator', '', () => window.UnwipProof && window.UnwipProof.open(), inProject],
+    ['Screen video: pause or resume', 'pause resume screen video recording recorder stop break', '', () => { const P = window.UnwipProof; if (!P) return; if (P._V.rec) P.pauseVideo(!P._V.paused); else P.open(); }, inProject],
     ['Replay: watch how this book was written', 'replay playback recording proof timelapse report', '', () => window.UnwipProof && window.UnwipProof.recordings(), inProject],
     ['Snapshots of this chapter', 'versions history compare restore', '', side('snapshots'), needDoc],
     ['Revise', 'highlights hard sentences adverbs passive grammar readability check', 'F7', () => U.setRevise(!S.revise), needDoc],

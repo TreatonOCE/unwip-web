@@ -465,7 +465,7 @@ window.UnwipLook = (function () {
   return {
     setTheme(id) { look = { ...look, theme: id }; save('unwip-look', look); applyLook(); }, THEMES,
     attach, openThemes, openTyping, applyLook, setMessyFade, updateFocus,
-    typewriterActive, typewriterPosition: () => typing.twPos || 0.45, smoothScroll: () => typing.twSmooth,
+    typewriterActive, caretRect, typewriterPosition: () => typing.twPos || 0.45, smoothScroll: () => typing.twSmooth,
     get typing() { return typing; }, get look() { return look; }
   };
 })();

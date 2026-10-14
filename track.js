@@ -30,6 +30,57 @@ window.UnwipTrack = (function () {
     }
   }, true);
 
+  // ---------------------------------------------------------------- typing while NOT tracking
+  // The browser treats an added or deleted mark like bold: type beside one, or press Enter at its end, and the new words
+  // carry the mark on (green, underlined, listed as a suggestion). With tracking off, new words are never marked.
+  // the outermost mark around n (marks can end up inside each other)
+  const tcAt = n => { let el = up(n, 'tc-ins') || up(n, 'tc-del'), o; while (el && (o = up(el.parentNode, 'tc-ins') || up(el.parentNode, 'tc-del')) && editor.contains(o)) el = o; return el; };
+  function stepOut(r) {
+    const el = tcAt(r.startContainer); if (!el) return null;
+    // where in the mark the caret is: at its start, at its end, or in the middle (then the mark is split in two)
+    const before = document.createRange(); before.selectNodeContents(el); before.setEnd(r.startContainer, r.startOffset);
+    const atStart = !before.toString().length, atEnd = before.toString().length >= el.textContent.length;
+    const out = document.createRange();
+    if (atEnd) out.setStartAfter(el);
+    else if (atStart) out.setStartBefore(el);
+    else { const rest = document.createRange(); rest.setStart(r.startContainer, r.startOffset); rest.setEnd(el, el.childNodes.length); const tail = el.cloneNode(false); tail.appendChild(rest.extractContents()); el.after(tail); out.setStartAfter(el); }
+    out.collapse(true); return out;
+  }
+  editor.addEventListener('beforeinput', e => {
+    if (on() || S.programmatic || (e.inputType !== 'insertText' && e.inputType !== 'insertReplacementText') || e.data == null) return;
+    const sel = getSelection(); if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return;
+    const out = stepOut(sel.getRangeAt(0)); if (!out) return;
+    e.preventDefault();
+    const tn = document.createTextNode(e.data.replace(/ /g, '\u00a0')); out.insertNode(tn);   // (a plain space on its own at a line's end would vanish)
+    const nr = document.createRange(); nr.setStart(tn, tn.length); nr.collapse(true); sel.removeAllRanges(); sel.addRange(nr);
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: e.data }));
+  }, true);
+  // Enter (tracking on or off): the browser copies the mark onto the new line, nests marks inside each other and leaves
+  // the line's end-of-line placeholder inside a mark, so later typing on that line lands on a line of its own.
+  // Tidy both lines: one level of mark, the placeholder outside any mark, and no empty marks.
+  const blockAt = n => { let b = n && (n.nodeType === 3 ? n.parentNode : n); while (b && b !== editor && !/^(P|DIV|H[1-6]|LI|BLOCKQUOTE)$/.test(b.tagName)) b = b.parentNode; return b && b !== editor ? b : null; };
+  const unwrapMark = el => { while (el.firstChild) el.before(el.firstChild); el.remove(); };
+  function tidyMarks(block) {
+    if (!block) return;
+    for (const inner of [...block.querySelectorAll('.tc-ins .tc-ins, .tc-del .tc-del')]) unwrapMark(inner);
+    for (const br of [...block.querySelectorAll('.tc-ins br, .tc-del br')]) {
+      let m = tcAt(br); if (!m) continue;
+      const after = document.createRange(); after.setStartAfter(br); after.setEnd(m, m.childNodes.length);
+      if (after.toString().length) continue;              // a line break in the middle of the words: leave it
+      m.after(br);
+    }
+    for (const el of [...block.querySelectorAll('ins.tc-ins, del.tc-del')]) if (!el.textContent.replace(/\u200b/g, '')) unwrapMark(el);
+  }
+  editor.addEventListener('input', e => {
+    if (S.programmatic || e.inputType !== 'insertParagraph') return;
+    const sel = getSelection(); if (!sel.rangeCount) return;
+    const r = sel.getRangeAt(0), block = blockAt(r.startContainer); if (!block) return;
+    const keep = { n: r.startContainer, o: r.startOffset };
+    tidyMarks(block.previousElementSibling); tidyMarks(block);
+    if (!block.firstChild) block.appendChild(document.createElement('br'));
+    try { if (!editor.contains(keep.n)) { const nr = document.createRange(); nr.setStart(block, 0); nr.collapse(true); sel.removeAllRanges(); sel.addRange(nr); } } catch {}
+  });
+
   function typeText(text) {
     const sel = getSelection(); if (!sel.rangeCount) return;
     let r = sel.getRangeAt(0);

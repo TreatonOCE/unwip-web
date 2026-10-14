@@ -8,7 +8,7 @@
   if (window.folio) return;                       // the PC app already has the real thing
 
   // ------------------------------------------------------------------ storage: a tiny file system in IndexedDB
-  const DB_NAME = 'unwip', STORE = 'files';
+  const DB_NAME = window.UNWIP_DEV ? 'unwip-dev' : 'unwip', STORE = 'files';   // Unwip Dev keeps its own books
   let dbp = null;
   function db() {
     if (dbp) return dbp;

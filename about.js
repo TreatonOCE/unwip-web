@@ -4,7 +4,17 @@ window.UnwipAbout = (function () {
   'use strict';
   const U = window.__unwip; if (!U) return;
   const { S, api, esc } = U;
-  const SUPPORT = window.UNWIP_SUPPORT || '';           // where "Email it" goes (set when the app is built)
+  const SUPPORT = window.UNWIP_SUPPORT || '';
+  // Unwip Dev (the test copy) says so everywhere, so it's never mistaken for the real thing
+  (async () => {
+    let dev = !!window.UNWIP_DEV;
+    if (!dev && api && !api.web) try { dev = (await api.updateState()).flavor === 'dev'; } catch {}
+    if (!dev) return;
+    document.documentElement.classList.add('flavor-dev');
+    const b = document.querySelector('.lib-head .brand'); if (b && !b.querySelector('.dev-tag')) b.insertAdjacentHTML('beforeend', '<span class="dev-tag" title="This is Unwip Dev, the test copy. It has its own books, separate from the normal Unwip.">DEV</span>');
+    const fix = () => { if (!/^\[DEV\]/.test(document.title)) document.title = '[DEV] ' + document.title; };
+    fix(); new MutationObserver(fix).observe(document.querySelector('title'), { childList: true });
+  })();           // where "Email it" goes (set when the app is built)
 
   // ---------------------------------------------------------------- remember recent errors (in memory and on this device)
   const LOG_KEY = 'unwip-errlog';

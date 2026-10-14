@@ -232,9 +232,9 @@ window.UnwipProof = (function () {
     editor.addEventListener('cut', () => { R.kind = 'c'; R.kindAt = Date.now(); }, true);
     editor.addEventListener('input', onInput);
   }
-  U.on('project', () => { stop().then(() => { if (onFor(S.slug)) start(); }); });
+  U.on('project', () => { remindHidden = null; stop().then(() => { if (onFor(S.slug)) start(); }); renderRemind(); });
   U.on('doc', () => setTimeout(watchDoc, 0));
-  U.on('leave', () => { stop(); stopVideo(); });
+  U.on('leave', () => { stop(); stopVideo(); setTimeout(renderRemind, 0); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
   window.addEventListener('beforeunload', () => { flush(); });
 
@@ -243,9 +243,53 @@ window.UnwipProof = (function () {
   function renderStatus() {
     btn = btn || document.getElementById('st-proof'); if (!btn) return;
     btn.classList.toggle('on', R.on || !!V.rec);
-    if (V.rec) btn.innerHTML = `<i class="pf-dot"></i>${clock(Date.now() - V.started)} · ${size(V.bytes)}`;
+    btn.classList.toggle('paused', !!V.paused);
+    if (V.rec) btn.innerHTML = `<i class="pf-dot${V.paused ? ' off' : ''}"></i>${V.paused ? 'Paused · ' : ''}${clock(recorded())} · ${size(V.bytes)}`;
     else btn.innerHTML = R.on ? '<i class="pf-dot"></i>Replay on' : '<i class="pf-dot off"></i>Record';
-    btn.title = V.rec ? 'Recording a screen video. Click to stop.' : R.on ? 'Replay is recording your writing in this book. Click for Proof of writing.' : 'Proof of writing: record a replay or a screen video';
+    btn.title = V.rec ? (V.paused ? 'The screen video is paused. Click to resume or stop.' : 'Recording a screen video. Click to pause or stop.') : R.on ? 'Replay is recording your writing in this book. Click for Proof of writing.' : 'Proof of writing: record a replay or a screen video';
+    renderRemind();
+  }
+  // time actually recorded (pauses left out)
+  const recorded = () => Date.now() - V.started - V.pausedFor - (V.paused ? Date.now() - V.pausedAt : 0);
+  function pauseVideo(on) {
+    if (!V.rec || on === V.paused) return;
+    try { if (on) V.rec.pause(); else V.rec.resume(); } catch (e) { console.error('video pause', e); return; }
+    if (on) { V.paused = true; V.pausedAt = Date.now(); }
+    else { V.paused = false; V.pausedFor += Date.now() - V.pausedAt; }
+    renderStatus();
+  }
+
+  // ---- the "not recording" reminder (a setting per book): a big red pill while the screen isn't being recorded
+  const remindOn = slug => !!(((S.settings || {}).proofRemind || {})[slug]);
+  let remindEl = null, remindHidden = null;
+  function renderRemind() {
+    const ws = document.getElementById('workspace');
+    const show = canVideo() && S.slug && remindOn(S.slug) && remindHidden !== S.slug && ws && !ws.classList.contains('hidden') && (!V.rec || V.paused);
+    document.body.classList.toggle('pf-alert', !!show && !V.paused);
+    document.body.classList.toggle('pf-alert-paused', !!show && !!V.paused);
+    if (!show) { if (remindEl) remindEl.classList.add('hidden'); return; }
+    if (!remindEl) {
+      remindEl = document.createElement('div'); remindEl.className = 'pf-remind';
+      remindEl.addEventListener('click', e => {
+        const b = e.target.closest('button') || remindEl.querySelector('[data-act=resume], [data-act=start]'); if (!b) return;
+        if (b.dataset.act === 'resume') pauseVideo(false);
+        else if (b.dataset.act === 'start') open();
+        else if (b.dataset.act === 'hide') { remindHidden = S.slug; renderRemind(); U.toast('Hidden until you next open this book. Turn the reminder off in Proof of writing (the Record button in the bottom bar).', '', 7000); }
+      });
+      document.body.appendChild(remindEl);
+    }
+    const html = V.paused
+      ? `<i class="pf-dot off"></i><span class="pf-rt"><b>Recording paused</b><small>You’re writing in “${esc(S.project ? S.project.title : '')}”. Click to resume.</small></span><button class="btn small primary" data-act="resume">Resume</button><button class="icon-btn" data-act="hide" title="Hide until I reopen this book">✕</button>`
+      : `<i class="pf-dot"></i><span class="pf-rt"><b>Not recording</b><small>You’re writing in “${esc(S.project ? S.project.title : '')}”. Click to start recording.</small></span><button class="btn small primary" data-act="start">Start screen video</button><button class="icon-btn" data-act="hide" title="Hide until I reopen this book">✕</button>`;
+    remindEl.classList.toggle('paused', !!V.paused);
+    if (remindEl.dataset.h !== html) { remindEl.innerHTML = html; remindEl.dataset.h = html; }
+    remindEl.classList.remove('hidden');
+  }
+  async function setRemind(on) {
+    const map = { ...((S.settings || {}).proofRemind || {}) }; if (on) map[S.slug] = true; else delete map[S.slug];
+    S.settings = await api.setSettings({ proofRemind: map });
+    if (on && remindHidden === S.slug) remindHidden = null;
+    renderRemind();
   }
   const clock = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const size = b => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : b >= 1e7 ? Math.round(b / 1e6) + ' MB' : (b / 1e6).toFixed(1) + ' MB';
@@ -261,7 +305,14 @@ window.UnwipProof = (function () {
 
   async function open() {
     if (!S.slug) { U.toast('Open a book first.'); return; }
-    if (V.rec) { if (await U.confirmBox('Stop the screen video?', `It’s been recording for ${clock(Date.now() - V.started)} (${size(V.bytes)}).`, 'Stop and save')) stopVideo(); return; }
+    if (V.rec) {
+      const canPause = typeof V.rec.pause === 'function';
+      const go = await U.modal({ title: V.paused ? 'Screen video paused' : 'Screen video recording',
+        body: `<p>${V.paused ? 'Paused at' : 'Recording for'} <b>${clock(recorded())}</b> (${size(V.bytes)}).${V.paused ? ' Nothing is recorded while it’s paused.' : ' Pause it for a break: nothing is recorded until you resume, and it’s still one video.'}</p>`,
+        buttons: [{ label: 'Cancel', value: null, kind: 'ghost' }, ...(canPause ? [{ label: V.paused ? '⏺ Resume' : '❚❚ Pause', value: 'pause' }] : []), { label: 'Stop and save', value: 'stop', kind: 'primary' }] });
+      if (go === 'pause') pauseVideo(!V.paused); else if (go === 'stop') stopVideo();
+      return;
+    }
     const list = await api.proofList(S.slug).catch(() => []);
     const info = !api.web && api.videoInfo ? await api.videoInfo().catch(() => null) : null;
     let qi = 1;
@@ -286,7 +337,8 @@ window.UnwipProof = (function () {
           <div class="pf-q">${QUALITY.map((x, j) => `<label><input type="radio" name="pf-q" value="${j}"${j === qi ? ' checked' : ''}> <b>${x.label}</b> · up to ${size(perHour(x))}/hour · ${x.note}</label>`).join('')}</div>
           ${info && info.free != null ? `<p class="pf-small">Free space: <b>${size(info.free)}</b>, about ${Math.max(0, Math.floor(info.free / hour))} hours at this quality. Videos are saved in <b>${esc(info.folder)}</b>.${api.platform === 'darwin' ? ' The first time, your Mac may ask you to allow screen recording for Unwip.' : ''}</p>` : ''}
           ${api.web ? `<p class="pf-small">${window.showSaveFilePicker ? 'You’ll choose where to save it first, and it’s written there as you go.' : 'This browser keeps the video in memory until you stop, then downloads it, so keep browser recordings short (under about 30 minutes).'}</p>` : ''}
-          <div class="pf-row"><button class="btn primary" id="pf-video">⏺ Start screen video</button></div>`
+          <div class="pf-row"><button class="btn primary" id="pf-video">⏺ Start screen video</button></div>
+          <label class="switch-line pf-remind-set"><input type="checkbox" id="pf-remind"${remindOn(S.slug) ? ' checked' : ''}> Remind me when this book isn’t being recorded <span class="pf-small">(a red “Not recording” sign stays on screen until you start or resume a screen video)</span></label>`
           : `<p>${/iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)) ? 'iPhones and iPads don’t let web apps record the screen. Use the built-in recorder instead: open Control Centre and tap <b>Screen Recording</b> (add it in Settings › Control Centre if it isn’t there). Replay above works here.' : 'This browser can’t record the screen. Replay above still works.'}</p>`}
         </div>
         <p class="pf-small">Nothing is uploaded anywhere. Replays stay with the book (and in Dropbox if the book is there); videos stay where you save them.</p>`;
@@ -294,6 +346,7 @@ window.UnwipProof = (function () {
       $('#pf-list', body).onclick = () => { closeDlg(); recordings(); };
       $$('input[name="pf-q"]', body).forEach(r => r.onchange = () => { qi = +r.value; draw(); });
       const vb = $('#pf-video', body); if (vb) vb.onclick = () => { closeDlg(); startVideo(QUALITY[qi], info); };
+      const rm = $('#pf-remind', body); if (rm) rm.onchange = () => setRemind(rm.checked);
     };
     let closeDlg = () => {};
     draw();
@@ -397,7 +450,7 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     body.innerHTML = `<p>Turns the replay into a video you can share, with the words appearing as they were written.</p>
       <div class="pf-q"><b>Length</b>${[30, 60, 180].map((s, j) => `<label><input type="radio" name="tl-len" value="${s}"${j === 1 ? ' checked' : ''}> ${s < 60 ? s + ' seconds' : s / 60 + ' minute' + (s > 60 ? 's' : '')}</label>`).join('')}</div>
       <div class="pf-q"><b>Shape</b><label><input type="radio" name="tl-shape" value="wide" checked> Wide (YouTube, computers)</label><label><input type="radio" name="tl-shape" value="tall"> Tall (TikTok, Reels, Shorts)</label></div>
-      <p class="pf-small">It’s made in real time, so a 1-minute video takes about a minute. Timelapse videos are small (a few MB a minute).</p>`;
+      <p class="pf-small">It’s made in real time, so a 1-minute video takes about a minute. Keep Unwip in front while it’s made (a hidden window draws fewer pictures, so the video gets jumpy). Timelapse videos are small (a few MB a minute).</p>`;
     const ok = await U.modal({ title: 'Make a timelapse video', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Make the video', value: true, kind: 'primary' }] });
     if (!ok) return;
     const secs = +($('input[name="tl-len"]:checked', body) || {}).value || 60, tall = (($('input[name="tl-shape"]:checked', body) || {}).value) === 'tall';
@@ -418,28 +471,40 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     const F = tall ? 44 : 40, LH = Math.round(F * 1.55), PAD = tall ? 90 : 220, TOP = tall ? 260 : 210, BOT = tall ? 240 : 150;
     const font = `${F}px "EB Garamond", Georgia, serif`;
     void css;
-    function wrap(text, width) {   // paragraphs → lines, remembering where each line starts in the text
+    // paragraphs → lines, remembering where each line starts in the text. A paragraph is only measured once (most of
+    // the book doesn't change from one frame to the next), so long chapters don't slow the video down.
+    const wrapped = new Map();
+    function wrapPara(p, width) {
+      let got = wrapped.get(p); if (got) return got;
+      got = []; let i = 0;
+      while (i < p.length) {
+        let j = p.length;
+        if (g.measureText(p.slice(i, j)).width > width) {
+          let lo = i + 1, hi = p.length;
+          while (lo < hi) { const m = (lo + hi + 1) >> 1; if (g.measureText(p.slice(i, m)).width <= width) lo = m; else hi = m - 1; }
+          j = lo; const sp = p.lastIndexOf(' ', j); if (sp > i) j = sp + 1;
+        }
+        got.push([i, j]); i = j;
+      }
+      if (wrapped.size > 4000) wrapped.clear();
+      wrapped.set(p, got); return got;
+    }
+    function wrap(text, width) {
       const lines = []; let off = 0;
       for (const p of text.split('\n')) {
         if (!p) { lines.push({ s: '', a: off }); off += 1; continue; }
-        let i = 0;
-        while (i < p.length) {
-          let j = p.length;
-          if (g.measureText(p.slice(i, j)).width > width) {
-            let lo = i + 1, hi = p.length;
-            while (lo < hi) { const m = (lo + hi + 1) >> 1; if (g.measureText(p.slice(i, m)).width <= width) lo = m; else hi = m - 1; }
-            j = lo; const sp = p.lastIndexOf(' ', j); if (sp > i) j = sp + 1;
-          }
-          lines.push({ s: p.slice(i, j), a: off + i }); i = j;
-        }
+        for (const [i, j] of wrapPara(p, width)) lines.push({ s: p.slice(i, j), a: off + i });
         off += p.length + 1;
       }
       return lines;
     }
     const docs = {}; let i = 0;
     const total = data.total, frames = secs * 30;
+    // The video records in real time, so each picture is drawn for the moment it's due on the clock (if drawing ever
+    // falls behind, frames are skipped rather than the whole video stretching out longer and slower than chosen).
     rec.start(1000);
-    for (let fr = 0; fr <= frames && !cancelled; fr++) {
+    const t0 = performance.now();
+    for (let fr = 0; fr <= frames && !cancelled;) {
       const vnow = total * fr / frames;
       while (i < ev.length && ev[i].vt + ev[i].dur <= vnow) pfApply(docs, ev[i++]);
       const e = i < ev.length && ev[i].vt <= vnow ? ev[i] : ev[Math.max(0, i - 1)];
@@ -469,7 +534,9 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
       g.fillText(`${pfWords(text).toLocaleString()} words`, PAD, H - (tall ? 120 : 70));
       const tag = 'Written in Unwip'; g.fillText(tag, W - PAD - g.measureText(tag).width, H - (tall ? 120 : 70));
       $('.pf-bar i', prog).style.width = Math.round(100 * fr / frames) + '%';
-      await new Promise(r => setTimeout(r, 1000 / 30));
+      const due = t0 + (fr + 1) * 1000 / 30, now = performance.now();
+      if (due > now) await new Promise(r => setTimeout(r, due - now)); else await new Promise(r => setTimeout(r, 0));
+      fr = fr >= frames ? frames + 1 : Math.min(frames, Math.max(fr + 1, Math.floor((performance.now() - t0) * 30 / 1000)));
     }
     await new Promise(r => { rec.onstop = r; rec.stop(); });
     stream.getTracks().forEach(t => t.stop());
@@ -486,7 +553,7 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
   }
 
   // ================================================================== SCREEN VIDEO
-  const V = { rec: null, stream: null, started: 0, bytes: 0, writer: null, parts: null, path: '', timer: 0, type: '', book: '' };
+  const V = { rec: null, stream: null, started: 0, bytes: 0, writer: null, parts: null, path: '', timer: 0, type: '', book: '', paused: false, pausedAt: 0, pausedFor: 0 };
   async function startVideo(q, info) {
     if (!canVideo()) return;
     const type = videoType(); if (!type) { U.toast('This computer can’t record video here.', 'warn'); return; }
@@ -503,7 +570,7 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
       else if (window.showSaveFilePicker) { const h = await window.showSaveFilePicker({ suggestedName: name + '.' + ext, types: [{ description: 'Video', accept: { [type.split(';')[0]]: ['.' + ext] } }] }); V.writer = await h.createWritable(); V.path = h.name; }
       else V.parts = [];
     } catch (e) { stream.getTracks().forEach(t => t.stop()); if (e && e.name !== 'AbortError') U.toast('Couldn’t start the video file: ' + esc(e.message || e), 'warn'); return; }
-    V.stream = stream; V.bytes = 0; V.type = type; V.started = Date.now();
+    V.stream = stream; V.bytes = 0; V.type = type; V.started = Date.now(); V.paused = false; V.pausedFor = 0;
     const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: q.bps });
     let queue = Promise.resolve();
     rec.ondataavailable = e => {
@@ -522,13 +589,13 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     V.rec = rec;
     V.timer = setInterval(renderStatus, 1000);
     renderStatus();
-    U.toast(`Screen video recording. Click <b>${clock(0)}</b> in the bottom bar to stop.`, '', 6000);
+    U.toast(`Screen video recording. Click <b>${clock(0)}</b> in the bottom bar to pause or stop.`, '', 6000);
   }
   function stopVideo() { if (V.rec && V.rec.state !== 'inactive') { try { V.rec.stop(); } catch {} } if (V.stream) V.stream.getTracks().forEach(t => t.stop()); }
   async function finishVideo() {
     clearInterval(V.timer);
-    const was = { bytes: V.bytes, path: V.path, secs: Math.round((Date.now() - V.started) / 1000) };
-    V.rec = null; V.stream = null;
+    const was = { bytes: V.bytes, path: V.path, secs: Math.round(recorded() / 1000) };
+    V.rec = null; V.stream = null; V.paused = false;
     try {
       if (V.parts) { const blob = new Blob(V.parts, { type: V.type.split(';')[0] }); V.parts = null; await api.exportBinary(await seekable(new Uint8Array(await blob.arrayBuffer()), V.type), `${V.book} screen video`, /mp4/.test(V.type) ? 'mp4' : 'webm', 'Video'); }
       else if (V.writer) { await V.writer.close(); V.writer = null; U.toast(`Screen video saved: ${esc(was.path)} (${size(was.bytes)}).`, '', 8000); }
@@ -576,5 +643,5 @@ ${PLAYER_CSS()}`;
   // the app's own copy of the player styles
   { const st = document.createElement('style'); st.textContent = PLAYER_CSS().replace(/var\(--ink\)/g, 'var(--text)'); document.head.appendChild(st); }
 
-  return { open, recordings, play, setReplay, isOn: () => R.on, flush, stopVideo, saveReport, timelapse, startVideo, loadSessions, QUALITY, _engine: ENGINE, _R: R, _V: V };
+  return { open, recordings, play, setReplay, setRemind, pauseVideo, isOn: () => R.on, flush, stopVideo, saveReport, timelapse, startVideo, loadSessions, QUALITY, _engine: ENGINE, _R: R, _V: V };
 })();
