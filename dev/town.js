@@ -90,9 +90,12 @@ window.UnwipTownFactory = function (M) {
     if (st().grid) { g.strokeStyle = P.ink; g.globalAlpha = 0.1; g.lineWidth = 1; for (let x = 0; x < W; x += 40) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } for (let y = 0; y < H; y += 40) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); } g.globalAlpha = 1; }
   }
   function poly(g, pts) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); }
-  function drawArea(g, a, P, i) {
+  function drawArea(g, a, P, i, noEdge, mode) {
     const c = C(P), col = { park: c.park, market: c.plaza, field: c.field, grave: c.grave }[a.k] || c.park;
-    g.save(); poly(g, a.pts); g.fillStyle = col; g.fill(); g.clip();
+    if (mode === 'fill') { poly(g, a.pts); g.fillStyle = col; g.fill(); return; }
+    g.save();
+    if (mode === 'tex') { if (a.k === 'field') { poly(g, a.pts); g.clip(); } }   // (the caller has already clipped to the whole shape)
+    else { poly(g, a.pts); g.fillStyle = col; g.fill(); g.clip(); }
     const b = bbox(a.pts), r = M.rng(i * 97 + 5 + Math.round(b.x));
     g.strokeStyle = P.ink; g.fillStyle = P.ink; g.lineWidth = 1;
     if (a.k === 'park') { g.globalAlpha = 0.9; for (let k = 0; k < b.w * b.h / 500; k++) { const x = b.x + r() * b.w, y = b.y + r() * b.h, s = 4 + r() * 4; g.beginPath(); g.arc(x, y, s, 0, 7); g.fillStyle = M.shade(c.park, -0.18); g.fill(); g.stroke(); } }
@@ -100,7 +103,18 @@ window.UnwipTownFactory = function (M) {
     else if (a.k === 'grave') { g.globalAlpha = 0.6; for (let y = b.y + 8; y < b.y + b.h; y += 12) for (let x = b.x + 8; x < b.x + b.w; x += 12) { g.beginPath(); g.moveTo(x, y - 3); g.lineTo(x, y + 3); g.moveTo(x - 2, y - 1); g.lineTo(x + 2, y - 1); g.stroke(); } }
     else if (a.k === 'market') { g.globalAlpha = 0.25; for (let k = 0; k < b.w * b.h / 120; k++) g.fillRect(b.x + r() * b.w, b.y + r() * b.h, 1.5, 1.5); }
     g.restore();
-    g.save(); poly(g, a.pts); g.strokeStyle = P.ink; g.lineWidth = a.k === 'market' ? 1 : 1.3; g.globalAlpha = a.k === 'market' ? 0.4 : 0.7; if (a.k === 'field') g.setLineDash([4, 3]); g.stroke(); g.restore();
+    if (!noEdge) { g.save(); poly(g, a.pts); g.strokeStyle = P.ink; g.lineWidth = a.k === 'market' ? 1 : 1.3; g.globalAlpha = a.k === 'market' ? 0.4 : 0.7; if (a.k === 'field') g.setLineDash([4, 3]); g.stroke(); g.restore(); }
+  }
+  // Painted areas of the same kind that overlap become one shape: only their outside edge gets a line (no lines
+  // criss-crossing where two strokes of park or field meet).
+  function areaEdges(g, list, P, k) {
+    const sc = Math.max(1, Math.abs(g.getTransform().a) || 1), o = document.createElement('canvas'); o.width = Math.ceil(W * sc); o.height = Math.ceil(H * sc);
+    const x = o.getContext('2d'); x.scale(sc, sc);
+    x.strokeStyle = P.ink; x.lineWidth = (k === 'market' ? 1 : 1.3) * 2; x.lineJoin = 'round'; if (k === 'field') x.setLineDash([4, 3]);
+    for (const a of list) { poly(x, a.pts); x.stroke(); }
+    x.setLineDash([]); x.globalCompositeOperation = 'destination-out'; x.fillStyle = '#000';
+    for (const a of list) { poly(x, a.pts); x.fill(); }
+    g.save(); g.globalAlpha = k === 'market' ? 0.4 : 0.7; g.drawImage(o, 0, 0, W, H); g.restore();
   }
   function line(g, pts) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); }
   function drawStreets(g, P, list) {
@@ -151,7 +165,20 @@ window.UnwipTownFactory = function (M) {
   }
   function renderUnder(g, P, skip) {
     const S2 = st(), sk = (t, i) => skip && skip.type === t && skip.i === i;
-    S2.areas.forEach((a, i) => { if (!sk('area', i)) drawArea(g, a, P, i); });
+    // overlapping areas of one kind are drawn as one shape: all the colour, then the trees or marks across the whole
+    // shape (so none are cut in half where two strokes meet), then one outline round the outside
+    const kinds = {};
+    S2.areas.forEach((a, i) => { if (!sk('area', i)) (kinds[a.k] = kinds[a.k] || []).push([a, i]); });
+    const ccw = pts => { let s = 0; for (let j = 0; j < pts.length; j++) { const [x1, y1] = pts[j], [x2, y2] = pts[(j + 1) % pts.length]; s += x1 * y2 - x2 * y1; } return s < 0 ? pts.slice().reverse() : pts; };
+    for (const [k, list] of Object.entries(kinds)) {
+      for (const [a, i] of list) drawArea(g, a, P, i, true, 'fill');
+      g.save(); g.beginPath();
+      for (const [a] of list) { const q = ccw(a.pts); g.moveTo(q[0][0], q[0][1]); for (let j = 1; j < q.length; j++) g.lineTo(q[j][0], q[j][1]); g.closePath(); }
+      g.clip('nonzero');
+      for (const [a, i] of list) drawArea(g, a, P, i, true, 'tex');
+      g.restore();
+      areaEdges(g, list.map(x => x[0]), P, k);
+    }
     drawStreets(g, P, S2.streets.filter((_, i) => !sk('street', i)));
     S2.buildings.forEach((b, i) => { if (!sk('building', i)) drawBuilding(g, b, P, i); });
     S2.walls.forEach((w, i) => { if (!sk('wall', i)) drawWall(g, w, P); });

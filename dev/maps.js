@@ -19,7 +19,7 @@ window.UnwipMaps = (function () {
   const FRAME_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3a3a3a"><rect x="3" y="5" width="18" height="14" stroke-width="2"/><rect x="6" y="8" width="12" height="8" stroke-width="1"/></svg>';
   const TOOLS = [
     ['select', '✋', 'Move & select: drag things around, double-click a label or pin to edit it, Delete removes it. To turn a landmark or label, drag the round handle that appears when it’s selected (it turns in small steps; hold Shift to turn it freely), or press R and Shift+R. Drag a bridge’s end to turn and stretch it. Drag empty space to pan; scroll to zoom'],
-    ['land', '🟫', 'Paint land'], ['water', '🌊', 'Paint water (rub out land)'],
+    ['land', '🟫', 'Paint land'], ['water', '🌊', 'Water: paint over land to make lakes, bays and rivers (the sea around the land is already water)'],
     ['forest', '🌲', 'Forest: drag to scatter trees'], ['mountain', '⛰️', 'Mountains: drag to place a range'], ['hill', '🏔️', 'Hills: drag to scatter'],
     ['town', '🏠', 'Town: click to place'], ['city', '🏰', 'City or castle: click to place'], ['tower', '🗼', 'Tower: click to place'], ['ruin', '🏚️', 'Ruins: click to place'],
     ['road', '〰️', 'Road or path: drag to draw'], ['border', BORDER_ICON, 'Border: drag to draw a dotted border between lands or kingdoms. (For rivers and lakes, paint with 🌊 water)'],
@@ -409,6 +409,7 @@ window.UnwipMaps = (function () {
 
   // ================================================================== EDITING
   const world = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left - cam.x) / cam.z, y: (e.clientY - r.top - cam.y) / cam.z }; };
+  function landCount() { try { const d = mctx.getImageData(0, 0, MW, MH).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 127) n++; return n; } catch { return 0; } }
   function paint(x, y, on, from) {
     mctx.globalCompositeOperation = on ? 'source-over' : 'destination-out';
     mctx.fillStyle = '#000'; mctx.strokeStyle = '#000'; mctx.lineCap = 'round'; mctx.lineWidth = brush;
@@ -428,7 +429,7 @@ window.UnwipMaps = (function () {
     if (tool === 'select') { sel = hit(p.x, p.y); push(); drawing = { move: true, last: p }; itemsDirty = true; redraw(); return; }
     push();
     if (isTown() && T.pointerDown(p, tool)) return;
-    if (tool === 'land' || tool === 'water') { drawing = { brush: true, on: tool === 'land', last: p }; paint(p.x, p.y, drawing.on); redraw(); return; }
+    if (tool === 'land' || tool === 'water') { drawing = { brush: true, on: tool === 'land', last: p, before: landCount() }; paint(p.x, p.y, drawing.on); redraw(); return; }
     if (['forest', 'mountain', 'hill'].includes(tool)) { drawing = { scatter: tool === 'forest' ? 'tree' : tool, last: p }; scatter(p); changed(); return; }
     if (['town', 'city', 'tower', 'ruin'].includes(tool)) { st.stamps.push({ k: tool, x: p.x, y: p.y, s: 1 }); sel = { type: 'stamp', i: st.stamps.length - 1 }; changed(); schedule(); return; }
     if (['road', 'border'].includes(tool)) { drawing = { path: { k: tool, pts: [[p.x, p.y]] } }; return; }
@@ -472,7 +473,12 @@ window.UnwipMaps = (function () {
     if (T && T.busy) { T.pointerUp(); return; }
     if (!drawing) return;
     const d = drawing; drawing = null;
-    if (d.brush) landDirty = true;
+    if (d.brush) {
+      landDirty = true;
+      // water painted where there was no land changes nothing you can see: say how the tool works instead of seeming broken
+      if (!d.on && Math.abs(landCount() - d.before) < 3) U.toast('That’s already water. Paint 🌊 over land to make a lake, a bay or a river.', '', 5000);
+      else if (d.on && Math.abs(landCount() - d.before) < 3) U.toast('That’s already land. Paint 🟫 over the sea to add land.', '', 5000);
+    }
     if (d.path) { if (d.path.pts.length >= 2) st.paths.push(d.path); else undo.pop(); }
     if (d.box) { const b = norm(d.box); if (b.w > 20 && b.h > 20) { st.boxes = st.boxes || []; st.boxes.push(b); sel = { type: 'box', i: st.boxes.length - 1 }; } else undo.pop(); }
     if (d.move && !sel) undo.pop();
