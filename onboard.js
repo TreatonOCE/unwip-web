@@ -219,7 +219,7 @@ window.UnwipIntro = (function () {
       if (title) { const slug = await api.createProject(title, blankTemplate()); await U.openProject(slug, { skipCheck: true }); opened = true; }
     }
     if (!opened) { U.showLibrary(); return; }
-    if (withTour) setTimeout(tour, 500);
+    if (withTour) { writerAfterTour = !!L.writer; setTimeout(tour, 500); }
     else if (L.writer) setTimeout(() => { U.setWriter(true); U.toast('This is Writer mode: just the page. Press Esc or F11 to see everything else.', '', 7000); }, 800);
   }
 
@@ -425,10 +425,12 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); showStep(1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); showStep(-1); }
   }
-  let tourWatch = null;
+  let tourWatch = null, writerAfterTour = false;
   function endTour() {
     clearInterval(tourWatch);
     if (!tEls) return;
+    // picked Distraction-free in the setup, then took the tour: go into Writer mode once the tour is over
+    if (writerAfterTour) { writerAfterTour = false; if (S.slug) setTimeout(() => { U.setWriter(true); U.toast('This is Writer mode, the layout you picked: just the page. Press Esc or F11 to see everything else.', '', 7000); }, 300); }
     tEls.shade.remove(); tEls.card.remove(); tEls = null;
     document.removeEventListener('keydown', tourKey, true);
     window.removeEventListener('resize', placeStep);
