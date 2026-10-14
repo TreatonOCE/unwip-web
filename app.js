@@ -2691,7 +2691,7 @@
 <div class="pc-only">        <div class="section-label">Updates</div>
         <label class="check"><input type="checkbox" id="g-autoup" ${cfg.autoUpdate !== false ? 'checked' : ''}> Install updates automatically</label>
         <div class="field"><label id="g-version">Unwip</label><button class="btn" id="g-checkup" type="button">Check for updates now</button></div>
-        <div class="field full"><label>Update key (only needed while your updates repo on GitHub is private)</label><input type="password" id="g-upkey" value="${esc(cfg.updateKey || '')}" placeholder="Paste the read-only key from GitHub here" autocomplete="off" spellcheck="false"></div></div>
+</div>
         <div class="section-label">Where your projects live</div>
         <div class="field full" id="s-lib"><label>Loading…</label></div>
         <div class="section-label">Extra backup copy</div>
@@ -2707,11 +2707,11 @@
     $('#g-tour', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.tour(); };
     $('#g-help', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipHelp && window.UnwipHelp.open(); };
     api.updateState().then(st => { const l = $('#g-version', body); if (l) l.textContent = `You have Unwip ${st.current}`; }).catch(() => {});
-    $('#g-checkup', body).onclick = async () => { S.settings = await api.setSettings({ updateKey: $('#g-upkey', body).value.trim() }); window.UnwipUpdates && window.UnwipUpdates.checkNow(); };
+    $('#g-checkup', body).onclick = () => { window.UnwipUpdates && window.UnwipUpdates.checkNow(); };
     const ok = await modal({ title: 'Settings', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
     if (!ok) return;
     const v = id => $('#' + id, body).value, c = id => $('#' + id, body).checked;
-    S.settings = await api.setSettings({ author: v('g-author').trim(), dailyGoal: Math.max(0, +v('g-daily') || 0), quotes: c('g-quotes'), autoUpdate: c('g-autoup'), updateKey: v('g-upkey').trim() });
+    S.settings = await api.setSettings({ author: v('g-author').trim(), dailyGoal: Math.max(0, +v('g-daily') || 0), quotes: c('g-quotes'), autoUpdate: c('g-autoup') });
     try { localStorage.setItem('folio-ac', JSON.stringify({ on: c('s-ac'), min: +v('s-acmin') })); } catch {}
     const langSel = $('#s-lang', body);
     const newLangs = langSel ? [langSel.value] : sp.current;
