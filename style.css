@@ -2348,3 +2348,8 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
   .pf-back { padding: 8px; }
   .pf-page { height: 60vh; }
 }
+
+/* Report a problem: pick how to email it */
+.rep-via { display: grid; gap: 8px; margin: 8px 0 12px; }
+.rep-via .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 14px; height: auto; }
+.rep-via .btn span { font-size: .85em; opacity: .75; font-weight: 400; }

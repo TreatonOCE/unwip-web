@@ -55,24 +55,43 @@ window.UnwipAbout = (function () {
     return lines.filter(x => x !== '').join('\n').replace(/\nWhat happened:/, '\n\nWhat happened:').replace(/\nRecent errors/, '\n\nRecent errors');
   }
 
-  async function report() {
+  async function report(prefill) {
     const body = document.createElement('div'); body.className = 'rep';
     body.innerHTML = `<p>Something not working, or confusing? Say what you were doing and what went wrong. Unwip adds the details that help fix it: the version, your device and any recent errors. <b>None of your writing is included.</b></p>
       <div class="field"><label>What happened?</label><textarea id="rep-what" rows="4" placeholder="e.g. I pressed Copy for Docs in chapter 3 and nothing was copied"></textarea></div>
       <details class="rep-details"><summary>See exactly what will be sent</summary><pre id="rep-pre"></pre></details>`;
     const pre = body.querySelector('#rep-pre'), what = body.querySelector('#rep-what');
+    if (prefill) what.value = prefill;
     const refresh = async () => { pre.textContent = await reportText(what.value.trim()); };
     what.addEventListener('input', () => { clearTimeout(what._t); what._t = setTimeout(refresh, 300); });
     await refresh();
     const v = await U.modal({ title: 'Report a problem', body, wide: true, onOpen: () => setTimeout(() => what.focus(), 50),
-      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Copy report', value: 'copy', kind: 'ghost' }, { label: SUPPORT ? 'Email it' : 'Email it…', value: 'mail', kind: 'primary' }] });
+      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Copy report', value: 'copy', kind: 'ghost' }, { label: 'Email it…', value: 'mail', kind: 'primary' }] });
     if (!v) return;
     const text = await reportText(what.value.trim());
     if (v === 'copy') { try { await navigator.clipboard.writeText(text); U.toast('Report copied. Paste it into an email or message.'); } catch { U.toast('Couldn’t copy. Select the text under “See exactly what will be sent” and copy it.', 'warn'); } return; }
     const subj = `Unwip problem: ${(what.value.trim().split('\n')[0] || 'report').slice(0, 60)}`;
-    const url = `mailto:${encodeURIComponent(SUPPORT)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(text.slice(0, 1800))}`;
-    if (api.web) location.href = url; else window.open(url, '_blank');   // the PC hands mailto: links to your email app
-    if (text.length > 1800) { try { await navigator.clipboard.writeText(text); U.toast('Your email app is opening. The full report was also copied, in case it’s cut short.'); } catch {} }
+    // which email to send it with: Gmail or Outlook in the browser, or the email app on this device. Remembered.
+    let via = ''; try { via = localStorage.getItem('unwip-report-via') || ''; } catch {}
+    const pick = document.createElement('div');
+    pick.innerHTML = `<p>Send it with:</p><div class="rep-via">
+      <button class="btn" type="button" data-via="gmail"><b>Gmail</b><span>opens in your browser</span></button>
+      <button class="btn" type="button" data-via="outlook"><b>Outlook.com</b><span>Hotmail and Live too, in your browser</span></button>
+      <button class="btn" type="button" data-via="app"><b>Email app</b><span>the one set up on this ${api.web ? 'device' : (api.platform === 'darwin' ? 'Mac' : 'PC')}</span></button></div>
+      <p class="about-small">Or press Back and use Copy report to paste it anywhere you like.</p>`;
+    pick.querySelectorAll('[data-via]').forEach(b => { if (b.dataset.via === via) b.classList.add('primary'); });
+    let picked = null;
+    await U.modal({ title: 'Email the report', body: pick, buttons: [{ label: 'Back', value: false, kind: 'ghost' }],
+      onOpen: back => back.querySelectorAll('[data-via]').forEach(b => { b.onclick = () => { picked = b.dataset.via; back.querySelector('.m-foot button').click(); }; }) });
+    via = picked;
+    if (!via) return report(what.value);   // Back: the report again, with what they typed
+    try { localStorage.setItem('unwip-report-via', via); } catch {}
+    const to = SUPPORT, bodyText = text.slice(0, 1800), q = encodeURIComponent;
+    const url = via === 'gmail' ? `https://mail.google.com/mail/?view=cm&fs=1&to=${q(to)}&su=${q(subj)}&body=${q(bodyText)}`
+      : via === 'outlook' ? `https://outlook.live.com/mail/0/deeplink/compose?to=${q(to)}&subject=${q(subj)}&body=${q(bodyText)}`
+      : `mailto:${q(to)}?subject=${q(subj)}&body=${q(bodyText)}`;
+    if (via === 'app' && api.web) location.href = url; else window.open(url, '_blank');   // the PC hands links to your browser or email app
+    if (text.length > 1800) { try { await navigator.clipboard.writeText(text); U.toast('The full report was also copied, in case the email cuts it short.'); } catch {} }
   }
 
   // ---------------------------------------------------------------- About
