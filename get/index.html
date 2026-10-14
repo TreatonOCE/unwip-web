@@ -299,6 +299,18 @@ table.cmp{width:100%;border-collapse:collapse;min-width:720px;font-size:.95rem}
   .btn-row .btn{width:100%}
   .replay .page{padding:16px 18px;font-size:1.02rem}
 }
+
+dialog.mail{border:0;border-radius:20px;padding:26px;max-width:min(420px,calc(100vw - 32px));width:100%;background:var(--panel);color:var(--ink);box-shadow:0 30px 80px -20px rgba(15,25,45,.55)}
+dialog.mail::backdrop{background:rgba(20,30,48,.45)}
+dialog.mail h3{margin:0 0 6px;font:700 1.35rem/1.2 var(--serif,Georgia,serif)}
+dialog.mail p{margin:0 0 16px;color:var(--muted)}
+dialog.mail .addr{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--rule);border-radius:12px;margin-bottom:14px;font-weight:600;font-size:.95rem;overflow-wrap:anywhere}
+@media (max-width:440px){dialog.mail{padding:22px 18px}dialog.mail .ways small{display:none}}
+dialog.mail .addr button{flex:none;border:0;background:var(--sky);color:var(--ink);border-radius:8px;padding:6px 10px;font:600 .85rem/1 var(--sans);cursor:pointer}
+dialog.mail .ways{display:grid;gap:8px}
+dialog.mail .ways .btn{justify-content:flex-start;min-height:46px}
+dialog.mail .ways small{font-weight:400;color:var(--muted);margin-left:auto;font-size:.82rem}
+dialog.mail .close{position:absolute;top:12px;right:14px;border:0;background:none;font-size:1.5rem;line-height:1;color:var(--muted);cursor:pointer}
 </style>
 </head>
 <body>
@@ -691,13 +703,33 @@ var GATED = false;
   for (var i = 0; i < nodes.length; i++) {
     var a = nodes[i], key = a.getAttribute('data-link'), url = LINKS[key];
     if (GATED && a.hasAttribute('data-gate')) { url = LINKS.access; a.textContent = 'Request access'; }
-    else if (key === 'email' && url) url = 'mailto:' + url + '?subject=' + encodeURIComponent('Unwip beta');
+    else if (key === 'email' && url) { a.addEventListener('click', openMail); url = '#mail'; }
     if (url) { a.setAttribute('href', url); if (/^https?:/.test(url) && !/github\.com/.test(url)) a.setAttribute('rel', 'noopener'); }
     else if (key === 'discord' || key === 'email') a.style.display = 'none';
     else { a.removeAttribute('href'); a.setAttribute('aria-disabled', 'true'); a.title = 'Not available yet'; }
   }
   var dc = document.querySelectorAll('.if-discord'); for (var j = 0; j < dc.length; j++) if (!LINKS.discord) dc[j].style.display = 'none';
   if (!LINKS.discord && !LINKS.email) { var x = document.querySelector('.if-any'); if (x) x.style.display = 'none'; }
+
+
+  // email: let people choose Gmail, Outlook.com or their email app, instead of whatever app the computer opens
+  function openMail(e) {
+    var d = document.getElementById('mail'); if (!d || !d.showModal) return;   // very old browsers: the plain link
+    e.preventDefault();
+    var to = LINKS.email, su = encodeURIComponent('Unwip beta'), q = encodeURIComponent(to);
+    document.getElementById('mail-addr').textContent = to;
+    document.getElementById('mail-gmail').href = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + q + '&su=' + su;
+    document.getElementById('mail-outlook').href = 'https://outlook.live.com/mail/0/deeplink/compose?to=' + q + '&subject=' + su;
+    document.getElementById('mail-app').href = 'mailto:' + to + '?subject=' + su;
+    d.showModal();
+  }
+  (function () {
+    var d = document.getElementById('mail'); if (!d) return;
+    d.addEventListener('click', function (e) { if (e.target === d || e.target.hasAttribute('data-close')) d.close(); if (e.target.closest && e.target.closest('.ways a')) setTimeout(function () { d.close(); }, 50); });
+    document.getElementById('mail-copy').addEventListener('click', function () {
+      var b = this; try { navigator.clipboard.writeText(LINKS.email).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); }); } catch (x) {}
+    });
+  })();
 
   // coming from: tabs (arrow keys move between them)
   var tabs = [].slice.call(document.querySelectorAll('.tabs [role=tab]'));
@@ -794,5 +826,12 @@ var GATED = false;
   }
 })();
 </script>
+<dialog class="mail" id="mail" aria-labelledby="mail-h"><button class="close" type="button" aria-label="Close" data-close>×</button>
+  <h3 id="mail-h">Email Unwip</h3><p>Questions, problems or ideas are all welcome. Pick how you’d like to write:</p>
+  <div class="addr"><span id="mail-addr"></span><button type="button" id="mail-copy">Copy</button></div>
+  <div class="ways"><a class="btn ghost" id="mail-gmail" target="_blank" rel="noopener">Gmail <small>in your browser</small></a>
+    <a class="btn ghost" id="mail-outlook" target="_blank" rel="noopener">Outlook.com <small>Hotmail and Live too</small></a>
+    <a class="btn ghost" id="mail-app">Email app <small>on this device</small></a></div>
+</dialog>
 </body>
 </html>
