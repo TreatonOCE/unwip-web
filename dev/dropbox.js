@@ -639,17 +639,20 @@ window.UnwipDropbox = (function () {
   function fillCard(card) {
     const s = statusText();
     card.innerHTML = connected()
-      ? `<div class="sy-cur"><span class="sy-ic">📦</span><div><b>Dropbox</b> <em class="sy-badge">${st.broken ? 'sign in again' : 'syncing'}</em><span class="sy-path">${esc(st.email || 'Connected')} · ${esc(s.text)}</span></div></div>
+      ? `<div class="sy-cur"><span class="sy-ic">📦</span><div><b>Dropbox</b> <em class="sy-badge">${st.broken ? 'sign in again' : 'connected'}</em><span class="sy-path">${esc(st.email || 'Connected')} · ${esc(s.text)}</span></div></div>
          ${lastError ? `<p class="sy-note">Last problem: ${esc(lastError)}</p>` : ''}
          ${st.localOnly.length ? `<p class="sy-note">Kept on this ${esc(DEVICE)} only: ${st.localOnly.map(esc).join(', ')}</p>` : ''}
          ${st.removedHere.length ? `<p class="sy-note">Deleted on this ${esc(DEVICE)} but still in Dropbox: ${st.removedHere.map(esc).join(', ')}. <button class="link-btn" type="button" data-dbx="restore">Bring back</button></p>` : ''}
          <label class="check sy-auto"><input type="checkbox" id="dbx-auto" ${auto() ? 'checked' : ''}><span>Sync by itself while I write. Off: tap <b>Sync</b> when you want to, and a ⚠ shows when another device has changed something.</span></label>
          <div class="sy-moves"><button class="btn primary" type="button" data-dbx="${st.broken ? 'connect' : 'sync'}">${st.broken ? 'Sign in to Dropbox again' : 'Sync now'}</button><button class="btn ghost" type="button" data-dbx="off">Disconnect</button></div>
-         <p class="sy-note">Chapters, the binder, pictures and snapshots sync with the Unwip folder in your Dropbox, the same one your PC uses (on the PC: Settings › Where your projects live › Sync with Dropbox). If a chapter is changed on both at once, nothing is lost: the other version goes into Snapshots.</p>`
+         <p class="sy-note sy-alert hidden" id="dbx-empty">No books in your Dropbox yet. Unwip uses the folder <b>Dropbox › Apps › Unwip</b>. If your PC or Mac keeps its books somewhere else (like Dropbox › Unwip), open Settings there › Where your projects live › <b>Sync with Dropbox (shared with the phone and iPad)</b>, then tap Sync now here.</p>
+         <p class="sy-note">Chapters, the binder, pictures and snapshots sync with the Unwip folder in your Dropbox (Dropbox › Apps › Unwip), the same one your PC or Mac uses (there: Settings › Where your projects live › Sync with Dropbox (shared with the phone and iPad)). If a chapter is changed on both at once, nothing is lost: the other version goes into Snapshots.</p>`
       : `<div class="sy-cur"><span class="sy-ic">📱</span><div><b>On this ${esc(DEVICE)} only</b><span class="sy-path">Saved inside this app. Connect Dropbox to work on the same books as your PC.</span></div></div>
          <div class="sy-moves"><button class="btn primary" type="button" data-dbx="connect">Connect Dropbox</button></div>`;
     const restore = async () => { st.removedHere = []; await persist(); sync(); };
     card.querySelectorAll('[data-dbx]').forEach(b => b.onclick = () => ({ connect, sync, off: disconnect, restore })[b.dataset.dbx]());
+    const empty = card.querySelector('#dbx-empty');
+    if (empty) FS.list('Unwip').then(l => { if (!l.dirs.some(d => !d.startsWith('_'))) empty.classList.remove('hidden'); }).catch(() => {});
     const ac = card.querySelector('#dbx-auto'); if (ac) ac.onchange = async () => { st.auto = ac.checked; await persist(); if (st.auto) sync(); else check(); render(); };
   }
 

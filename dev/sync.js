@@ -343,9 +343,13 @@ window.UnwipSync = (function () {
       extra.innerHTML = '';
       return;
     }
-    const cur = info.places.find(p => p.kind === info.kind) || { label: 'A folder you chose', kind: 'custom' };
-    const others = info.places.filter(p => p.kind !== info.kind);
+    // the place the books are in now, matched by its folder (there can be two Dropbox places: the shared one and Dropbox › Unwip)
+    const norm = p => String(p || '').replace(/[\\/]+$/, '').toLowerCase();
+    const cur = info.places.find(p => norm(p.path) === norm(info.path)) || info.places.find(p => p.kind === info.kind) || { label: 'A folder you chose', kind: 'custom' };
+    const others = info.places.filter(p => p !== cur && !(p.kind === 'default' && cur.kind === 'default'));
+    const sharedPlace = info.places.find(p => p.shared);
     box.innerHTML = `<div class="sy-cur"><span class="sy-ic">${ICON[info.kind] || '📁'}</span><div><b>${esc(cur.label)}</b>${info.kind === 'dropbox' || info.kind === 'onedrive' ? ` <em class="sy-badge" title="This folder is kept up to date by the ${info.kind === 'dropbox' ? 'Dropbox' : 'OneDrive'} app on this PC. Its icon in the taskbar shows whether it's still uploading.">✓ kept in sync by ${info.kind === 'dropbox' ? 'Dropbox' : 'OneDrive'}</em>` : ''}<span class="sy-path">${esc(info.path)}</span></div><button class="btn small ghost" id="sy-open" type="button">Open folder</button></div>
+      ${cur.computersOnly && sharedPlace ? `<p class="sy-note sy-alert">⚠ Your phone and iPad can’t see this folder. Dropbox only lets them use <b>Dropbox › Apps › Unwip</b>. Tap <b>Sync with Dropbox (shared with the phone and iPad)</b> below to move your books there; nothing is deleted.</p>` : ''}
       ${info.kind === 'default' && !info.places.some(p => p.kind === 'dropbox') ? '<p class="sy-note">To sync between devices, install the Dropbox app on this PC, then come back here. Unwip will offer to move your projects into it.</p>' : ''}
       <div class="sy-moves">${others.map(p => `<button class="btn ${p.kind === 'dropbox' ? 'primary' : ''}" type="button" data-path="${esc(p.path)}" data-label="${esc(p.label)}" data-tip="${esc(p.path)}">${ICON[p.kind]} ${p.kind === 'default' ? 'Move back to this PC only' : `Sync with ${esc(p.label)}`}</button>`).join('')}
         <button class="btn ghost" type="button" id="sy-pick">Choose another folder…</button></div>`;
@@ -363,6 +367,15 @@ window.UnwipSync = (function () {
     };
     drawExtra();
   }
+  // At start-up: books in Dropbox › Unwip while the phone/iPad use Dropbox › Apps › Unwip. Say so, and offer the move.
+  setTimeout(async () => {
+    if (api.web || !api.libraryInfo) return;
+    let info; try { info = await api.libraryInfo(); } catch { return; }
+    const norm = p => String(p || '').replace(/[\\/]+$/, '').toLowerCase();
+    const cur = (info.places || []).find(p => norm(p.path) === norm(info.path)), shared = (info.places || []).find(p => p.shared);
+    if (!cur || !cur.computersOnly || !shared) return;
+    U.toastAction('Your phone and iPad can’t see your books: they’re in Dropbox › Unwip, and Dropbox only lets the phone and iPad use Dropbox › Apps › Unwip.', 'Move them there…', () => move(shared.path, 'Dropbox (shared with the phone and iPad)'), 30000);
+  }, 6000);
   async function move(target, label) {
     const ok = await U.confirmBox(`Move your projects to ${label}?`, `Unwip will copy every project (and your Play pieces) to:<br><b>${esc(target)}</b><br><br>If projects are already there from another device, both are kept. Your current folder isn’t deleted. It’s renamed “… (old copy)” so you can check everything arrived before removing it yourself.`, 'Move projects');
     if (!ok) return;
