@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data: blob:; img-src 'self' data: blob:; script-src 'self'">
+<title>Unwip</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="popout-body">
+<header class="po-bar">
+  <div class="po-title" id="po-title">Loading…</div>
+  <div class="po-tools">
+    <button class="icon-btn" id="po-b" title="Bold (Ctrl+B)"><b>B</b></button>
+    <button class="icon-btn" id="po-i" title="Italic (Ctrl+I)"><i>I</i></button>
+    <button class="icon-btn" id="po-u" title="Underline (Ctrl+U)"><u>U</u></button>
+    <span class="po-count" id="po-count"></span>
+    <span class="po-saved" id="po-saved"></span>
+    <button class="btn small ghost" id="po-back" title="Close this window and carry on in the main window">Back to the main window</button>
+  </div>
+</header>
+<main class="po-main">
+  <div class="page" id="page">
+    <div id="editor" class="editor" contenteditable="true" spellcheck="true"></div>
+  </div>
+</main>
+<script src="icons.js"></script>
+<script src="clipboard.js"></script>
+<script src="fonts.js"></script>
+<script src="popout.js"></script>
+</body>
+</html>
