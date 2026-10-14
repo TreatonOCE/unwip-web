@@ -638,6 +638,7 @@ window.UnwipMaps = (function () {
     view.innerHTML = `<div class="mp-top">
         <button class="icon-btn" id="mp-close" data-tip="Close the map">${I.back}</button><b class="mp-title">${esc(host.title(id) || 'Map')}</b><span class="mp-saved" id="mp-saved">Saved</span>
         <span class="mp-sp"></span>
+        ${host.inBook === false ? '<button class="st-proof rec-btn" type="button" title="Proof of writing: record your screen"></button>' : ''}
         <button class="btn small" id="mp-gen" data-tip="Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after">🎲 Random map…</button>
         <select id="mp-style" data-tip="Map style">${Object.entries(STYLES).map(([k, v]) => `<option value="${k}" ${st.style === k ? 'selected' : ''}>${v.name}</option>`).join('')}</select>
         <button class="btn small ghost ${st.grid ? 'on' : ''}" id="mp-grid" data-tip="Hex grid">⬡ Grid</button>
@@ -653,6 +654,7 @@ window.UnwipMaps = (function () {
         <div class="mp-brush" data-tip="Brush size: how big the land, water, forest and mountain brushes paint"><span class="mp-brush-ic">🖌️</span><input type="range" id="mp-size" min="4" max="60" value="${brush}" orient="vertical"><span class="mp-brush-n" id="mp-size-n">${brush}</span></div></div>
         <div class="mp-stage"><canvas></canvas><div class="mp-opts hidden" id="mp-opts"></div><div class="mp-selbar hidden"><button type="button" class="btn small" data-layer="front" title="Bring to front (Shift+])">⇈ Front</button><button type="button" class="btn small" data-layer="up" title="Bring forward (])">↑ Forward</button><button type="button" class="btn small" data-layer="down" title="Send backward ([)">↓ Backward</button><button type="button" class="btn small" data-layer="back" title="Send to back (Shift+[)">⇊ Back</button><button type="button" class="btn small ghost" data-layer="del" title="Delete">🗑</button></div><div class="mp-hint">Scroll to zoom · drag empty space to move around · double-click a pin or label to edit it</div></div></div>`;
     host.mount(view);
+    if (window.UnwipProof && window.UnwipProof.renderStatus) window.UnwipProof.renderStatus();   // fill in the Record button (or the timer if a video is going)
     cv = $('canvas', view); ctx = cv.getContext('2d');
     buildTools(); resize(); fit(); setTool('select'); draw();
     // touch screens: one finger uses the tool, two fingers pinch to zoom and drag to move around (a stroke the first

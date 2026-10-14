@@ -651,5 +651,5 @@ ${PLAYER_CSS()}`;
   // the app's own copy of the player styles
   { const st = document.createElement('style'); st.textContent = PLAYER_CSS().replace(/var\(--ink\)/g, 'var(--text)'); document.head.appendChild(st); }
 
-  return { open, recordings, play, setReplay, setRemind, pauseVideo, isOn: () => R.on, flush, stopVideo, saveReport, timelapse, startVideo, loadSessions, QUALITY, _engine: ENGINE, _R: R, _V: V };
+  return { open, renderStatus, recordings, play, setReplay, setRemind, pauseVideo, isOn: () => R.on, flush, stopVideo, saveReport, timelapse, startVideo, loadSessions, QUALITY, _engine: ENGINE, _R: R, _V: V };
 })();
