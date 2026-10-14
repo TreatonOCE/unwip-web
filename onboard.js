@@ -30,6 +30,14 @@ window.UnwipIntro = (function () {
         ['Save As…', 'Saves itself every few seconds'], ['Export to PDF', 'Export › PDF, Word or e-book']],
       tip: 'Bring a Word document in and Unwip splits it into chapters at the headings.'
     },
+    obsidian: {
+      name: 'Obsidian or Markdown', icon: '🗂️', blurb: 'A vault of Markdown notes',
+      layout: 'page', structure: 'chapters', font: 'Georgia', para: 'blocks',
+      map: [['Your vault', 'One book, with your sub-folders as folders in the Binder'], ['Markdown symbols', 'Formatting you can see: Ctrl+I for italics, Ctrl+B for bold'],
+        ['[[Links]] and tags', 'Plain words in the book; Characters and Places sheets sit alongside'], ['Notes beside the draft', 'Notes and Research, outside the Manuscript'],
+        ['Plain files you own', 'Export › a folder of Markdown files, any time']],
+      tip: 'Bring your vault in as a book: chapter 2 comes before chapter 10, and HTML like <u> becomes real formatting.'
+    },
     hemingway: {
       name: 'An editing or style checker', icon: '✂️', blurb: 'Tightening and readability',
       layout: 'calm', structure: 'chapters', font: 'Georgia', para: 'book',
@@ -51,13 +59,14 @@ window.UnwipIntro = (function () {
   };
   const STRUCT = {
     chapters: { name: 'Chapters', desc: 'Each chapter is one page.', tree: ['Chapter 1', 'Chapter 2', 'Chapter 3'] },
-    scenes: { name: 'Chapters with scenes', desc: 'Each chapter is a folder; scenes inside it are easy to move around.', tree: ['▾ Chapter 1', '  Scene: The light goes out', '  Scene: Fog', '▾ Chapter 2', '  Scene: The logbook'] },
+    scenes: { name: 'Chapters with scenes', desc: 'Each chapter is a folder; scenes inside it are easy to move around.', tree: ['▾ Chapter 1', '  Scene: 3 May, Bistritz', '  Scene: The Borgo Pass', '▾ Chapter 2', '  Scene: 8 May'] },
     parts: { name: 'Parts, chapters, scenes', desc: 'For longer books split into parts or acts.', tree: ['▾ Part One', '  ▾ Chapter 1', '    Scene', '    Scene', '  ▸ Chapter 2', '▸ Part Two'] }
   };
   const THEME_PICKS = ['paper', 'sepia', 'mint', 'night', 'midnight', 'forest'];
   const FONT_PICKS = ['Times New Roman', 'Georgia', 'Garamond', 'Palatino Linotype', 'Calibri', 'Arial', 'Courier New'];
   const GOALS = [[0, 'No goal'], [250, '250'], [500, '500'], [1000, '1,000'], [1667, '1,667 (NaNo)'], [2000, '2,000']];
-  const SAMPLE = 'The lamp had burned every night for ninety years. On the night it went out, Mara was halfway up the stairs with the oil, and she heard the sea go quiet.';
+  const SAMPLE = 'It was on the dark side of twilight when we got to Bistritz, which is a very interesting old place.';
+  const SAMPLE2 = '“Welcome to my house! Enter freely and of your own will!” He made no motion of stepping to meet me, but stood like a statue, as though his gesture of welcome had fixed him into stone.';
 
   // ================================================================== THE SETUP
   let ans = null, step = 0, root = null;
@@ -113,7 +122,7 @@ window.UnwipIntro = (function () {
       <div class="in-row"><label>Paragraphs</label><div class="in-chips">
         <button class="in-chip${ans.para === 'book' ? ' on' : ''}" data-para="book">Indented, like a printed book</button>
         <button class="in-chip${ans.para === 'blocks' ? ' on' : ''}" data-para="blocks">Spaced blocks, like Docs and Word</button></div></div>
-      <div class="in-sample ${ans.para}" style="font-family:'${esc(ans.font)}'"><p>${SAMPLE}</p><p>She set the can down. Below her, very faintly, someone was knocking at the door.</p></div>`;
+      <div class="in-sample ${ans.para}" style="font-family:'${esc(ans.font)}'"><p>${SAMPLE}</p><p>${SAMPLE2}</p></div>`;
     else if (name === 'goal') h = `
       <h2>A daily goal?</h2>
       <p class="in-lead">Shown as a quiet progress ring while you write. Plenty of people pick none.</p>
@@ -123,6 +132,7 @@ window.UnwipIntro = (function () {
       const actions = [];
       if (ans.from === 'scrivener') actions.push(['scriv', '📚 Bring in my Scrivener project', 'Pick the .scriv folder. Everything comes across as a new project.']);
       if (ans.from === 'docs') actions.push(['paste', '📋 Paste my book from Google Docs', 'Select all in Docs, copy, paste. Unwip finds the chapters for you.']);
+      if (ans.from === 'obsidian') actions.push(['vault', '🗂️ Bring in my Obsidian vault', 'Pick the vault folder (or any folder of chapter files). Sub-folders come too.']);
       if (ans.from !== 'scrivener') actions.push(['files', ans.from === 'word' ? '📝 Bring in my Word files' : '📁 Bring in my book from files', 'One file or one per chapter: Word, LibreOffice, RTF, text or Markdown. Chapters are found automatically.']);
       h = `
       <h2>All set</h2>
@@ -134,7 +144,7 @@ window.UnwipIntro = (function () {
       </ul>
       <h3 class="in-h3">What would you like to start with?</h3>
       <div class="in-grid">${choose([
-        ['example', '🏮 An example project', 'A short sample story, “The Lighthouse Keeper”, laid out the way you chose, with a character, a place and tips. Poke at it freely.'],
+        ['example', '🦇 An example book: Dracula', 'The opening chapters of Bram Stoker’s Dracula, laid out the way you chose: diary entries, letters, characters, places and a timeline. Poke at it freely.'],
         ...actions,
         ['blank', '📖 A blank book', 'Name it and start writing.']
       ], ans.action, 'action')}</div>`;
@@ -197,9 +207,9 @@ window.UnwipIntro = (function () {
     close();
     let opened = false;
     if (ans.action === 'scriv') { await U.importScrivener(); opened = !!S.slug; }
-    else if (ans.action === 'paste' || ans.action === 'files') {
+    else if (ans.action === 'paste' || ans.action === 'files' || ans.action === 'vault') {
       const BI = window.UnwipBookImport, after = withTour ? () => setTimeout(tour, 500) : null;
-      if (ans.action === 'paste') BI.fromPaste({ onDone: after }); else BI.fromFiles({ onDone: after });
+      if (ans.action === 'paste') BI.fromPaste({ onDone: after }); else if (ans.action === 'vault') BI.fromFolder({ onDone: after }); else BI.fromFiles({ onDone: after });
       return;
     }
     else if (ans.action === 'example') { await makeExample(); opened = true; }
@@ -213,59 +223,54 @@ window.UnwipIntro = (function () {
   }
 
   // ================================================================== EXAMPLE PROJECT
+  // The opening chapters of Dracula (Bram Stoker, 1897, public domain): told in dated diary entries, letters and a
+  // newspaper cutting, so it shows off the binder, corkboard, timeline and formatting. The text is in example-text.js.
   const P = s => s.split('\n\n').map(x => `<p>${x}</p>`).join('');
-  const TEXT = {
-    out: P(`The lamp at Gull Rock had burned every night for ninety years. On the night it went out, Mara Quill was halfway up the spiral stairs with a can of oil in each hand, counting steps the way her father had taught her.
+  const SCENE_BREAK = '<p class="scene" style="text-align: center">* * *</p>';
+  const LOG = P(`[Not typed up yet. That’s what the “To do” status is for.]
 
-Seventy-one. Seventy-two. The light above her flickered once, the way a candle does when a door opens somewhere in the house, and then it was simply gone.
+Next: the captain’s log of the Demeter, found on board and read at the inquest. Day by day from 6 July, as the crew go missing one by one.
 
-She stood very still. Without the hum of the clockwork and the turning of the great lens, she could hear the sea properly for the first time in her life. It was quieter than she expected. It sounded like it was listening.
-
-“Right,” she said, to nobody, and kept climbing.`),
-    fog: P(`By midnight the fog had come in so thick that Mara could not see the rail of the gallery from the door. She lit the old storm lantern, the one with the cracked red glass, and hung it on the hook outside. It was not much. It was something.
-
-At ten past one she heard an engine. Not a ship's engine, which she would have felt in the floor, but something small and coughing, like a fishing boat with a cold.
-
-Then the engine stopped, and a voice called her name.`),
-    log: P(`The logbook lived in the drawer under the chart table, and nobody but the keeper was supposed to write in it. Mara's father had kept it in small, square capitals for thirty-one years.
-
-She opened it to the last page, meaning to write down the time the light failed. Instead she read the entry above it, in her father's hand, dated the morning he left:
-
-IF THE LIGHT GOES OUT, DO NOT OPEN THE DOOR.
-
-She read it three times. Downstairs, someone knocked.`),
-    door: P(`[This chapter isn't written yet. That's what the “To do” status is for.]
-
-Ideas:
-– Who is at the door? Someone she knows, or someone who knows her?
-– What did her father know?`)
-  };
+– Keep it in the captain’s voice: short, dated entries.
+– Add each day to the Timeline as you go.`);
   const START_HERE = name => {
     const f = FROM[ans.from] || FROM.new;
-    return `<p>This is an example project, so click around and change anything. Delete it from the main screen (right-click its card) when you're done.</p>
+    return `<p>This example book is the opening of <i>Dracula</i> by Bram Stoker (1897), shortened in places. It’s long out of copyright, so it’s yours to click around in and change. Delete it from the main screen (right-click its card) when you’re done.</p>
+<p>Stoker told the story in diary entries, letters and newspaper cuttings, each one dated, which is why it makes a good example: every entry is its own scene in the Binder, every scene has a card on the corkboard, and the dates are already on the Timeline.</p>
 <h2>Coming from ${esc(f.name)}</h2>
 <ul>${f.map.map(([a, b]) => `<li><b>${esc(a)}</b> → ${esc(b)}</li>`).join('')}</ul>
 <p>${esc(f.tip)}</p>
 <h2>Things to try</h2>
 <ul>
 <li>Open <b>${name}</b> in the Binder on the left and just type. It saves itself.</li>
-<li>Drag a chapter in the Binder to reorder it.</li>
-<li>Click <b>Detailed</b> at the top for the corkboard, outline and statuses${ans.layout === 'desk' ? ' (you’re already in it)' : ''}.</li>
+<li>Drag a scene in the Binder to reorder it.</li>
+<li>Click <b>Detailed</b> at the top for the corkboard, outline, statuses and the <b>Timeline</b>${ans.layout === 'desk' ? ' (you’re already in Detailed)' : ''}. The Timeline shows each entry on its date.</li>
+<li>Open <b>Jonathan Harker</b> under Characters to see a character sheet.</li>
 <li>Select a word and add a comment, or put a footnote in.</li>
-<li>Try <b>Revise</b> on the first chapter to see repeated words.</li>
-<li>Press <b>Spark</b> if you don't know what comes next.</li>
-<li>Export the book as a PDF to see the chapter titles come out properly.</li>
+<li>Try <b>Revise</b> on a scene to see repeated words and long sentences (Stoker has plenty).</li>
+<li>Press <b>Read aloud</b> to hear a letter read out.</li>
+<li>Click <b>Record</b> at the bottom, write a few lines in “The Demeter’s log”, then play them back.</li>
+<li>Export the book as a PDF or e-book to see the chapter titles come out properly.</li>
 </ul>
 <p>Settings › Help runs the setup and the tour again.</p>`;
   };
-  const CHAR = `<p><b>Full name:</b> Mara Quill</p><p><b>Aliases:</b> The keeper’s girl</p><p><b>Role:</b> Main character</p><p><b>Age:</b> 19</p>
-<h2>Appearance</h2><p>Salt-cracked hands, her father's oilskin coat with the sleeves rolled three times.</p>
-<h2>Personality</h2><p>Practical, stubborn, talks to herself when she's frightened. Counts things.</p>
-<h2>Backstory</h2><p>Grew up on Gull Rock. Her father left on the supply boat a week ago and hasn't come back.</p>
-<h2>Notes</h2><p>What does she want more: to keep the light, or to leave it?</p>`;
-  const PLACE = `<p><b>Name:</b> Gull Rock Lighthouse</p><p><b>Aliases:</b> The Rock</p><p><b>Region:</b> Off the north coast</p><p><b>Type:</b> Lighthouse</p>
-<h2>Description</h2><p>A white tower on a lump of black rock, 112 steps to the lamp room. A keeper's cottage, a boat shed, a lot of gulls.</p>
-<h2>History</h2><p>Built ninety years ago after the wreck of the <i>Constance</i>.</p><h2>Notes</h2><p>The door at the bottom of the tower has never had a lock. Why not?</p>`;
+  const sheet = (fields, parts) => fields.map(([k, v]) => `<p><b>${k}:</b> ${v}</p>`).join('') + parts.map(([h, t]) => `<h2>${h}</h2><p>${t}</p>`).join('');
+  const CHARS = [
+    ['Jonathan Harker', sheet([['Full name', 'Jonathan Harker'], ['Role', 'Main character'], ['Age', 'Young; newly qualified']],
+      [['Appearance', 'An English solicitor’s clerk, travelling with a notebook he keeps in shorthand.'], ['Personality', 'Careful, polite and observant. Notes down recipes for Mina, and the trains that run late.'], ['Backstory', 'Sent by his employer, Mr. Hawkins, to help a Transylvanian count buy a house in England.'], ['Notes', 'Tells the first four chapters through his journal.']])],
+    ['Mina Murray', sheet([['Full name', 'Wilhelmina “Mina” Murray'], ['Role', 'Main character'], ['Age', 'Young; engaged to Jonathan']],
+      [['Personality', 'Clear-headed and practical. Learning shorthand and typewriting so she can help Jonathan with his work.'], ['Backstory', 'An assistant schoolmistress, and Lucy’s closest friend.'], ['Notes', 'Her journal and letters carry the story once it moves to Whitby.']])],
+    ['Lucy Westenra', sheet([['Full name', 'Lucy Westenra'], ['Role', 'Supporting character'], ['Age', 'Nineteen']],
+      [['Personality', 'Warm, playful and much admired. Sleepwalks.'], ['Notes', 'Writes to Mina about her suitors.']])],
+    ['Count Dracula', sheet([['Full name', 'Count Dracula'], ['Aliases', 'The Count'], ['Role', 'Antagonist']],
+      [['Appearance', 'A tall old man, clean shaven save for a long white moustache, dressed in black. Very pale; hands as cold as ice.'], ['Personality', 'Courtly and hospitable, and never seen to eat.'], ['Notes', 'Is buying a house in England. Why?']])]
+  ];
+  const PLACES = [
+    ['Castle Dracula', sheet([['Name', 'Castle Dracula'], ['Region', 'The Carpathian mountains, beyond the Borgo Pass'], ['Type', 'Castle']],
+      [['Description', 'A vast ruined castle on the edge of a precipice. Doors, doors, doors everywhere, and all of them locked and bolted.'], ['Notes', 'No mirrors anywhere in the castle.']])],
+    ['Whitby', sheet([['Name', 'Whitby'], ['Region', 'The Yorkshire coast, England'], ['Type', 'Harbour town']],
+      [['Description', 'A harbour town with a ruined abbey on the East Cliff and a churchyard full of sailors’ graves.'], ['Notes', 'Where Mina and Lucy spend the summer, and where the storm comes in.']])]
+  ];
 
   function blankTemplate() {
     const t = U.newProjectTemplate();
@@ -280,39 +285,70 @@ Ideas:
   }
 
   async function makeExample() {
+    const X = window.UnwipExampleText;
     const t = U.newProjectTemplate();
     const docs = {};
     const doc = (title, html, extra = {}) => { const id = U.uid(); docs[id] = html; return { id, type: 'doc', title, words: U.countWords(html.replace(/<[^>]+>/g, ' ')), ...extra }; };
     const desk = ans.layout === 'desk' || ans.from === 'scrivener';
     const st = s => desk ? { status: s } : {};
+    // the chapters, each a list of scenes: [title, text, synopsis, status, date of the entry]
+    const CH = [
+      ['Jonathan Harker’s Journal', 'Jonathan travels east to meet his client, Count Dracula.', [
+        ['3 May, Bistritz', X.bistritz, 'Trains, paprika and a letter of welcome from the Count.', 'final', '1893-05-03'],
+        ['4 May', X.may4, 'The landlady begs him not to go, and gives him her crucifix.', 'revised', '1893-05-04'],
+        ['The Borgo Pass', X.borgo, 'No one is expected at the pass, until a calèche comes out of the dark.', 'revised', '1893-05-04']]],
+      ['At the Castle', 'A courteous host, and a castle with no way out.', [
+        ['5 May, Castle Dracula', X.castle, '“Welcome to my house! Enter freely and of your own will!”', 'revised', '1893-05-05'],
+        ['8 May', X.mirror, 'No reflection in the shaving glass. Every door is locked.', 'draft', '1893-05-08']]],
+      ['Letters', 'Mina and Lucy write to each other.', [
+        ['Mina to Lucy', X.mina, 'Mina is learning shorthand, and wants all of Lucy’s news.', 'draft', '1893-05-09'],
+        ['Lucy to Mina', X.lucy, 'Lucy writes about Mr. Holmwood.', 'draft', '1893-05-10']]],
+      ['Whitby', 'A summer by the sea, and a ship in a storm.', [
+        ['24 July, Whitby', X.whitby, 'Mina arrives, and meets an old man in the churchyard.', 'draft', '1893-07-24'],
+        ['Cutting from The Dailygraph', X.cutting, 'A sudden storm drives a ship into the harbour, steered by a dead man.', 'draft', '1893-08-08'],
+        ['The Demeter’s log', LOG, 'The captain’s log: what happened on board.', 'todo', '']]]
+    ];
+    const EVENT = { '3 May, Bistritz': 'Jonathan reaches Bistritz', '4 May': 'The landlady’s crucifix', 'The Borgo Pass': 'Met at the Borgo Pass',
+      '5 May, Castle Dracula': 'Arrives at Castle Dracula', '8 May': 'No reflection in the mirror', 'Mina to Lucy': 'Mina writes to Lucy',
+      'Lucy to Mina': 'Lucy writes back', '24 July, Whitby': 'Mina arrives in Whitby', 'Cutting from The Dailygraph': 'A ship runs aground in the storm' };
+    const events = [], ids = {};
+    const COLOURS = { Jonathan: '#4a7fd0', Mina: '#3f9a5a', Lucy: '#c2577a', Ship: '#6b6b6b' };
+    const who = title => /Lucy to/.test(title) ? ['Lucy Westenra'] : /Mina|Whitby/.test(title) ? ['Mina Murray'] : /Dailygraph|Demeter/.test(title) ? [] : ['Jonathan Harker'];
     let ms;
+    const sceneDoc = ([title, html, synopsis, status]) => doc(title, html, { synopsis, ...st(status) });
     if (ans.structure === 'chapters') {
-      ms = [doc('The Light Goes Out', TEXT.out + TEXT.fog, { synopsis: 'The lamp fails. Fog comes in, and someone arrives by boat.', ...st('draft') }),
-        doc('What the Logbook Said', TEXT.log, { synopsis: 'Mara finds her father’s last warning.', ...st('draft') }),
-        doc('The Door', TEXT.door, { synopsis: 'Does she open it?', ...st('todo') })];
+      ms = CH.map(([title, synopsis, scenes]) => {
+        const d = doc(title, scenes.map(x => x[1]).join(SCENE_BREAK), { synopsis, ...st(scenes.some(x => x[3] === 'todo') ? 'draft' : scenes[0][3]) });
+        scenes.forEach(x => { ids[x[0]] = d.id; });
+        return d;
+      });
     } else {
-      const ch1 = { id: U.uid(), type: 'folder', title: 'Chapter 1', holds: 'scenes', open: true, synopsis: 'The light fails on a foggy night.', children: [
-        doc('The light goes out', TEXT.out, { synopsis: 'Halfway up the stairs, the lamp dies.', ...st('revised') }),
-        doc('Fog', TEXT.fog, { synopsis: 'A small boat, and a voice calling her name.', ...st('draft') })] };
-      const ch2 = { id: U.uid(), type: 'folder', title: 'Chapter 2', holds: 'scenes', open: true, synopsis: 'A warning, and a knock.', children: [
-        doc('The logbook', TEXT.log, { synopsis: 'Her father’s last entry.', ...st('draft') }),
-        doc('The door', TEXT.door, { synopsis: 'Does she open it?', ...st('todo') })] };
+      const chs = CH.map(([title, synopsis, scenes], i) => ({ id: U.uid(), type: 'folder', title: `Chapter ${i + 1}`, holds: 'scenes', open: i < 2, synopsis: `${title}. ${synopsis}`,
+        children: scenes.map(x => { const d = sceneDoc(x); ids[x[0]] = d.id; return d; }) }));
       ms = ans.structure === 'parts'
-        ? [{ id: U.uid(), type: 'folder', title: 'Part One: The Rock', holds: 'chapters', open: true, children: [ch1, ch2] },
-           { id: U.uid(), type: 'folder', title: 'Part Two: The Mainland', holds: 'chapters', open: false, children: [] }]
-        : [ch1, ch2];
+        ? [{ id: U.uid(), type: 'folder', title: 'Part One: Transylvania', holds: 'chapters', open: true, children: chs.slice(0, 2) },
+           { id: U.uid(), type: 'folder', title: 'Part Two: England', holds: 'chapters', open: true, children: chs.slice(2) }]
+        : chs;
     }
-    const firstName = ans.structure === 'chapters' ? '“The Light Goes Out”' : '“The light goes out”';
+    // the timeline: every dated entry on its day (Stoker never gives the year; most readers place it in 1893)
+    for (const [, , scenes] of CH) for (const [title, , synopsis, , date] of scenes) {
+      if (!date) continue;
+      const chars = who(title), key = /Dailygraph/.test(title) ? 'Ship' : chars[0] ? chars[0].split(' ')[0] : 'Ship';
+      events.push({ id: U.uid(), title: EVENT[title] || title, date, chars, chapterId: ids[title], color: COLOURS[key] || '#6b6b6b', note: synopsis });
+    }
+    events.push({ id: U.uid(), title: 'The Demeter sails from Varna', date: '1893-07-06', chars: [], color: COLOURS.Ship, note: 'From the captain’s log, not written yet.' });
+    t.timeline = { mode: 'dates', lanes: 'single', events, zoom: 70, filter: '' };
+    const firstName = ans.structure === 'chapters' ? '“Jonathan Harker’s Journal”' : '“3 May, Bistritz”';
     const byKind = k => t.binder.find(n => n.kind === k);
     byKind('manuscript').children = ms;
-    byKind('characters').children = [doc('Mara Quill', CHAR)];
-    byKind('places').children = [doc('Gull Rock Lighthouse', PLACE)];
+    byKind('characters').children = CHARS.map(([n, h]) => doc(n, h));
+    byKind('places').children = PLACES.map(([n, h]) => doc(n, h));
     const start = doc('Start here', START_HERE(firstName), { icon: '👋' });
     byKind('notes').children = [start];
     byKind('notes').open = true;
     t.lastDoc = start.id;
-    t.goals = { daily: +ans.goal || 0, total: 80000, deadline: '' };
-    const slug = await api.createProject('The Lighthouse Keeper (example)', t);
+    t.goals = { daily: +ans.goal || 0, total: 160000, deadline: '' };
+    const slug = await api.createProject('Dracula (example)', t);
     for (const [id, html] of Object.entries(docs)) await api.saveDoc(slug, id, html);
     await U.openProject(slug, { skipCheck: true });
   }
@@ -320,28 +356,29 @@ Ideas:
   // ================================================================== THE TOUR
   // A spotlight that walks round the main buttons. Steps whose button isn't on screen are skipped.
   const TOUR = [
-    ['#binder-tree', 'The Binder', 'Your whole project: the Manuscript (what gets exported), plus Characters, Places, Notes and Research. Drag to reorder; right-click anything for more.',
-      { scrivener: 'Same idea as Scrivener’s Binder. Only the Manuscript is exported, like “Include in compile”.', docs: 'Instead of one long document, each chapter gets its own page here.', word: 'Like Word’s Navigation pane, but each chapter is its own page.' }],
+    ['#binder-tree', 'The Binder', 'Your whole book: the Manuscript (what gets exported), plus Characters, Places, Notes and Research. Drag to reorder; right-click anything for more.',
+      { scrivener: 'Same idea as Scrivener’s Binder. Only the Manuscript is exported, like “Include in compile”.', docs: 'Instead of one long document, each chapter gets its own page here.', word: 'Like Word’s Navigation pane, but each chapter is its own page.', obsidian: 'Like your vault’s file list, but in reading order, and only the Manuscript is exported.' },
+      'In the example, every diary entry and letter in Dracula is its own scene.'],
     ['#editor', 'The page', 'Just write. Unwip saves every few seconds, keeps backups, and cleans up anything you paste in.',
-      { docs: 'Pasting from Google Docs keeps italics and bold but drops the clutter.', word: 'Pasting from Word keeps italics and bold but drops the clutter.' }],
-    ['#mode-switch', 'Focused or Detailed', 'Focused is a clean page. Detailed adds the corkboard, outline, status labels and timeline.',
-      { scrivener: 'Detailed is where the Corkboard, Outliner and labels live.' }],
+      { docs: 'Pasting from Google Docs keeps italics and bold but drops the clutter.', word: 'Pasting from Word keeps italics and bold but drops the clutter.', obsidian: 'No Markdown symbols here: Ctrl+I and Ctrl+B (or the buttons above) give italics and bold you can see, and they export cleanly.' }],
+    ['#mode-switch', 'Focused or Detailed', 'Focused is a clean page. Detailed adds the corkboard, outline, status labels, moodboard and timeline.',
+      { scrivener: 'Detailed is where the Corkboard, Outliner and labels live.' },
+      'Try the Timeline in Detailed: each of Dracula’s dated entries sits on its day.'],
     ['#btn-writer', 'Writer mode', 'Full screen, nothing but the page. Typewriter scrolling keeps your line in the middle.',
       { hemingway: 'This is the distraction-free mode. Settings › Typewriter adds focus dimming and sounds.', scrivener: 'Like Composition mode.' }],
-    ['#btn-new', 'New', 'Add a document, folder or map, or a template section like Factions, Magic or Monsters where every entry starts from the same sheet.'],
-    ['#btn-help', 'Help', 'What every button does, and all the keyboard shortcuts. Press F1 any time.'],
-    ['#btn-sprint', 'Sprints', 'A timed burst of writing with a word target. Good for getting going.'],
-    ['#btn-stuck', 'Spark', 'Five little tools for when you don’t know what comes next or keep putting it off.'],
-    ['#btn-cmdk', 'Find anything', 'Press Ctrl+K (or this magnifying glass) and type what you want: “snapshot”, “epub”, “map”, a chapter name. Every feature is in there, so nothing is ever more than a few letters away.'],
-    ['#btn-panel', 'Side panel', 'Revise, Comments, Snapshots and Manuscript style share this panel. Click a tab to switch. Select some words and a small bar appears for comments, footnotes and alignment.'],
-    ['#btn-revise', 'Revise', 'Highlights repeated words, adverbs, long sentences and filler for you to look at. It never changes anything by itself.',
+    ['#btn-new', 'New', 'Add a scene, chapter, folder or map, or a template section like Factions, Magic or Monsters where every entry starts from the same sheet.'],
+    ['#btn-cmdk', 'Find anything', 'Press Ctrl+K (or this magnifying glass) and type what you want: “snapshot”, “epub”, “timeline”, a chapter name. Every feature is in there.'],
+    ['#btn-stuck', 'Spark and Sprints', 'Spark has five little tools for a blank page or a slow day. Sprint, next to it, is a timed burst of writing with a word target.'],
+    ['#btn-revise', 'Revise', 'Highlights repeated words, adverbs, long sentences and filler for you to look at, without AI. It never changes anything by itself.',
       { hemingway: 'This is the readability checker, without any AI.' }],
+    ['#btn-listen', 'Read aloud', 'Hear the chapter read out from where your cursor is. Clunky sentences are easier to hear than to see. F8 starts and stops it.'],
     ['#btn-snap', 'Snapshots', 'Save a copy of a chapter before a big rewrite, and compare or go back later.',
       { scrivener: 'Same as Scrivener’s Snapshots.', docs: 'Like Version history, but you choose the moments.' }],
-    ['#btn-copy-docs', 'Copy for Google Docs', 'Copies the chapter (or the whole book) ready to paste into Google Docs with the formatting right.'],
-    ['#btn-export-more', 'Export', 'The arrow next to Copy for Docs: print-ready PDF, EPUB e-book, Word, and page counts.'],
-    ['#btn-library', 'All your projects', 'Back to the main screen. The Play tab there has story starters and exercises that don’t touch your book.'],
-    ['#btn-settings', 'Settings', 'Themes, typing sounds, Dropbox or OneDrive sync, backups and updates. Help in here runs this tour again.']
+    ['#btn-copy-docs', 'Copy for Docs', 'Copies the chapter (or the whole book) ready to paste into Google Docs or Word with the formatting right. The arrow beside it exports a print-ready PDF, an e-book, Word, Markdown or Scrivener.'],
+    ['#st-proof', 'Record', 'Proof of writing. Turn on Replay and Unwip notes how the words went in, so you can play your writing back or share a report showing it’s your own work. It stays on your device.'],
+    ['#btn-help', 'Help', 'What every button does, and all the keyboard shortcuts. Press F1 any time.'],
+    ['#btn-library', 'All your books', 'Back to the main screen. The Play tab there has story starters and exercises that don’t touch your book.'],
+    ['#btn-settings', 'Settings', 'Themes, fonts, typing sounds, syncing through Dropbox, OneDrive, Google Drive or iCloud Drive, backups and updates. Help in here runs this tour again.']
   ];
   let tEls = null;
   // really on screen: has a size, isn't hidden, and isn't tucked under something else (e.g. a squeezed toolbar)
@@ -385,8 +422,8 @@ Ideas:
     if (i < 0) return;
     if (i >= TOUR.length) { endTour(); curIdx = -1; U.toast('That’s the tour. Happy writing!'); return; }
     curIdx = i;
-    const [sel, title, text, alt] = TOUR[i];
-    const extra = alt && alt[S.settings.from];
+    const [sel, title, text, alt, inExample] = TOUR[i];
+    const extra = (inExample && /\(example\)$/.test((S.project && S.project.title) || '')) ? inExample : alt && alt[S.settings.from];
     const shown = TOUR.filter(x => target(x[0]));
     const n = shown.indexOf(TOUR[i]) + 1;
     tEls.card.innerHTML = `<div class="tour-n">${n} of ${shown.length}</div><h3>${esc(title)}</h3><p>${esc(text)}</p>${extra ? `<p class="tour-alt">${esc(extra)}</p>` : ''}

@@ -359,7 +359,7 @@ dialog.mail .close{position:absolute;top:12px;right:14px;border:0;background:non
       <div class="float sync" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EE6038" stroke-width="2" stroke-linecap="round"><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 7.9"/><path d="M9 15l3 3 3-3"/></svg><div><b>In step</b>through your own cloud</div></div>
       <div class="frame" id="frame">
         <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
-        <img src="img/editor.webp" width="1600" height="965" alt="Unwip on a computer: the binder on the left with chapters and scenes, and the chapter “The light goes out” open on the page">
+        <img src="img/editor.webp" width="1600" height="965" alt="Unwip on a computer: the binder on the left with chapters and scenes, and Bram Stoker’s Dracula open at Jonathan Harker’s journal, 3 May">
       </div>
     </div>
   </div>
@@ -445,7 +445,7 @@ dialog.mail .close{position:absolute;top:12px;right:14px;border:0;background:non
             <li><b>Snapshots.</b> Save a version before a big rewrite, compare it, bring it back.</li>
           </ul>
         </div>
-        <div class="pic rv d1"><img src="img/cork.webp" width="1600" height="965" alt="Detailed mode in Unwip: a corkboard with a card for each chapter, its synopsis and word count" loading="lazy"></div>
+        <div class="pic rv d1"><img src="img/cork.webp" width="1600" height="965" alt="Detailed mode in Unwip: a corkboard with a card for each scene of Dracula, with its synopsis, status and word count" loading="lazy"></div>
       </div>
       <div class="zig flip">
         <div class="pic rv"><div class="phones"><img src="img/phone-binder.webp" width="640" height="1385" alt="Unwip on an iPhone: the binder with chapters and scenes" loading="lazy"><img src="img/phone-page.webp" width="640" height="1385" alt="Unwip on an iPhone: a chapter open for writing" loading="lazy"></div></div>
@@ -509,7 +509,7 @@ dialog.mail .close{position:absolute;top:12px;right:14px;border:0;background:non
       </div>
       <div class="panel" role="tabpanel" id="pan-new" aria-labelledby="tab-new" hidden>
         <div class="two-col">
-          <div><h3>A gentle start</h3><p>A few questions set Unwip up the way you work: chapters or scenes, a daily goal, a calm or detailed layout. An example book, “The Lighthouse Keeper”, is there to poke at.</p></div>
+          <div><h3>A gentle start</h3><p>A few questions set Unwip up the way you work: chapters or scenes, a daily goal, a calm or detailed layout. An example book is there to poke at: the opening of Bram Stoker’s <i>Dracula</i>, its diary entries and letters laid out as scenes, with characters and a timeline.</p></div>
           <div><h3>A short tour</h3><p>A quick walk round the binder, the page and the modes, then out of your way. Help is always one key away (F1).</p></div>
           <div><h3>Room to grow</h3><p>Characters, places and notes beside your manuscript, plus templates for magic systems, factions and more when your world gets bigger.</p></div>
         </div>
@@ -552,7 +552,7 @@ dialog.mail .close{position:absolute;top:12px;right:14px;border:0;background:non
         </div>
         <div class="rv d1">
           <div class="replay" aria-label="A replay of a paragraph being written, with a pasted note highlighted" role="img">
-            <div class="head"><b>The door</b><span>Chapter 2</span><span class="wc"><span id="rp-wc">0</span> words</span></div>
+            <div class="head"><b>The Demeter’s log</b><span>Chapter 4</span><span class="wc"><span id="rp-wc">0</span> words</span></div>
             <div class="page" id="rp-page" aria-hidden="true"></div>
             <div class="foot"><span>▶ Replay</span><span class="track"><i id="rp-track"></i></span><span id="rp-time">0:00</span></div>
           </div>
@@ -785,10 +785,10 @@ var GATED = false;
 
   // a live replay: words appear as they were typed, a pasted note lights up
   var parts = [
-    ['t', 'The knock came again, slower this time, as if whoever stood outside had all night. '],
-    ['t', 'Mara set the oil can down on the step and listened.'],
-    ['p', ' (Check the tide tables.)'],
-    ['t', ' Nobody knew she was here. Nobody but him.']
+    ['t', '7 July. Fair wind out of Varna. The men will not go down into the hold after dark. '],
+    ['t', 'Petrofsky says something moves among the boxes.'],
+    ['p', ' (Check the dates against Mina’s journal.)'],
+    ['t', ' I have told him it is rats. I am not sure I believe it.']
   ];
   var page = document.getElementById('rp-page'), track = document.getElementById('rp-track'), tm = document.getElementById('rp-time'), wc = document.getElementById('rp-wc');
   var sT = document.getElementById('st-typed'), sP = document.getElementById('st-pasted'), sS = document.getElementById('st-share');
