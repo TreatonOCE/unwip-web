@@ -1805,9 +1805,33 @@
     }
     restoreRange();
     document.execCommand('styleWithCSS', false, false);
-    document.execCommand(b.dataset.cmd);
+    if (b.dataset.cmd === 'underline') toggleUnderline(); else document.execCommand(b.dataset.cmd);
     cleanEmptySpans(); scheduleSave(); refreshToolbar();
   }));
+  // Underline on an empty line (straight after Enter at the end of underlined words): on a Mac the browser keeps the
+  // line's empty placeholder inside the underline, so Cmd+U couldn't turn it off until something was typed.
+  // Here an empty line just loses the underline around its placeholder, and new typing is plain.
+  function toggleUnderline() {
+    const sel = getSelection();
+    const block = sel.rangeCount && sel.isCollapsed && editor.contains(sel.anchorNode) ? currentBlock(sel.anchorNode) : null;
+    if (block && !block.textContent.replace(/[\u200b\u00a0\s]/g, '')) {
+      const marks = [...block.querySelectorAll('u, [style*="underline"]')];
+      let n = sel.anchorNode, inU = false; for (; n && n !== block; n = n.parentNode) if (n.nodeType === 1 && (n.tagName === 'U' || /underline/.test(n.getAttribute('style') || ''))) inU = true;
+      if (marks.length || inU || document.queryCommandState('underline')) {
+        for (const m of marks) { if (m.tagName === 'U') { while (m.firstChild) m.before(m.firstChild); m.remove(); } else { m.style.textDecoration = ''; m.style.textDecorationLine = ''; if (!m.getAttribute('style')) { while (m.firstChild) m.before(m.firstChild); m.remove(); } } }
+        if (!block.firstChild) block.appendChild(document.createElement('br'));
+        const r = document.createRange(); r.setStart(block, 0); r.collapse(true); sel.removeAllRanges(); sel.addRange(r);
+        if (document.queryCommandState('underline')) document.execCommand('underline');
+        return;
+      }
+    }
+    document.execCommand('underline');
+  }
+  editor.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key || '').toLowerCase() === 'u') {
+      e.preventDefault(); document.execCommand('styleWithCSS', false, false); toggleUnderline(); cleanEmptySpans(); scheduleSave(); refreshToolbar();
+    }
+  });
 
   $('#sel-block').addEventListener('change', e => {
     const v = e.target.value;
