@@ -78,6 +78,7 @@
     t.className = 'toast ' + kind; t.innerHTML = msg;
     $('#toasts').appendChild(t);
     setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, ms);
+    return t;
   }
 
   function toastAction(msg, label, action, ms = 12000) {
@@ -856,7 +857,7 @@
   // ---- template sections: a binder section where every new entry starts from the same sheet
   const TEMPLATES = [
     ['🛡️', 'Factions', 'Faction', ['Name', 'Aliases', 'Leader', 'Base', 'Size'], ['Goals', 'Beliefs', 'Allies & enemies', 'History', 'Notes']],
-    ['✨', 'Magic systems', 'Magic system', ['Name', 'Aliases', 'Source', 'Cost'], ['Rules', 'Limits', 'Who can use it', 'Examples in the story', 'Notes']],
+    ['📜', 'Magic systems', 'Magic system', ['Name', 'Aliases', 'Source', 'Cost'], ['Rules', 'Limits', 'Who can use it', 'Examples in the story', 'Notes']],
     ['🐉', 'Creatures', 'Creature', ['Name', 'Aliases', 'Habitat', 'Size', 'Danger'], ['Appearance', 'Behaviour', 'Abilities', 'Weaknesses', 'Notes']],
     ['👹', 'Monsters', 'Monster', ['Name', 'Aliases', 'Level', 'Area or floor', 'Loot'], ['Appearance', 'Attacks', 'Weaknesses', 'Notes']],
     ['🎲', 'Classes & skills', 'Class or skill', ['Name', 'Aliases', 'Type', 'Rank', 'Main stat'], ['What it does', 'How it levels up', 'Strengths', 'Weaknesses', 'Notes']],

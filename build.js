@@ -9,7 +9,7 @@ window.UnwipBuild = (function () {
 
   const KINDS = {
     map: { icon: '🗺️', name: 'Map', plural: 'Maps', blurb: 'Coastlines, kingdoms, towns and cities. Link one into any book.' },
-    magic: { icon: '✨', name: 'Magic system', plural: 'Magic systems', blurb: 'Where the power comes from, what it costs, and rules Unwip checks your spells against.' },
+    magic: { icon: '📜', name: 'Magic system', plural: 'Magic systems', blurb: 'Where the power comes from, what it costs, and rules Unwip checks your spells against.' },
     runes: { icon: 'ᚱ', name: 'Rune alphabet', plural: 'Rune alphabets', blurb: 'Draw runes on a dot grid, then write words, names and inscriptions in them.' },
     sigil: { icon: '✴️', name: 'Sigil', plural: 'Sigils', blurb: 'Draw in one slice and it repeats around the circle. Add a ring of runes.' },
     arms: { icon: '🛡️', name: 'Coat of arms', plural: 'Coats of arms', blurb: 'Shield, colours, symbols and a motto, with the herald’s description written for you.' }
@@ -118,7 +118,7 @@ window.UnwipBuild = (function () {
   }
   function saved(t) { const el = $('#bd-saved'); if (el) el.textContent = t; }
   function changed() { if (!cur) return; saved('Saving…'); clearTimeout(saveT); saveT = setTimeout(saveNow, 600); }
-  async function saveNow() { clearTimeout(saveT); if (!cur) return; await put(cur); saved('Saved'); }
+  async function saveNow() { clearTimeout(saveT); saveT = null; if (!cur) return; await put(cur); saved('Saved'); }
   async function open(id) {
     const it = await get(id); if (!it) { U.toast('Couldn’t open that.', 'warn'); render(); return; }
     await close(true);
@@ -150,7 +150,7 @@ window.UnwipBuild = (function () {
     top.classList.add('hidden');
     const host = {
       read: async () => JSON.stringify(it.data),
-      write: async (_id, json) => { it.data = JSON.parse(json); it.thumb = M.thumb() || it.thumb; await api.buildSave(it.id, JSON.stringify({ ...it, updated: Date.now() })); it.updated = Date.now(); },
+      write: async (_id, json) => { if (it.stale) return; it.data = JSON.parse(json); it.thumb = M.thumb() || it.thumb; await api.buildSave(it.id, JSON.stringify({ ...it, updated: Date.now() })); it.updated = Date.now(); },
       title: () => it.title,
       mount: v => {
         main.appendChild(v);
@@ -174,6 +174,28 @@ window.UnwipBuild = (function () {
     active = null; cur = null; main.innerHTML = '';
     if (!quiet) { show(false); render(); }
   }
+
+  // ================================================================== CHANGED ON ANOTHER DEVICE
+  // A sync brought in a newer copy (phone and iPad), or Dropbox's own app changed the file (PC). The piece on screen
+  // is reloaded so an old copy is never saved over the new one; edits not yet saved here are kept as a separate piece.
+  let checking = false;
+  async function external(id) {
+    if (!cur || cur.id !== id || checking) { if (!cur && !$('#build-home').classList.contains('hidden') && !$('#library').classList.contains('hidden')) render(); return; }
+    checking = true;
+    try {
+      const disk = await get(id); if (!disk || !cur || cur.id !== id) return;
+      const strip = x => JSON.stringify({ ...x, updated: 0, thumb: '' });
+      if (strip(disk) === strip(cur)) return;
+      if (saveT) { clearTimeout(saveT); saveT = null; const mine = JSON.parse(JSON.stringify(cur)); mine.id = U.uid(); mine.title = (cur.title || 'Untitled') + ' (unsaved changes)'; await put(mine); }
+      if (cur.kind === 'map') { cur.stale = true; await window.UnwipMaps.close(true); await open(id); }
+      else { const keepScroll = main.scrollTop; cur = null; await open(id); main.scrollTop = keepScroll; }
+      U.toast('This was changed on another device, so the newer version is showing.', '', 6000);
+    } finally { checking = false; }
+  }
+  if (api.onBuildChange) api.onBuildChange(d => external(d && d.id));
+  // the PC: Dropbox's own app changes the file, so look when the window comes back and every so often
+  const peek = async () => { if (!cur || saveT || checking) return; const disk = await get(cur.id); if (disk && cur && disk.id === cur.id && (disk.updated || 0) > (cur.updated || 0) + 1000) external(cur.id); };
+  if (!api.onBuildChange) { window.addEventListener('focus', peek); setInterval(peek, 20000); }
 
   // ================================================================== ADD TO A BOOK
   async function addToBook(it) {

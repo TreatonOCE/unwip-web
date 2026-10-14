@@ -10,7 +10,7 @@ window.UnwipAbout = (function () {
   const LOG_KEY = 'unwip-errlog';
   let log = []; try { log = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch {}
   function note(kind, msg) {
-    msg = String(msg || '').replace(/\s+/g, ' ').slice(0, 300);
+    msg = scrub(String(msg || '')).replace(/\s+/g, ' ').slice(0, 300);
     if (!msg || /ResizeObserver loop/.test(msg)) return;
     const last = log[log.length - 1]; if (last && last.m === msg) { last.n = (last.n || 1) + 1; last.t = Date.now(); }
     else log.push({ t: Date.now(), k: kind, m: msg });
@@ -19,8 +19,10 @@ window.UnwipAbout = (function () {
   addEventListener('error', e => note('error', `${e.message} (${String(e.filename || '').split('/').pop()}:${e.lineno})`));
   addEventListener('unhandledrejection', e => note('promise', e.reason && (e.reason.stack || e.reason.message) || e.reason));
   const warn0 = console.warn.bind(console), err0 = console.error.bind(console);
-  console.warn = (...a) => { try { note('warn', a.map(x => x && x.message ? x.message : typeof x === 'string' ? x : JSON.stringify(x)).join(' ')); } catch {} warn0(...a); };
-  console.error = (...a) => { try { note('error', a.map(x => x && x.message ? x.message : typeof x === 'string' ? x : JSON.stringify(x)).join(' ')); } catch {} err0(...a); };
+  // only words and error messages are noted, never whole objects (one could hold settings or a sign-in)
+  const said = x => x && x.message ? x.message : typeof x === 'string' ? x : typeof x === 'number' || typeof x === 'boolean' ? String(x) : `[${x === null ? 'null' : typeof x}]`;
+  console.warn = (...a) => { try { note('warn', a.map(said).join(' ')); } catch {} warn0(...a); };
+  console.error = (...a) => { try { note('error', a.map(said).join(' ')); } catch {} err0(...a); };
 
   async function version() {
     if (window.UNWIP_VERSION) return window.UNWIP_VERSION;
@@ -34,8 +36,22 @@ window.UnwipAbout = (function () {
     return `${kind}${os ? ' ' + os.replace(/_/g, '.') : ''}, ${web ? (navigator.standalone || matchMedia('(display-mode: standalone)').matches ? 'Home Screen app' : 'browser') : 'PC app'}, ${innerWidth}×${innerHeight}`;
   };
 
-  // file paths name your books and folders, so a report keeps only the file's own name: "…\\project.json"
-  const hidePaths = m => String(m).replace(/(?:[A-Za-z]:\\|\\\\|\/(?:Users|home|private|var|tmp|Volumes|mnt)\/)[^\n]*?(?=['"](?:[\s,;)]|$)|\s+->|$)/gm, p => '…' + (p.includes('\\') ? '\\' : '/') + p.split(/[\\/]/).pop());
+  // Anything that could say who you are or what you write is taken out before it's kept or sent: file paths (they
+  // name you, your computer and your books; only Unwip's own file names like project.json are kept), email addresses,
+  // and the bit of text a "not valid JSON" error quotes. Runs when an error is noted and again on the finished report.
+  const SAFE_NAME = /^(?:project\.json|[\w-]{6,}\.(?:html|json)|[\w.-]+\.js(?::\d+){0,2}|app\.asar)$/;
+  const URLP = /file:\/\/\/?[^\s'"()]+/g;
+  const PATH = /(?:[A-Za-z]:[\\/]|\\\\|\/\/[^\s/]+\/|~[\\/]|\/(?:Users|home|private|var|tmp|Volumes|mnt|media|run|storage|sdcard|data|opt|root|srv|Library)\/)[^\n]*?(?=['"](?:[\s,;:)\]}]|$)|\s+->|$)/gm;
+  const keepName = p => { const last = p.replace(/[\\/]+$/, '').split(/[\\/]/).pop(); return '…' + (SAFE_NAME.test(last) ? (p.includes('\\') ? '\\' : '/') + last : ''); };
+  function scrub(t) {
+    t = String(t == null ? '' : t);
+    t = t.replace(URLP, keepName);
+    t = t.replace(/(?:%[0-9A-Fa-f]{2})+/g, m => { try { return decodeURIComponent(m); } catch { return m; } });
+    t = t.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '[email]');
+    t = t.replace(/"[^"]{0,60}"\.\.\.(?= is not valid JSON)/g, '"…"').replace(/(Unexpected token '?.'?, )"[^"]*"/g, '$1"…"');
+    return t.replace(PATH, keepName);
+  }
+  const hidePaths = scrub;
   async function reportText(what) {
     let projects = [];
     try { projects = await api.listProjects(); } catch {}
@@ -46,7 +62,7 @@ window.UnwipAbout = (function () {
       `When: ${new Date().toString().replace(/ GMT.*/, '')}`,
       `Projects: ${projects.length} (${projects.reduce((a, p) => a + (p.words || 0), 0).toLocaleString()} words in total)`,
       S.project ? `Open: a project with ${(S.project.binder || []).reduce((a, r) => a + (r.children || []).length, 0)} top-level items, ${S.mode || ''} mode, view ${S.view || 'write'}` : 'Open: main screen',
-      D ? `Dropbox: ${D.connected() ? 'connected' : 'not connected'}${D.lastError ? ` · last problem: ${D.lastError}` : ''}` : '',
+      D ? `Dropbox: ${D.connected() ? 'connected' : 'not connected'}${D.lastError ? ` · last problem: ${scrub(D.lastError)}` : ''}` : '',
       '',
       'What happened:',
       what || '(not filled in)',

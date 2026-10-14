@@ -338,8 +338,11 @@ window.UnwipLook = (function () {
 
   // ---- hover explanations: anything with data-tip shows a small bubble after a moment
   const tipEl = document.createElement('div'); tipEl.className = 'ui-tip hidden'; document.body.appendChild(tipEl);
-  let tipT = null, tipFor = null;
+  let tipT = null, tipFor = null, touchedAt = 0;
+  // a finger has no hover: the "mouseover" a tap makes would pop up a bubble on whatever ends up under it
+  document.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touchedAt = Date.now(); clearTimeout(tipT); tipEl.classList.add('hidden'); }, true);
   document.addEventListener('mouseover', e => {
+    if (Date.now() - touchedAt < 1500) return;
     const t = e.target.closest && e.target.closest('[data-tip]');
     if (t === tipFor) return;
     tipFor = t; clearTimeout(tipT); tipEl.classList.add('hidden');

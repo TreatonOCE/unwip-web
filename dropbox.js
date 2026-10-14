@@ -343,7 +343,7 @@ window.UnwipDropbox = (function () {
   async function push(k, rel, bytes, hash, rev) {
     if (progress) progress.up++;
     const res = await upload(rel, bytes, rev);
-    if (res.refused) { st.refused = { ...(st.refused || {}), [k]: hash }; console.warn('Dropbox would not take', rel, res.refused); return; }   // not tried again until it changes
+    if (res.refused) { st.refused = { ...(st.refused || {}), [k]: hash }; console.warn('Dropbox would not take a file', String(res.refused).slice(0, 80)); return; }   // not tried again until it changes
     if (res.conflict) { st.records[k] = { rev: 'conflict', hash: '' }; running && (running.again = true); dirty.add(k); return; }
     st.records[k] = { rev: res.rev, hash: res.content_hash || hash, ...shapeOf(k, bytes) };
   }
@@ -366,6 +366,19 @@ window.UnwipDropbox = (function () {
   // the parts of a binder a person would notice: what's in it, in what order, with which names and notes
   const binderShape = json => { try { const p = JSON.parse(json); const walk = l => (l || []).map(n => [n.id, n.type, n.title || '', n.synopsis || '', n.status || '', n.label ? n.label.n : '', n.icon || '', n.noBook ? 1 : 0, n.type === 'folder' ? walk(n.children) : 0]); return JSON.stringify([p.title, walk(p.binder)]); } catch { return null; } };
   async function keepMine(rel, bytes, theirs) {
+    // a Build piece changed on both devices: keep this device's version as its own piece, next to the other one
+    const bm = /^_build\/items\/([\w-]+)\.json$/i.exec(rel);
+    if (bm) {
+      try {
+        const mine = JSON.parse(new TextDecoder().decode(bytes)), other = theirs ? JSON.parse(new TextDecoder().decode(theirs)) : null;
+        if (other && JSON.stringify({ ...mine, updated: 0, thumb: '' }) === JSON.stringify({ ...other, updated: 0, thumb: '' })) return;
+        const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        mine.id = id; mine.title = `${mine.title || 'Untitled'} (${DEVICE}’s version)`;
+        await origWrite(`${LOCAL}_Build/items/${id}.json`, JSON.stringify(mine)); dirty.add(`_build/items/${id}.json`);
+        try { window.__unwip.toast(`“${esc(mine.title)}”: it was changed on two devices, so both versions are kept in Build.`, 'warn', 9000); } catch {}
+      } catch {}
+      return;
+    }
     // two devices both saving the project file is normal (it also holds where each was reading, word counts and the
     // like); only a real difference in the binder is worth asking about
     if (/^[^/]+\/project\.json$/.test(rel) && theirs) {
@@ -384,6 +397,7 @@ window.UnwipDropbox = (function () {
   // let the open project know what arrived (reloads the chapter or binder, same as on the PC)
   function tell(touched) {
     for (const rel of touched) {
+      const b = /^_build\/items\/([\w-]+)\.json$/i.exec(rel); if (b) { emit('build', { id: b[1] }); continue; }
       const m = /^([^/]+)\/(project\.json|docs\/([\w-]+)\.html)$/.exec(rel); if (!m) continue;
       emit('external', { slug: m[1], file: m[2], id: m[3] || null });
     }
@@ -660,9 +674,10 @@ window.UnwipDropbox = (function () {
       if (!ios || standalone() || connected()) return;
       const last = +(localStorage.getItem('unwip-safari-warned') || 0); if (Date.now() - last < 14 * 86400000) return;
       if (!(await F.listProjects()).length) return;
+      if (document.getElementById('library').classList.contains('hidden')) return setTimeout(safariWarning, 60000);   // wait for the main screen, not over a chapter
       localStorage.setItem('unwip-safari-warned', String(Date.now()));
       const U = window.__unwip, msg = `Safari can clear what a website has saved if it isn’t opened for 7 days, and your books are saved in Safari. To keep them safe, add Unwip to your Home Screen (the Share button, then “Add to Home Screen”)${KEY ? ' or connect Dropbox' : ''}.`;
-      if (KEY) U.toastAction(msg, 'Connect Dropbox', () => connect(), 20000); else U.toast(msg, 'warn', 20000);
+      if (KEY) U.toastAction(msg, 'Connect Dropbox', () => connect(), 12000); else U.toast(msg, 'warn', 12000);
     } catch {}
   }
 

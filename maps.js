@@ -661,7 +661,7 @@ window.UnwipMaps = (function () {
     };
     document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('#mp-gen-mode .chip'); if (c) { c.parentElement.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); } });
     document.addEventListener('keydown', keys, true);
-    if (isTown() ? !st.streets.length && !st.buildings.length : !st.land && !st.stamps.length) U.toast(isTown() ? 'An empty town. Try 🎲 Random town… for a starting point, or draw streets and click between them to fill in buildings.' : 'A blank map. Try 🎲 Random map… for a starting point, or paint land with 🟫.', '', 7000);
+    if (isTown() ? !st.streets.length && !st.buildings.length : !st.land && !st.stamps.length) hintToast = U.toast(isTown() ? 'An empty town. Try 🎲 Random town… for a starting point, or draw streets and click between them to fill in buildings.' : 'A blank map. Try 🎲 Random map… for a starting point, or paint land with 🟫.', '', 7000);
   }
   // ---- sections: several maps inside one (the world, a region, a city…)
   function renderTabs() {
@@ -737,7 +737,9 @@ window.UnwipMaps = (function () {
     else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) { e.preventDefault(); e.stopPropagation(); removeSel(); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (sel) { sel = null; redraw(); } else close(); }
   }
+  let hintToast = null;
   async function close(quiet) {
+    if (hintToast) { hintToast.remove(); hintToast = null; }
     if (!view) return;
     await saveNow();
     document.removeEventListener('keydown', keys, true); window.removeEventListener('pointerup', pointerUp);

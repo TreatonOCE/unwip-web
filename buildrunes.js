@@ -51,6 +51,7 @@
     const words = []; let w = [];
     for (const t of tokens(A, text)) { if (t.space || t.nl) { if (w.length) words.push(w); w = []; if (t.nl) words.push('nl'); } else w.push(t); }
     if (w.length) words.push(w);
+    for (let i = 0; i < words.length; i++) if (words[i] !== 'nl' && words[i].length > per) { const wd = words[i], parts = []; for (let j = 0; j < wd.length; j += per) parts.push(wd.slice(j, j + per)); words.splice(i, 1, ...parts); i += parts.length - 1; }
     const lines = [[]]; let n = 0;
     for (const wd of words) { if (wd === 'nl') { lines.push([]); n = 0; continue; } if (n && n + wd.length > per) { lines.push([]); n = 0; } lines[lines.length - 1].push(wd); n += wd.length + 1; }
     let parts = '', maxW = 0;

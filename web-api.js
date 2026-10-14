@@ -422,7 +422,7 @@
       await FS.remove(`${pdir(slug)}/${file}`); return true;
     },
     watchProject: async () => true,
-    onExternalChange: on('external'),
+    onExternalChange: on('external'), onBuildChange: on('build'),
     // for dropbox.js (web only): the file store, and a way to tell the app something changed
     // a zipped Scrivener project (from Dropbox's download, dbximport.js), read the same way as a picked folder
     async __readScrivZip(buf, name) {

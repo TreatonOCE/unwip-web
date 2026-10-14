@@ -46,7 +46,7 @@ window.UnwipIntro = (function () {
       tip: 'Revise highlights things to look at, but never changes your words for you. No AI anywhere.'
     },
     new: {
-      name: 'Nothing yet / pen & paper', icon: '✨', blurb: 'Starting fresh',
+      name: 'Nothing yet / pen & paper', icon: '🌱', blurb: 'Starting fresh',
       layout: 'page', structure: 'chapters', font: 'Georgia', para: 'book',
       map: [['A notebook', 'One page per chapter, with Notes and Characters alongside'], ['Losing work', 'Saves itself, plus backups'], ['Not knowing what next', 'Spark and Play give you a push']],
       tip: 'Take the tour at the end: it points at each button and says what it does.'
