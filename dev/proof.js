@@ -265,11 +265,13 @@ window.UnwipProof = (function () {
   function renderRemind() {
     const ws = document.getElementById('workspace');
     const show = canVideo() && S.slug && remindOn(S.slug) && remindHidden !== S.slug && ws && !ws.classList.contains('hidden') && (!V.rec || V.paused);
+    document.body.classList.toggle('pf-alert', !!show && !V.paused);
+    document.body.classList.toggle('pf-alert-paused', !!show && !!V.paused);
     if (!show) { if (remindEl) remindEl.classList.add('hidden'); return; }
     if (!remindEl) {
       remindEl = document.createElement('div'); remindEl.className = 'pf-remind';
       remindEl.addEventListener('click', e => {
-        const b = e.target.closest('button'); if (!b) return;
+        const b = e.target.closest('button') || remindEl.querySelector('[data-act=resume], [data-act=start]'); if (!b) return;
         if (b.dataset.act === 'resume') pauseVideo(false);
         else if (b.dataset.act === 'start') open();
         else if (b.dataset.act === 'hide') { remindHidden = S.slug; renderRemind(); U.toast('Hidden until you next open this book. Turn the reminder off in Proof of writing (the Record button in the bottom bar).', '', 7000); }
@@ -277,8 +279,9 @@ window.UnwipProof = (function () {
       document.body.appendChild(remindEl);
     }
     const html = V.paused
-      ? `<i class="pf-dot off"></i><b>Screen video paused</b><button class="btn small primary" data-act="resume">Resume</button><button class="icon-btn" data-act="hide" title="Hide until I reopen this book">✕</button>`
-      : `<i class="pf-dot"></i><b>Not recording</b><button class="btn small primary" data-act="start">Start screen video</button><button class="icon-btn" data-act="hide" title="Hide until I reopen this book">✕</button>`;
+      ? `<i class="pf-dot off"></i><span class="pf-rt"><b>Recording paused</b><small>You’re writing in “${esc(S.project ? S.project.title : '')}”. Click to resume.</small></span><button class="btn small primary" data-act="resume">Resume</button><button class="icon-btn" data-act="hide" title="Hide until I reopen this book">✕</button>`
+      : `<i class="pf-dot"></i><span class="pf-rt"><b>Not recording</b><small>You’re writing in “${esc(S.project ? S.project.title : '')}”. Click to start recording.</small></span><button class="btn small primary" data-act="start">Start screen video</button><button class="icon-btn" data-act="hide" title="Hide until I reopen this book">✕</button>`;
+    remindEl.classList.toggle('paused', !!V.paused);
     if (remindEl.dataset.h !== html) { remindEl.innerHTML = html; remindEl.dataset.h = html; }
     remindEl.classList.remove('hidden');
   }

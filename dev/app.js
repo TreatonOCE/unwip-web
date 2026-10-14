@@ -1604,6 +1604,27 @@
     return [...c.children].map(e => e.textContent).join('\n');
   }
   function resyncWords() { S.lastDocWords = countWords(editorText()); }
+  // Two hyphens become an em dash (—) as you type the second one, like Word, Scrivener and a Mac's own apps do.
+  // Undo straight after gives the two hyphens back. A setting in Settings › Writing turns it off.
+  const smartDash = () => { try { return localStorage.getItem('folio-dash') !== 'off'; } catch { return true; } };
+  let dashNext = false;
+  editor.addEventListener('beforeinput', e => {
+    dashNext = false;
+    if (e.inputType !== 'insertText' || e.data !== '-' || !smartDash()) return;
+    const sel = getSelection(); if (!sel.rangeCount || !sel.isCollapsed) return;
+    const n = sel.anchorNode, o = sel.anchorOffset;
+    dashNext = !!n && n.nodeType === 3 && o >= 1 && n.data[o - 1] === '-' && !(o > 1 && n.data[o - 2] === '-');
+  }, true);
+  editor.addEventListener('input', e => {
+    if (!dashNext || e.inputType !== 'insertText') return;
+    dashNext = false;
+    const sel = getSelection(); if (!sel.rangeCount) return;
+    const n = sel.anchorNode, o = sel.anchorOffset;
+    if (!n || n.nodeType !== 3 || o < 2 || n.data.slice(o - 2, o) !== '--') return;
+    const r = document.createRange(); r.setStart(n, o - 2); r.setEnd(n, o);
+    sel.removeAllRanges(); sel.addRange(r);
+    document.execCommand('insertText', false, '\u2014');
+  });
   editor.addEventListener('input', e => {
     trackTyping();
     ensureParagraphs();
@@ -2785,6 +2806,7 @@
         <div class="section-label">Language &amp; spelling</div>
         ${api.web ? `<div class="field full"><label>Spelling language</label><div class="hint" style="padding-top:4px">${(/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) ? 'Your iPhone or iPad checks spelling in the languages of its keyboards, and Unwip can’t change that. To check another language, add its keyboard: Settings › General › Keyboard › Keyboards › Add New Keyboard, then switch to it with the 🌐 key while you write.' : 'This browser checks spelling in your device’s languages. Add a language in your device or browser settings to check it too.'}</div></div>` : `<div class="field"><label>Spelling language</label>${sp.available.length ? `<select id="s-lang">${spellOptions(sp)}</select>` : `<div style="padding-top:8px;color:var(--muted)">${api.platform === 'darwin' ? 'Uses your Mac’s spelling languages (System Settings › Keyboard › Text Input)' : 'Uses your Windows language settings'}</div>`}</div>
         <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>`}
+        <label class="check full"><input type="checkbox" id="s-dash" ${smartDash() ? 'checked' : ''}> Turn two hyphens (--) into an em dash (—) as I type</label>
         <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
         <div class="section-label">Help</div>
         <div class="field"><label>New here, or showing someone?</label><button class="btn" id="g-intro" type="button">Welcome setup…</button></div>
@@ -2815,6 +2837,7 @@
     const v = id => $('#' + id, body).value, c = id => $('#' + id, body).checked;
     S.settings = await api.setSettings({ author: v('g-author').trim(), dailyGoal: Math.max(0, +v('g-daily') || 0), quotes: c('g-quotes'), autoUpdate: c('g-autoup') });
     try { localStorage.setItem('folio-ac', JSON.stringify({ on: c('s-ac'), min: +v('s-acmin') })); } catch {}
+    try { localStorage.setItem('folio-dash', c('s-dash') ? 'on' : 'off'); } catch {}
     const langSel = $('#s-lang', body);
     const newLangs = langSel ? [langSel.value] : sp.current;
     if ((langSel && newLangs[0] !== sp.current[0]) || c('s-spell') !== sp.enabled) {
@@ -2853,9 +2876,14 @@
     const delta = rect.top - target;
     if (Math.abs(delta) < 2) return;
     cancelAnimationFrame(twAnim);
-    if (instant || !L || !L.smoothScroll()) { editorWrap.scrollTop += delta; return; }
-    const from = editorWrap.scrollTop, to = from + delta, t0 = performance.now(), dur = 160;
-    const step = now => { const k = Math.min(1, (now - t0) / dur); editorWrap.scrollTop = from + (to - from) * (1 - Math.pow(1 - k, 3)); if (k < 1) twAnim = requestAnimationFrame(step); };
+    // where it can actually go (near the top or end of a chapter the page can't move all the way): nothing to do if it's already there
+    const from = editorWrap.scrollTop, to = Math.max(0, Math.min(editorWrap.scrollHeight - editorWrap.clientHeight, from + delta));
+    if (Math.abs(to - from) < 1) return;
+    if (instant || !L || !L.smoothScroll()) { editorWrap.scrollTop = to; return; }
+    const t0 = performance.now(), dur = 160;
+    // (the first frame's clock can read a moment before t0: without the floor at 0 it moved the page the wrong way first,
+    // which was the "jumping up and down" in Writer mode)
+    const step = now => { const k = Math.max(0, Math.min(1, (now - t0) / dur)); editorWrap.scrollTop = from + (to - from) * (1 - Math.pow(1 - k, 3)); if (k < 1) twAnim = requestAnimationFrame(step); };
     twAnim = requestAnimationFrame(step);
   }
   // When the window changes size (a Mac takes most of a second to slide into full screen, and the page's top gap is

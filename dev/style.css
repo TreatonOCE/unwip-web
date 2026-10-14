@@ -2650,7 +2650,18 @@ html.flavor-dev .topbar { box-shadow: inset 0 3px 0 #e8590c; }
 /* ---- "Not recording" reminder (Proof of writing, a setting per book) */
 .pf-remind { position: fixed; left: 50%; bottom: 46px; transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 10px;
   padding: 7px 8px 7px 16px; border-radius: 999px; background: #d64535; color: #fff; box-shadow: 0 6px 22px rgba(150, 30, 20, .35); font-size: 14px; animation: pf-remind-in .3s ease-out; }
-.pf-remind b { letter-spacing: .02em; }
+.pf-remind { cursor: pointer; animation: pf-remind-in .3s ease-out, pf-remind-pulse 2.2s ease-in-out .3s infinite; }
+.pf-remind .pf-rt { display: flex; flex-direction: column; line-height: 1.2; }
+.pf-remind .pf-rt small { opacity: .85; font-size: 12px; }
+.pf-remind b { letter-spacing: .06em; text-transform: uppercase; font-size: 13px; }
+.pf-remind.paused { background: #d9822b; box-shadow: 0 6px 22px rgba(160, 90, 20, .35); }
+.pf-remind.paused .btn.primary { color: #a45d15; }
+@keyframes pf-remind-pulse { 50% { opacity: .78; } }
+/* the whole window gets a glowing edge while it isn't recording (red) or is paused (amber) */
+body.pf-alert::after, body.pf-alert-paused::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 2000; border-radius: 8px; animation: pf-edge 2.2s ease-in-out infinite; }
+body.pf-alert::after { box-shadow: inset 0 0 0 3px rgba(214, 69, 53, .85), inset 0 0 28px rgba(214, 69, 53, .45); }
+body.pf-alert-paused::after { box-shadow: inset 0 0 0 3px rgba(217, 130, 43, .85), inset 0 0 28px rgba(217, 130, 43, .45); }
+@keyframes pf-edge { 50% { opacity: .55; } }
 .pf-remind .pf-dot { width: 11px; height: 11px; border-radius: 50%; background: #fff; display: inline-block; animation: pfpulse 1.2s ease-in-out infinite; }
 .pf-remind .pf-dot.off { background: transparent; border: 2px solid #fff; box-sizing: border-box; animation: none; }
 .pf-remind .btn.primary { background: #fff; color: #b8372a; border-color: #fff; }
