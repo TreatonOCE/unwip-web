@@ -27,6 +27,21 @@ window.UnwipMaps = (function () {
     ['pin', '📍', 'Pin: click to mark a place. You can link it to a Places sheet'], ['label', '🔤', 'Label: click to name a region, sea or place']
   ];
 
+  // where the map is kept: in a book (a binder document, or a Build map linked into the book), or in Build itself
+  const bookHost = {
+    ref: id => { const f = U.findNode(id); return f && f.node.buildRef && window.UnwipBuild ? f.node.buildRef : null; },
+    async read(id) { const r = this.ref(id); return r ? window.UnwipBuild.readMap(r) : api.loadDoc(S.slug, id); },
+    async write(id, json) {
+      const r = this.ref(id);
+      if (r) await window.UnwipBuild.writeMap(r, json, thumb()); else await api.saveDoc(S.slug, id, json);
+      const f = U.findNode(id); if (f) { f.node.mod = Date.now(); f.node.dev = S.device || ''; U.scheduleMeta(); }
+    },
+    title: id => { const f = U.findNode(id); return f ? f.node.title : 'Map'; },
+    mount: v => { const ew = $('#editor-wrap'); ew.classList.add('hidden'); ew.after(v); },
+    unmount: () => $('#editor-wrap').classList.remove('hidden'),
+    inBook: true
+  };
+  let host = bookHost;
   let st = null, nodeId = null, tool = 'select', brush = 18, cam = { x: 0, y: 0, z: 1 }, sel = null, undo = [], redo = [];
   let mask = null, mctx = null, landCache = null, landDirty = true, saveT = null, view = null, cv = null, ctx = null, drawing = null;
 
@@ -38,7 +53,7 @@ window.UnwipMaps = (function () {
   let docData = null;
   async function load(id) {
     let data = null;
-    try { data = JSON.parse(await api.loadDoc(S.slug, id) || 'null'); } catch {}
+    try { data = JSON.parse(await host.read(id) || 'null'); } catch {}
     st = null;
     if (data && Array.isArray(data.sections)) docData = data;
     else docData = { v: 2, active: 0, sections: [{ name: 'Main map', ...Object.assign(blank(), data || {}) }] };
@@ -64,8 +79,7 @@ window.UnwipMaps = (function () {
   async function saveNow() {
     clearTimeout(saveT); if (!st || !nodeId) return;
     st.land = maskData();
-    await api.saveDoc(S.slug, nodeId, JSON.stringify(docData));
-    const f = U.findNode(nodeId); if (f) { f.node.mod = Date.now(); f.node.dev = S.device || ''; U.scheduleMeta(); }
+    await host.write(nodeId, JSON.stringify(docData));
     const el = $('#mp-saved'); if (el) el.textContent = 'Saved';
   }
 
@@ -445,7 +459,7 @@ window.UnwipMaps = (function () {
     const z = Math.min(4, Math.max(0.25, cam.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
     cam.x = mx - (mx - cam.x) * z / cam.z; cam.y = my - (my - cam.y) * z / cam.z; cam.z = z; redraw();
   }
-  function places() { const out = []; const r = S.project.binder.find(n => n.root && n.kind === 'places'); if (r) U.walkTree(r.children || [], n => { if (n.type === 'doc' && !n.map) out.push(n); }); return out; }
+  function places() { const out = []; if (!host.inBook || !S.project) return out; const r = S.project.binder.find(n => n.root && n.kind === 'places'); if (r) U.walkTree(r.children || [], n => { if (n.type === 'doc' && !n.map) out.push(n); }); return out; }
   async function addPin(p, existing) {
     const pl = places();
     const body = document.createElement('div');
@@ -489,7 +503,7 @@ window.UnwipMaps = (function () {
     const p = world(e), h = hit(p.x, p.y); if (!h) return;
     if (h.type === 'stamp' && !isTown() && ['town', 'city'].includes(st.stamps[h.i].k) && T) { townFor(st.stamps[h.i]); return; }
     if (h.type === 'label') { push(); addLabel(null, st.labels[h.i]); }
-    if (h.type === 'pin') { const pin = st.pins[h.i]; if (pin.placeId && U.findNode(pin.placeId)) { close().then(() => U.openDoc(pin.placeId)); } else { push(); addPin(null, pin); } }
+    if (h.type === 'pin') { const pin = st.pins[h.i]; if (pin.placeId && host.inBook && U.findNode(pin.placeId)) { close().then(() => U.openDoc(pin.placeId)); } else { push(); addPin(null, pin); } }
   }
   function removeSel() {
     if (!sel) return; push();
@@ -501,7 +515,7 @@ window.UnwipMaps = (function () {
   // Draws another map document without touching the one open on screen: its pictures are read first, then the
   // drawing swaps the map in and back out in one go, so nothing on screen or in a save can see it in between.
   async function pictures(id) {
-    let data = null; try { data = JSON.parse(await api.loadDoc(S.slug, id) || 'null'); } catch {}
+    let data = null; try { data = JSON.parse(await bookHost.read(id) || 'null'); } catch {}
     const secs = data && Array.isArray(data.sections) ? data.sections : [{ name: 'Main map', ...(data || {}) }];
     const ready = [];
     for (const sec of secs) {
@@ -529,8 +543,7 @@ window.UnwipMaps = (function () {
     renderAll(g, STYLES[st.style] || STYLES.parchment);
     const blob = await new Promise(r => c.toBlob(r, 'image/png'));
     if (copy) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); U.toast('Map copied. Paste it into any chapter with Ctrl+V.'); } catch { U.toast('Couldn’t copy the picture.', 'warn'); } return; }
-    const f = U.findNode(nodeId);
-    await api.exportBinary(new Uint8Array(await blob.arrayBuffer()), (f && f.node.title) || 'Map', 'png', 'PNG picture');
+    await api.exportBinary(new Uint8Array(await blob.arrayBuffer()), host.title(nodeId) || 'Map', 'png', 'PNG picture');
   }
   function fit() { const r = view.querySelector('.mp-stage').getBoundingClientRect(); const z = Math.min(r.width / W, r.height / H) * 0.96; cam = { z, x: (r.width - W * z) / 2, y: (r.height - H * z) / 2 }; }
   function resize() { if (!cv) return; const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; draw(); }
@@ -543,13 +556,18 @@ window.UnwipMaps = (function () {
   }
   function setTool(t) { tool = t;
     { const o = view && $('#mp-opts', view); if (o) { if (isTown()) T.optionsBar(t, o); else { o.innerHTML = ''; o.classList.add('hidden'); } } } if (t === 'frame' && sel && sel.type === 'box') { sel = null; if (cv) redraw(); } $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('.mp-brush', view).classList.toggle('dim', isTown() ? t !== 'water' : !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); syncFrameSelect(); }
-  async function open(id) {
+  // a small picture of the map, for the Build page
+  function thumb() {
+    if (!st || !mask) return '';
+    try { const c = document.createElement('canvas'); c.width = 320; c.height = 220; const g = c.getContext('2d'); g.scale(320 / W, 220 / H); renderAll(g, STYLES[st.style] || STYLES.parchment); baseKey = ''; return c.toDataURL('image/jpeg', 0.8); } catch { return ''; }
+  }
+  async function open(id, h) {
     await close(true);
+    host = h || bookHost;
     nodeId = id; await load(id);
-    const f = U.findNode(id);
     view = document.createElement('div'); view.className = 'mp-view';
     view.innerHTML = `<div class="mp-top">
-        <button class="icon-btn" id="mp-close" data-tip="Close the map">${I.back}</button><b class="mp-title">${esc(f ? f.node.title : 'Map')}</b><span class="mp-saved" id="mp-saved">Saved</span>
+        <button class="icon-btn" id="mp-close" data-tip="Close the map">${I.back}</button><b class="mp-title">${esc(host.title(id) || 'Map')}</b><span class="mp-saved" id="mp-saved">Saved</span>
         <span class="mp-sp"></span>
         <button class="btn small" id="mp-gen" data-tip="Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after">🎲 Random map…</button>
         <select id="mp-style" data-tip="Map style">${Object.entries(STYLES).map(([k, v]) => `<option value="${k}" ${st.style === k ? 'selected' : ''}>${v.name}</option>`).join('')}</select>
@@ -565,7 +583,7 @@ window.UnwipMaps = (function () {
       <div class="mp-body"><div class="mp-tools"><div class="mp-toollist"></div>
         <div class="mp-brush" data-tip="Brush size: how big the land, water, forest and mountain brushes paint"><span class="mp-brush-ic">🖌️</span><input type="range" id="mp-size" min="4" max="60" value="${brush}" orient="vertical"><span class="mp-brush-n" id="mp-size-n">${brush}</span></div></div>
         <div class="mp-stage"><canvas></canvas><div class="mp-opts hidden" id="mp-opts"></div><div class="mp-hint">Scroll to zoom · drag empty space to move around · double-click a pin or label to edit it</div></div></div>`;
-    const ew = $('#editor-wrap'); ew.classList.add('hidden'); ew.after(view);
+    host.mount(view);
     cv = $('canvas', view); ctx = cv.getContext('2d');
     buildTools(); resize(); fit(); setTool('select'); draw();
     // touch screens: one finger uses the tool, two fingers pinch to zoom and drag to move around (a stroke the first
@@ -724,7 +742,7 @@ window.UnwipMaps = (function () {
     await saveNow();
     document.removeEventListener('keydown', keys, true); window.removeEventListener('pointerup', pointerUp);
     view.remove(); view = null; cv = null; ctx = null; nodeId = null;
-    $('#editor-wrap').classList.remove('hidden');
+    const h = host; host = bookHost; h.unmount();
   }
   async function create(parentId) {
     let kind = 'world';
@@ -747,6 +765,7 @@ window.UnwipMaps = (function () {
     paint: (x, y, on, from) => paint(x, y, on, from), push: () => push(), changed: () => changed(), schedule: () => schedule(), redraw: () => redraw(),
     undoPop: () => undo.pop(), select: s => { sel = s; }, landDirty: () => { landDirty = true; baseKey = ''; }, toast: (m, k) => U.toast(m, k || '', 6000)
   });
-  U.on('leave', () => close(true)); U.on('doc', () => close(true)); U.on('view', () => close(true));
-  return { open, create, close, pictures, townGen: k => T && T.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
+  const bookOnly = () => { if (host.inBook) close(true); };
+  U.on('leave', bookOnly); U.on('doc', bookOnly); U.on('view', bookOnly);
+  return { open, create, thumb, blank: (style, kind) => blank(style, kind), close, pictures, townGen: k => T && T.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
 })();

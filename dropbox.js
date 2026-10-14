@@ -16,10 +16,12 @@ window.UnwipDropbox = (function () {
   const REMOTE = '', OLD = '/Unwip', LOCAL = 'Unwip/', STATE = 'app/dropbox.json';
   const CONFLICT = /\(([^()]*?)(?:['’]s)?\s*conflicted copy[^()]*\)/i;
 
-  // which files travel: the project, its chapters, pictures and snapshots (not backups, not deleted projects)
+  // which files travel: the project, its chapters, pictures and snapshots (not backups, not deleted projects), and Build
   const shaped = rel => {
     if (CONFLICT.test(rel)) return false;
-    const m = /^([^/]+)\/(.+)$/.exec(rel); if (!m || m[1].startsWith('_')) return false;
+    const m = /^([^/]+)\/(.+)$/.exec(rel); if (!m) return false;
+    if (m[1].toLowerCase() === '_build') return /^items\/[\w-]+\.json$/.test(m[2]);   // Build: the world's maps, magic, runes and arms
+    if (m[1].startsWith('_')) return false;
     if (/(^|\/)(desktop\.ini|thumbs\.db|\.ds_store|icon\r|~\$[^/]*|\.[^/]*)$/i.test(m[2])) return false;   // system files Dropbox won't store
     return /^project\.json$|^docs\/[\w-]+\.html$|^media\/[^/]+$|^snapshots\/[\w-]+\/[^/]+$|^proof\/[\w-]+\.json$/.test(m[2]);
   };
@@ -308,7 +310,7 @@ window.UnwipDropbox = (function () {
     st.remote = cache; st.cursor = j.cursor; return cache;
   }
   // files in Dropbox that belong to no book (a book deleted on a PC whose last few files hadn't gone yet) are left alone
-  const bookless = cache => { const books = new Set(Object.keys(cache).filter(k => /^[^/]+\/project\.json$/.test(k)).map(k => k.split('/')[0])); return k => !books.has(k.split('/')[0]); };
+  const bookless = cache => { const books = new Set(Object.keys(cache).filter(k => /^[^/]+\/project\.json$/.test(k)).map(k => k.split('/')[0])); return k => !k.startsWith('_build/') && !books.has(k.split('/')[0]); };
   // is what Dropbox has different from what this device last synced? Same content under a new version number isn't.
   function differs(cache) {
     const orphan = bookless(cache);

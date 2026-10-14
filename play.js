@@ -187,7 +187,9 @@ window.UnwipPlay = (function () {
     $$('#lib-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     $('#write-home').classList.toggle('hidden', t !== 'write');
     $('#play-home').classList.toggle('hidden', t !== 'play');
+    const bh = $('#build-home'); if (bh) bh.classList.toggle('hidden', t !== 'build');
     if (t === 'play') renderHome('home');
+    if (t === 'build' && window.UnwipBuild) window.UnwipBuild.render();
   }
   $$('#lib-tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   U.on('library', () => setTab(tab));
@@ -471,5 +473,5 @@ window.UnwipPlay = (function () {
 
   // first paint if the library is already showing
   if (!$('#library').classList.contains('hidden')) setTab(tab);
-  return { open: () => setTab('play'), EXERCISES, PROMPTS };
+  return { open: () => setTab('play'), setTab, EXERCISES, PROMPTS };
 })();
