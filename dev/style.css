@@ -2725,3 +2725,4 @@ body.writer .pf-remind { bottom: 18px; }
 .bd-pick-th img { width: 100%; height: 100%; object-fit: cover; }
 .bd-pick-win { font-size: 17px; }
 .bd-pick-new { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctx-menu { max-height: calc(100vh - 16px); overflow-y: auto; }

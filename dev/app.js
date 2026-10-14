@@ -111,7 +111,7 @@
     m.classList.remove('hidden');
     const r = m.getBoundingClientRect();
     m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
-    m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+    m.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
   }
   function hideMenu() { $('#menu').classList.add('hidden'); }
   document.addEventListener('mousedown', e => { if (!e.target.closest('#menu') && !(S.longPress && Date.now() - S.longPress < 900)) hideMenu(); });
@@ -2704,6 +2704,7 @@
     document.body.appendChild(pop);
     const r = $('#export-split').getBoundingClientRect();
     pop.style.top = (r.bottom + 6) + 'px'; pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.right - pop.offsetWidth)) + 'px';
+    pop.style.maxHeight = Math.max(200, innerHeight - r.bottom - 14) + 'px'; pop.style.overflowY = 'auto';   // a short window: it scrolls instead of running off the bottom
     $$('.ex-item', pop).forEach(b => b.onclick = () => { pop.remove(); items[+b.dataset.i][4](); });
     setTimeout(() => document.addEventListener('mousedown', function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('mousedown', off); } }), 0);
   };

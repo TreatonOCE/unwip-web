@@ -278,6 +278,6 @@ window.UnwipBuild = (function () {
   // what a book can borrow from Build (runes and sigils as coat-of-arms charges, alphabets for a sigil's ring)
   async function all(kind) { await refresh(); const out = []; for (const h of items.filter(x => !kind || x.kind === kind)) { const it = await get(h.id); if (it) out.push(it); } return out; }
 
-  { const bb = document.getElementById('btn-build-book'); if (bb) bb.onclick = () => fromBook(); }
+  { const bb = document.getElementById('btn-build-book'); if (bb) { bb.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V9l3-2 3 2v3h4V9l3-2 3 2v12z"/><path d="M10 21v-4a2 2 0 0 1 4 0v4"/><path d="M7 7V3M17 7V3"/></svg><span class="tb-label">Build</span>'; bb.onclick = () => fromBook(); } }
   return { KINDS, editors, render, refresh, open, close, create, fromBook, flush, get from() { return ret; }, readMap, writeMap, get, put, all, svgCanvas, svgURL, copyCanvas, savePNG, canvasBytes, addToBook, get items() { return items; } };
 })();
