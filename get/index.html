@@ -103,8 +103,8 @@ kbd{font:inherit;font-weight:600}
     </div>
     <div class="card" data-os="mac">
       <h3>Mac</h3>
-      <p>Open it in Safari, then <b>File › Add to Dock</b>. It gets its own window and icon, and works offline.</p>
-      <a href="../">Open Unwip</a>
+      <p>The full app for Apple-chip and Intel Macs. Or no download: open it in Safari, then <b>File › Add to Dock</b>.</p>
+      <a href="https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/Unwip-Mac-AppleSilicon.zip">Apple chip</a> · <a href="https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/Unwip-Mac-Intel.zip">Intel</a> · <a href="../">In Safari</a>
     </div>
   </div>
 
@@ -154,12 +154,17 @@ kbd{font:inherit;font-weight:600}
       '<p style="margin:16px 0 0"><a class="btn" href="../">Open Unwip</a></p>' +
       '<p class="small">This keeps your books safe: Safari clears a website’s saved data after 7 days without a visit, but not for apps on the Home Screen.</p>';
   } else if (mac) {
-    hero.innerHTML = '<h2>Unwip for Mac</h2><p>No download needed. Unwip runs from the web and can sit in your Dock like any other app, with its own window and icon. It works offline once it has opened.</p>' +
-      (chromeish
-        ? '<ol class="steps"><li>Click <b>Open Unwip</b> below.</li><li>In Chrome’s address bar, click the <b>Install</b> icon (a little screen with an arrow), or open the ⋮ menu › <b>Cast, save and share</b> › <b>Install page as app</b>.</li></ol>'
-        : '<ol class="steps"><li>Open this page in <b>Safari</b> and click <b>Open Unwip</b> below.</li><li>In the menu bar choose <b>File</b> › <b>Add to Dock</b>, then <b>Add</b>.</li></ol>') +
-      '<p style="margin:16px 0 0"><a class="btn" href="../">Open Unwip</a></p>' +
-      '<p class="small">Add to Dock needs macOS Sonoma (14) or later. On an older Mac, just bookmark Unwip.</p>';
+    var M = 'https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/';
+    hero.innerHTML = '<h2>Unwip for Mac</h2><p>The full app, for macOS 10.15 or later. It keeps itself up to date.</p>' +
+      '<p style="display:flex;gap:10px;flex-wrap:wrap;margin:0"><a class="btn" href="' + M + 'Unwip-Mac-AppleSilicon.zip">' + dl + 'Mac with Apple chip</a>' +
+      '<a class="btn" style="background:var(--panel);color:var(--text);border:1px solid var(--line)" href="' + M + 'Unwip-Mac-Intel.zip">' + dl + 'Mac with Intel</a></p>' +
+      '<p class="small">Not sure which? Apple menu  › <b>About This Mac</b>. If it says <b>Chip: Apple M…</b>, choose Apple chip; if it says <b>Processor: Intel</b>, choose Intel.</p>' +
+      '<p style="margin:18px 0 4px"><b>The first time you open it</b> (once only):</p>' +
+      '<ol class="steps"><li>Open the download to unzip it, and drag <b>Unwip</b> into your <b>Applications</b> folder.</li>' +
+      '<li>Double-click Unwip. macOS says it can’t check it: click <b>Done</b>.</li>' +
+      '<li>Open <b>System Settings › Privacy &amp; Security</b>, scroll down to “Unwip was blocked”, click <b>Open Anyway</b> and enter your Mac’s password.</li></ol>' +
+      '<p class="small">macOS asks this because Unwip isn’t registered with Apple (that costs a yearly fee). On macOS 14 or earlier you can instead Control-click Unwip and choose <b>Open</b>.</p>' +
+      '<p class="small" style="margin-top:12px">Rather not download? Open <a href="../" style="color:var(--accent)">Unwip in Safari</a> and choose <b>File › Add to Dock</b>.</p>';
   } else {
     hero.innerHTML = '<h2>Unwip in your browser</h2><p>Nothing to install. It runs in the browser, saves as you type, and works offline once it has opened.</p>' +
       '<a class="btn" href="../">Open Unwip</a><p class="small">On Windows? There’s a full app too: <a href="https://github.com/TreatonOCE/unwip-releases/raw/main/Unwip-Setup.exe" style="color:var(--accent)">download it here</a>.</p>';
