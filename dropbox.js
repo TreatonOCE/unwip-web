@@ -194,7 +194,13 @@ window.UnwipDropbox = (function () {
     const remote = {};
     for (const [k, v] of Object.entries(await remoteFiles())) if (tracked(v.rel)) remote[k] = { ...v };
     // a whole project deleted on this device stays in Dropbox (and on the PC); it just stops syncing here
-    const hereDirs = new Set((await FS.list('Unwip')).dirs.map(x => x.toLowerCase()));
+    const hereList = (await FS.list('Unwip')).dirs;
+    const hereDirs = new Set(hereList.map(x => x.toLowerCase()));
+    // "removed here" means a book deleted on this device, so it isn't fetched back. If a book of that name is on this
+    // device again (imported or made again), it's a book to sync, not a deleted one.
+    const hereNow = new Set();
+    for (const d of hereList) if (await FS.exists(LOCAL + d + '/project.json').catch(() => false)) hereNow.add(d.toLowerCase());
+    if ((st.removedHere || []).some(n => hereNow.has(n.toLowerCase()))) { st.removedHere = st.removedHere.filter(n => !hereNow.has(n.toLowerCase())); await persist(); }
     for (const k of Object.keys(st.records)) {
       const m = /^([^/]+)\/project\.json$/.exec(k);
       if (m && !hereDirs.has(m[1])) {
@@ -385,6 +391,7 @@ window.UnwipDropbox = (function () {
   F.projectPlaces = async () => connected() ? [{ path: 'dropbox', label: 'Dropbox', note: 'also on your PC and other devices', main: true }, { path: 'local', label: `This ${DEVICE} only`, note: 'not synced' }] : [];
   F.createProject = async (title, template, place) => {
     const slug = await origCreate(title, template);
+    if (st && st.removedHere) { st.removedHere = st.removedHere.filter(x => x.toLowerCase() !== String(slug).toLowerCase()); await persist(); }
     if (place === 'local' && connected()) { st.localOnly = [...new Set([...st.localOnly, slug])]; await persist(); }
     return slug;
   };
@@ -392,7 +399,7 @@ window.UnwipDropbox = (function () {
   F.moveProject = async (slug, place) => {
     if (!connected()) throw new Error('Connect Dropbox first.');
     const low = String(slug).toLowerCase();
-    if (place === 'dropbox') { st.localOnly = st.localOnly.filter(x => x.toLowerCase() !== low); await persist(); await sync(); return slug; }
+    if (place === 'dropbox') { st.localOnly = st.localOnly.filter(x => x.toLowerCase() !== low); st.removedHere = (st.removedHere || []).filter(x => x.toLowerCase() !== low); await persist(); await sync(); return slug; }
     // out of Dropbox: keep it here only, and move Dropbox's copy to its Deleted books (so the PC has it there)
     await sync().catch(() => {});
     st.localOnly = [...new Set([...st.localOnly, slug])];
