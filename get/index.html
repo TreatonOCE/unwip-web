@@ -79,6 +79,7 @@ p{margin:0}
 .dots i::after{content:"";position:absolute;inset:-1px;background:var(--coral);transform-origin:100% 50%;transform:scaleX(0);transition:transform .7s cubic-bezier(.2,.8,.2,1)}
 .dots.go i:nth-child(2)::after{transform:scaleX(.5)}
 .dots.go i:nth-child(3)::after{transform:scaleX(1);transition-delay:.45s}
+.dots.go i:nth-child(3){background:var(--coral);transition:background 0s 1.15s}
 .stage{perspective:1600px;margin:52px auto 0;max-width:1060px;position:relative}
 .frame{position:relative;border-radius:16px;overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--rule);background:var(--panel);transform-origin:50% 0;transform:rotateX(var(--tilt,14deg)) scale(var(--sc,.94));will-change:transform}
 .frame .bar{height:34px;display:flex;align-items:center;gap:7px;padding:0 14px;background:color-mix(in srgb,var(--panel) 92%,var(--sky));border-bottom:1px solid var(--rule)}
@@ -116,6 +117,7 @@ section{padding:96px 0;position:relative}
 .step.on .mk span{transform:scale(1.08)}
 .step.on:nth-child(3) .mk span::after{transform:scaleX(.5)}
 .step.on:nth-child(4) .mk span::after{transform:scaleX(1)}
+.step.on:nth-child(4) .mk span{background:var(--coral);transition:transform .4s ease,background 0s .8s}
 .step h3{font-size:1.45rem}
 .step p{color:var(--muted);margin:10px auto 16px;max-width:22rem}
 .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
@@ -585,14 +587,16 @@ var GATED = false;
   // scroll: the progress line, the header, the screenshot straightening, the flow line filling
   var bar = document.getElementById('progress'), top = document.getElementById('top'), frame = document.getElementById('frame');
   var flow = document.getElementById('flowsteps'), line = flow.querySelector('.line'), steps = flow.querySelectorAll('.step');
-  var ticking = false;
+  var ticking = false, flowMax = 0;
   function onScroll() {
     ticking = false;
     var y = window.scrollY, h = document.documentElement.scrollHeight - innerHeight;
     bar.style.transform = 'scaleX(' + (h > 0 ? y / h : 0) + ')';
     top.classList.toggle('solid', y > 20);
     if (!still) { var t = Math.min(1, y / 420); frame.style.setProperty('--tilt', (14 * (1 - t)).toFixed(2) + 'deg'); frame.style.setProperty('--sc', (0.94 + 0.06 * t).toFixed(3)); }
-    var fr = flow.getBoundingClientRect(), p = Math.max(0, Math.min(1, (innerHeight * 0.75 - fr.top) / (fr.height + innerHeight * 0.2)));
+    // starts when the steps come up the screen, and is full (Finish filled) by the time they're at mid-screen; it stays filled
+    var fr = flow.getBoundingClientRect(), p = Math.max(0, Math.min(1, (innerHeight * 0.92 - fr.top) / (innerHeight * 0.32 + fr.height * 0.35)));
+    flowMax = Math.max(flowMax, p); p = flowMax;
     line.style.setProperty('--p', still ? 1 : p);
     for (var s = 0; s < steps.length; s++) steps[s].classList.toggle('on', still || p >= s / (steps.length - 1) - 0.02);
   }
