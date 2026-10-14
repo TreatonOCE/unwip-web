@@ -277,6 +277,15 @@ table.cmp{width:100%;border-collapse:collapse;min-width:720px;font-size:.95rem}
   .tiles{grid-template-columns:1fr}
   .tiles.n2{grid-template-columns:1fr 1fr}
 }
+@media (max-width:1180px){
+  .float{padding:10px 12px;font-size:.8rem}.float b{font-size:.92rem}
+  .float.goal{left:12px}.float.rec{right:12px}.float.sync{left:12px}
+}
+@media (max-width:980px){
+  .stage{display:flex;flex-direction:column}
+  .float.goal,.float.sync{display:none}
+  .float.rec{position:static;order:2;align-self:center;margin-top:18px;animation:none}
+}
 @media (max-width:680px){
   .wrap{padding:0 16px}
   .top nav a:not(.btn){display:none}
@@ -351,7 +360,7 @@ dialog.mail .close{position:absolute;top:12px;right:14px;border:0;background:non
       <a class="btn" href="#download"><svg aria-hidden="true"><use href="#dl"/></svg>Download Unwip</a>
       <a class="btn ghost" href="#flow">See how it works</a>
     </div>
-    <p class="small note">No account, no AI, nothing on anyone’s servers. Free while it’s in beta.</p>
+    <p class="small note">No account and no AI. Your writing stays on your devices unless you choose to send it. Free while it’s in beta.</p>
     <div class="stage" id="stage">
       <div class="float goal" aria-hidden="true">
         <svg class="ring" viewBox="0 0 42 42"><circle class="bg" cx="21" cy="21" r="18"/><circle class="fg" id="goalring" cx="21" cy="21" r="18"/></svg>
@@ -524,7 +533,7 @@ dialog.mail .close{position:absolute;top:12px;right:14px;border:0;background:non
     <div class="wrap">
       <p class="eyebrow rv">Features</p>
       <h2 class="rv">What’s in Unwip, on each device</h2>
-      <p class="lede rv d1" style="margin-top:14px">Everything here is built and working. Some of it is still being tested, so see <a href="#tested">what’s been tested</a> for where each part stands.</p>
+      <p class="lede rv d1" style="margin-top:14px">Everything here is built. Not all of it has been tested on every device yet, so see <a href="#tested">what’s been tested</a> for where each part stands.</p>
       <p class="cmp-hint">Swipe the table sideways to see every device →</p>
       <div class="cmp-wrap rv">
         <table class="cmp">
@@ -632,7 +641,7 @@ dialog.mail .close{position:absolute;top:12px;right:14px;border:0;background:non
       <div class="faq rv d1">
         <details><summary>Is it really free?</summary><p>Yes, while it’s in beta. Pricing, if there is any, hasn’t been decided.</p></details>
         <details><summary>Does it use AI?</summary><p>No. Nothing in Unwip writes, rewrites or suggests for you. Spelling and grammar checks follow fixed rules and run on your device.</p></details>
-        <details><summary>Is my writing private?</summary><p>Yes. Unwip has no account and no server of its own, so your writing never passes through Unwip. It stays on your devices, and in your own cloud (Dropbox, OneDrive, Google Drive or iCloud Drive) if you connect it. Nothing is used to train AI, and there’s no tracking.</p></details>
+        <details><summary>Is my writing private?</summary><p>Yes. Unwip has no account and no server of its own, so your writing never passes through Unwip. It stays on your devices, and in your own cloud (Dropbox, OneDrive, Google Drive or iCloud Drive) if you connect it. Nothing is used to train AI, and there’s no tracking. Nothing leaves your device unless you choose to send it, such as a problem report you email or a Proof of writing report you share.</p></details>
         <details><summary>Where are my books stored?</summary><p>On your device, or in your own cloud: Dropbox works everywhere, and on a PC or Mac you can also use OneDrive, Google Drive or iCloud Drive. Unwip doesn’t ask you to sign up, and your writing isn’t uploaded to Unwip.</p></details>
         <details><summary>Will importing change my Scrivener project?</summary><p>No. Importing makes a new Unwip book, and your Scrivener project stays where it is.</p></details>
         <details><summary>Why does my computer warn me before it opens?</summary><p>Unwip isn’t registered with Microsoft or Apple yet (that costs a yearly fee). On Windows choose More info, then Run anyway. On a Mac, open System Settings › Privacy &amp; Security › Open Anyway. You only do it once.</p></details>
