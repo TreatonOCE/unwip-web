@@ -2616,3 +2616,5 @@ html.web .lib-head { padding-top: calc(18px + env(safe-area-inset-top)); padding
 @media (max-width: 380px) { .bd-top #bd-add { display: none; } }
 @media (pointer: coarse) { .mp-hint { display: none; } #dash-history { display: inline-block; padding: 10px 6px; margin: -10px -6px; } .bd-check { min-height: 36px; } }
 .bm-chips .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-card .pc-elsewhere { color: #a2620c; font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+:root[data-theme="dark"] .project-card .pc-elsewhere { color: #f0b45a; }

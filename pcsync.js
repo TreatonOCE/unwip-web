@@ -76,5 +76,20 @@ window.UnwipPCSync = (function () {
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   window.addEventListener('focus', refresh);
   setTimeout(refresh, 1500);
+  // opening a book in Dropbox/OneDrive when the PC can't be in step: say so (once per book until things are back)
+  const warned = new Set();
+  window.addEventListener('online', () => warned.clear());
+  window.UnwipOpenGate = async slug => {
+    let st = null; try { st = await api.syncStatus(slug); } catch { return true; }
+    if (!st || st.provider === 'none') return true;
+    const app = APP[st.provider] || st.label, offline = navigator.onLine === false;
+    if (!offline && st.running !== false) { warned.delete(slug); return true; }
+    if (warned.has(slug)) return true;
+    warned.add(slug);
+    let title = slug; try { title = ((await api.listProjects()).find(p => p.slug === slug) || {}).title || slug; } catch {}
+    const why = offline ? 'This PC isn’t connected to the internet' : `The ${app} app isn’t running on this PC`;
+    return !!(await U.modal({ title: offline ? 'You’re offline' : `${app} isn’t running`, body: `<p>${why}, so if “${esc(title)}” was changed on another device, those changes may not be here yet.</p><p>You can still write. If the other device changed it too, ${app} keeps both versions and Unwip helps you choose${offline ? ' once you’re back online' : ` when ${app} is running again`}.</p>`,
+      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Open anyway', value: true, kind: 'primary' }] }));
+  };
   return { refresh, click };
 })();

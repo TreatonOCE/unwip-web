@@ -273,7 +273,7 @@ window.UnwipDropbox = (function () {
     let next = 0;
     const worker = async () => { while (next < rest.length) await one(rest[next++]); };
     await Promise.all([worker(), worker(), worker(), worker()]);
-    st.last = Date.now(); progress = null; news = false;
+    st.last = Date.now(); progress = null; news = false; newsBooks = new Set();
     if (!dirty.size) { st.pending = false; st.waiting = []; } else st.waiting = [...new Set([...dirty].map(r => r.split('/')[0]))];
     bookMarks();
     await persist();
@@ -311,33 +311,47 @@ window.UnwipDropbox = (function () {
   }
   // files in Dropbox that belong to no book (a book deleted on a PC whose last few files hadn't gone yet) are left alone
   const bookless = cache => { const books = new Set(Object.keys(cache).filter(k => /^[^/]+\/project\.json$/.test(k)).map(k => k.split('/')[0])); return k => !k.startsWith('_build/') && !books.has(k.split('/')[0]); };
-  // is what Dropbox has different from what this device last synced? Same content under a new version number isn't.
-  function differs(cache) {
-    const orphan = bookless(cache);
+  // which books are different in Dropbox from what this device last synced? Same content under a new version number
+  // isn't a change. ("_build" stands for the Build pieces.)
+  let newsBooks = new Set();
+  function changedBooks(cache) {
+    const orphan = bookless(cache), out = new Set();
     for (const [k, R] of Object.entries(cache)) {
       if (!tracked(R.rel) || orphan(k)) continue;
       const rec = st.records[k];
-      if (!rec || (rec.rev !== R.rev && rec.hash !== R.hash)) return true;
+      if (!rec || (rec.rev !== R.rev && rec.hash !== R.hash)) out.add(k.split('/')[0]);
     }
-    for (const k of Object.keys(st.records)) if (!cache[k] && tracked(k)) return true;   // deleted on another device
-    return false;
+    for (const k of Object.keys(st.records)) if (!cache[k] && tracked(k)) out.add(k.split('/')[0]);   // deleted on another device
+    return out;
   }
-  // has another device changed anything since the last sync? (asks Dropbox what changed, brings nothing in)
+  const differs = cache => changedBooks(cache).size > 0;
+  // ask Dropbox what changed since the last look (brings nothing in). true when the answer is fresh.
+  let lookP = null;
+  function look() {
+    if (lookP) return lookP;
+    lookP = (async () => {
+      if (!connected() || !st.cursor || !st.remote) return false;
+      try {
+        const cache = { ...st.remote };
+        let r = await rpc('/files/list_folder/continue', { cursor: st.cursor });
+        if (r.status === 409) { news = true; newsBooks = new Set(['*']); render(); return true; }   // Dropbox wants a fresh start: treat everything as changed
+        if (!r.ok) return false;
+        let j = await r.json(); applyEntries(cache, j.entries);
+        while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) return false; j = await r.json(); applyEntries(cache, j.entries); }
+        if (running) return false;
+        st.remote = cache; st.cursor = j.cursor; await persist();
+        const before = [...newsBooks].join('|');
+        newsBooks = changedBooks(cache); news = newsBooks.size > 0;
+        if ([...newsBooks].join('|') !== before) bookMarks();
+        lastError = ''; render(); return true;
+      } catch (e) { return false; }
+    })().finally(() => { lookP = null; });
+    return lookP;
+  }
+  // has another device changed anything since the last sync?
   async function check() {
     if (!connected() || running || !st.cursor || !st.remote || auto()) return news;
-    try {
-      const cache = { ...st.remote };
-      let r = await rpc('/files/list_folder/continue', { cursor: st.cursor });
-      if (r.status === 409) { news = true; render(); return news; }
-      if (!r.ok) return news;
-      let j = await r.json(); applyEntries(cache, j.entries);
-      while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) return news; j = await r.json(); applyEntries(cache, j.entries); }
-      if (running) return news;
-      // keep what was learned, so the next look only asks about what's newer
-      st.remote = cache; st.cursor = j.cursor; await persist();
-      news = differs(cache);
-      lastError = ''; render();
-    } catch (e) { lastError = e.message || String(e); render(); }
+    await look();
     return news;
   }
   async function push(k, rel, bytes, hash, rev) {
@@ -448,7 +462,7 @@ window.UnwipDropbox = (function () {
   const inDropbox = slug => connected() && !st.localOnly.some(x => x.toLowerCase() === String(slug).toLowerCase());
   // on the main screen, books in Dropbox come first, then the ones kept on this device only
   const origList = F.listProjects;
-  F.listProjects = async () => { const waiting = new Set(((st && st.waiting) || []).map(x => x.toLowerCase())); return (await origList()).map(p => ({ ...p, ...(inDropbox(p.slug) ? { place: 'Dropbox', placeRank: 0, placePath: 'dropbox', unsynced: waiting.has(String(p.slug).toLowerCase()) ? DEVICE : '' } : { place: `This ${DEVICE}`, placeRank: 3, placePath: 'local' }) })); };
+  F.listProjects = async () => { const waiting = new Set(((st && st.waiting) || []).map(x => x.toLowerCase())); return (await origList()).map(p => ({ ...p, ...(inDropbox(p.slug) ? { place: 'Dropbox', placeRank: 0, placePath: 'dropbox', unsynced: waiting.has(String(p.slug).toLowerCase()) ? DEVICE : '', elsewhere: !auto() && (newsBooks.has('*') || newsBooks.has(String(p.slug).toLowerCase())) } : { place: `This ${DEVICE}`, placeRank: 3, placePath: 'local' }) })); };
   F.projectPlaces = async () => connected() ? [{ path: 'dropbox', label: 'Dropbox', note: 'also on your PC and other devices', main: true }, { path: 'local', label: `This ${DEVICE} only`, note: 'not synced' }] : [];
   F.createProject = async (title, template, place) => {
     const slug = await origCreate(title, template);
@@ -638,6 +652,43 @@ window.UnwipDropbox = (function () {
     card.querySelectorAll('[data-dbx]').forEach(b => b.onclick = () => ({ connect, sync, off: disconnect, restore })[b.dataset.dbx]());
     const ac = card.querySelector('#dbx-auto'); if (ac) ac.onchange = async () => { st.auto = ac.checked; await persist(); if (st.auto) sync(); else check(); render(); };
   }
+
+  // ---------------------------------------------------------------- opening a book: bring in other devices' changes first
+  // Like Scrivener: if another device changed the book, sync before it opens, so you never write in an old copy.
+  // Without a connection, say so (once per book while offline) and let you choose.
+  const offlineWarned = new Set();
+  window.addEventListener('online', () => offlineWarned.clear());
+  async function waitFor(text, promise) {
+    const U = window.__unwip, body = document.createElement('div');
+    body.innerHTML = `<div class="sy-wait"><span class="sy-spin"></span><div><b>${esc(text)}</b><span>${esc(progressText(false))}</span></div></div>`;
+    const tick = setInterval(() => { const sp = body.querySelector('.sy-wait span:last-child'); if (sp) sp.textContent = progressText(false); }, 400);
+    let back = null;
+    const asked = U.modal({ title: 'One moment', body, onOpen: b => { back = b; }, buttons: [{ label: 'Open without waiting', value: 'skip', kind: 'ghost' }] });
+    const r = await Promise.race([promise.then(v => ({ v })), asked.then(v => ({ skip: v === 'skip' || v === null }))]);
+    clearInterval(tick); if (back && back.isConnected) back.remove();
+    return r;
+  }
+  async function openGate(slug) {
+    if (!connected() || !inDropbox(slug)) return true;
+    const U = window.__unwip, key = String(slug).toLowerCase();
+    const title = (((await FS.json(`${LOCAL}${slug}/project.json`, null)) || {}).title) || slug;
+    if (running) { const r = await waitFor('Finishing the sync first…', running.p); if (r.skip) return true; }
+    const online = navigator.onLine !== false;
+    const fresh = online && (st.cursor ? await look() : false);
+    const needs = !st.cursor || newsBooks.has('*') || newsBooks.has(key);
+    if (online && (fresh || !st.cursor) && needs) {
+      const r = await waitFor(`Bringing in changes to “${title}” from your other devices…`, sync());
+      if (r.skip || r.v) return true;
+      return !!(await U.modal({ title: 'Couldn’t sync first', body: `<p>“${esc(title)}” was changed on another device, and those changes couldn’t be brought in just now${lastError ? ` (${esc(lastError)})` : ''}.</p><p>If you write in it now, you may have two versions to choose between later.</p>`,
+        buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Open anyway', value: true, kind: 'primary' }] }));
+    }
+    if (fresh) return true;                                   // checked, and nothing new for this book
+    if (offlineWarned.has(key)) return true;
+    offlineWarned.add(key);
+    return !!(await U.modal({ title: online ? 'Couldn’t check Dropbox' : 'You’re offline', body: `<p>Unwip can’t reach Dropbox right now, so if “${esc(title)}” was changed on another device, those changes aren’t on this ${esc(DEVICE)} yet.</p><p>You can still write. If the other device changed it too, you’ll get both versions to choose between when you’re back online.</p>`,
+      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Open anyway', value: true, kind: 'primary' }] }));
+  }
+  window.UnwipOpenGate = openGate;
 
   // ---------------------------------------------------------------- start up
   (async () => {

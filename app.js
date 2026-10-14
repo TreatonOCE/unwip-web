@@ -209,6 +209,7 @@
       card.innerHTML = `<div class="pc-top"><div><div class="pc-spine"></div><h3>${esc(p.title)}</h3></div>
           ${goal ? dial({ pct: p.words / goal, big: Math.floor(p.words / goal * 100) + '%', small: '', size: 58, track: 6 }) : ''}</div>
         ${pace ? `<div class="pc-pace">${esc(pace)}</div>` : ''}
+        ${p.elsewhere ? `<div class="pc-elsewhere" title="Another device changed this book since this ${esc(window.folio.__device || 'device')} last synced. Opening it brings the changes in first.">⚠ Changed on another device</div>` : ''}
         ${p.unsynced ? `<div class="pc-unsynced" title="This book has changes on this ${esc(p.unsynced)} that aren’t in Dropbox yet. Press Sync to send them.">● Not synced yet</div>` : ''}
         <div class="pc-meta">${fmt(p.words)}${goal ? ' / ' + fmt(goal) : ''} words · ${when}${p.dev && S.device && p.dev !== S.device ? ` · on ${esc(p.dev)}` : ''}</div><button class="icon-btn small pc-more" title="More">${I.dots}</button>`;
       card.onclick = e => { if (!e.target.closest('.pc-more')) openBook(p); };
@@ -334,6 +335,7 @@
   const FORMAT = 1;
   const MIGRATIONS = { /* 2: project => { ... } */ };
   async function openProject(slug, opts = {}) {
+    if (!opts.skipCheck && window.UnwipOpenGate && !(await window.UnwipOpenGate(slug))) return false;   // other devices' changes first (or a warning when offline)
     if (!opts.skipCheck && window.UnwipSync && !(await window.UnwipSync.beforeOpen(slug))) return false;
     try { S.settings = await api.getSettings(); } catch {}
     const project = await api.openProject(slug);
