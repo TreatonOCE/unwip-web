@@ -76,16 +76,27 @@
     const spellsOK = d.spells.filter(s => !check(d, s).length).length;
     page.innerHTML = `
       <div class="bm-intro"><div><b>${answered(d)} of ${QTOTAL}</b> questions answered${d.spells.length ? ` · <b>${spellsOK} of ${d.spells.length}</b> spells follow your rules` : ''}</div>
-        <div class="bm-bar"><i style="width:${Math.round(answered(d) / QTOTAL * 100)}%"></i></div></div>
+        <div class="bm-bar"><i style="width:${Math.round(answered(d) / QTOTAL * 100)}%"></i></div><button class="link-btn bm-howto-show" type="button" data-howto-show>How this page works</button></div>
 
-      <section class="bm-card"><h2>The basics</h2>
+      ${(() => { try { return localStorage.getItem('unwip-bm-howto') ? '' : 1; } catch { return 1; } })() ? `<section class="bm-card bm-howto"><h2>What this page is for</h2>
+        <p>A notebook for how magic works in your world, so it stays the same from chapter 1 to the end. Answer what you know and skip the rest; you can come back any time. None of it goes into your book unless you press <b>Add to book</b> at the top.</p>
+        <ol>
+          <li><b>The basics:</b> a few questions about where the magic comes from and who can use it.</li>
+          <li><b>Costs:</b> what using magic takes from people (tiredness, memories, years of life…).</li>
+          <li><b>Kinds of magic:</b> the types a spell can use, like fire and water, or schools, or gods.</li>
+          <li><b>Rules:</b> the laws your magic always follows.</li>
+          <li><b>Spells:</b> each spell you write down is checked against your rules, and Unwip warns you if one breaks them.</li>
+        </ol>
+        <p class="bm-help">The examples already filled in (Exhaustion, Memory, Fire, Mind) are there to show how it works. Change or delete them.</p>
+        <button class="btn small" type="button" data-howto-hide>Got it, hide this</button></section>` : ''}
+      <section class="bm-card"><h2>1. The basics</h2><p class="bm-help">Answer in a sentence or two. Skip any you haven’t decided yet.</p>
         ${QUESTIONS.map(([k, q, ph]) => `<div class="bm-q"><label>${esc(q)}</label><textarea data-a="${k}" rows="2" placeholder="${esc(ph)}">${esc(d.answers[k] || '')}</textarea></div>`).join('')}
         <div class="bm-q"><label>What can it never do?</label><p class="bm-help">Limits make magic interesting. A power that can do anything solves every problem in your plot.</p>
           <div class="bm-list" id="bm-limits">${d.limits.map(l => `<div class="bm-li" data-id="${l.id}"><span>•</span><input data-limit value="${esc(l.text)}" placeholder="e.g. It can’t bring back the dead"><button class="icon-btn small" data-del-limit title="Remove">×</button></div>`).join('')}</div>
           <button class="btn small ghost" id="bm-add-limit">+ Add a limit</button></div>
       </section>
 
-      <section class="bm-card"><h2>What it costs</h2><p class="bm-help">The price of magic. Give each cost a weight from light to terrible: the “costs add up to at least its power” rule uses it.</p>
+      <section class="bm-card"><h2>2. What it costs</h2><p class="bm-help">What using magic takes from the person using it. Give each cost a size, from light (a headache) to terrible (a year of your life), so bigger spells can be made to pay more.</p>
         <div class="bm-rows">${d.costs.map(c => `<div class="bm-row" data-id="${c.id}">
           <input class="bm-name" data-cost="name" value="${esc(c.name)}" placeholder="Name of the cost">
           <select data-cost="weight">${[1, 2, 3, 4, 5].map(w => `<option value="${w}" ${c.weight === w ? 'selected' : ''}>${w} · ${WEIGHT[w]}</option>`).join('')}</select>
@@ -94,7 +105,7 @@
         <button class="btn small ghost" id="bm-add-cost">+ Add a cost</button>
       </section>
 
-      <section class="bm-card"><h2>Elements, schools or kinds</h2><p class="bm-help">The kinds of magic a spell can draw on: elements, schools, colours, gods, notes of a song…</p>
+      <section class="bm-card"><h2>3. Kinds of magic</h2><p class="bm-help">The different types of magic in your world, like elements (fire, water), schools, colours, gods or notes of a song. Leave it empty if your magic is all one kind.</p>
         <div class="bm-rows">${d.elements.map(c => `<div class="bm-row" data-id="${c.id}">
           <input class="bm-name" data-el="name" value="${esc(c.name)}" placeholder="Name">
           <input class="bm-what" data-el="what" value="${esc(c.what || '')}" placeholder="What it does, what it’s good and bad at">
@@ -102,12 +113,12 @@
         <button class="btn small ghost" id="bm-add-el">+ Add one</button>
       </section>
 
-      <section class="bm-card"><h2>Rules</h2><p class="bm-help">The laws of your magic. Unwip checks every spell below against them, so a spell in chapter 20 can’t quietly break what chapter 3 set up.</p>
+      <section class="bm-card"><h2>4. Rules</h2><p class="bm-help">The laws your magic always follows, like “big spells always cost a memory”. Unwip checks every spell below against them, so a spell in chapter 20 can’t quietly break what chapter 3 set up. Untick a rule to switch it off.</p>
         <div class="bm-rules">${d.rules.map(r => ruleRow(d, r)).join('') || '<p class="bm-help">No rules yet.</p>'}</div>
         <button class="btn small ghost" id="bm-add-rule">+ Add a rule</button>
       </section>
 
-      <section class="bm-card"><h2>Spells</h2><p class="bm-help">Each spell: how strong it is, what it draws on and what it costs. Click elements and costs to switch them on.</p>
+      <section class="bm-card"><h2>5. Spells</h2><p class="bm-help">Each spell: its name, how strong it is (power 1 to 5), which kinds of magic it uses and what it costs. Tap the kinds and costs to switch them on for that spell. A warning appears if it breaks one of your rules.</p>
         <div class="bm-spells">${d.spells.map(s => spellCard(d, s)).join('') || '<p class="bm-help">No spells yet.</p>'}</div>
         <button class="btn small" id="bm-add-spell">+ Add a spell</button>
       </section>
@@ -156,6 +167,8 @@
     };
     page.onchange = e => { const t = e.target; if (t.dataset.cost === 'name' || t.dataset.el === 'name') draw(); };   // names show up in rules and spells
     page.onclick = e => {
+      if (e.target.closest('[data-howto-show]')) { try { localStorage.removeItem('unwip-bm-howto'); } catch {} draw(); return; }
+      if (e.target.closest('[data-howto-hide]')) { try { localStorage.setItem('unwip-bm-howto', '1'); } catch {} draw(); return; }
       const t = e.target.closest('button'); if (!t) return;
       const id = t.closest('[data-id]') && t.closest('[data-id]').dataset.id;
       const drop = (list, key) => { d[key] = list.filter(x => x.id !== id); save(); draw(); };

@@ -2308,15 +2308,15 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 /* ---- Proof of writing ---- */
 /* the Record button: an empty ring while idle (so it never looks like it's already recording); solid red with a
    pulsing dot only while Replay or a screen video is actually recording */
+/* idle: plain, in the theme's own colours, so it never looks like it's already recording. Red only while recording. */
 .statusbar .st-proof { display: inline-flex; align-items: center; gap: 7px; margin-right: 12px; height: 22px; padding: 0 11px 0 9px; border-radius: 999px;
-  border: 1.5px solid rgba(214, 69, 53, .55); background: rgba(214, 69, 53, .07); color: #b8372a; font-weight: 600; font-size: 12.5px; cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s; }
-.statusbar .st-proof:hover { background: rgba(214, 69, 53, .14); border-color: #d64535; box-shadow: 0 0 0 3px rgba(214, 69, 53, .12); }
-.st-proof .pf-dot { width: 9px; height: 9px; border-radius: 50%; background: #d64535; display: inline-block; box-shadow: 0 0 0 2px rgba(214, 69, 53, .18); }
+  border: 1px solid var(--line); background: transparent; color: var(--muted); font-weight: 600; font-size: 12.5px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+.statusbar .st-proof:hover { background: var(--hover, rgba(127, 127, 127, .12)); color: var(--text); }
+.st-proof .pf-dot { width: 9px; height: 9px; border-radius: 50%; background: #d64535; display: inline-block; }
 .st-proof .pf-dot.off { background: transparent; border: 2px solid currentColor; box-sizing: border-box; width: 10px; height: 10px; box-shadow: none; opacity: .9; }   /* not recording: an empty ring */
 .statusbar .st-proof.on { background: #d64535; border-color: #d64535; color: #fff; }
 .statusbar .st-proof.on:hover { background: #c23b2c; }
 .st-proof.on .pf-dot { background: #fff; box-shadow: none; animation: pfpulse 1.6s ease-in-out infinite; }
-:root[data-theme="dark"] .statusbar .st-proof:not(.on) { color: #ff8a7a; border-color: rgba(255, 138, 122, .55); background: rgba(255, 138, 122, .08); }
 @keyframes pfpulse { 50% { opacity: .35; } }
 .pf-dialog .pf-lead { margin: 0 0 14px; color: var(--muted); }
 .pf-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; background: var(--paper); }
@@ -2684,3 +2684,10 @@ body.writer .pf-remind { bottom: 18px; }
 .mv-dlg .mv-steps ol { margin: 6px 0 0; padding-left: 20px; }
 .sy-note.sy-alert { background: #fff4d6; color: #6b4d00; border: 1px solid #f0d58a; border-radius: 10px; padding: 10px 14px; }
 :root[data-theme="dark"] .sy-note.sy-alert { background: #3a3020; color: #f3dca0; border-color: #6b5a2c; }
+.bm-howto { border-color: var(--accent, #5b7bd5); }
+.bm-howto ol { margin: 8px 0 10px; padding-left: 22px; line-height: 1.5; }
+.bm-howto li { margin-bottom: 4px; }
+.bm-howto-show { font-size: 12.5px; margin-top: 6px; }
+.ar-shield.dragging-on svg { touch-action: none; }
+.ar-shield.dragging-on [data-chi] { cursor: grab; }
+#ar-size { width: 100%; }

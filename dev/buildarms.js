@@ -55,7 +55,7 @@
     tear: ['Drop', 'gutté', 'gouttes', ['M0 -40C10 -16 26 4 26 18A26 26 0 0 1 -26 18C-26 4 -10 -16 0 -40Z']],
     eye: ['Eye', 'eye', 'eyes', ['M-42 0Q0 -38 42 0Q0 38 -42 0Z' + circ(0, 0, 13)], true]
   };
-  const blank = () => ({ shape: 'heater', div: 'plain', t1: 'azure', t2: 'or', ord: 'none', t3: 'or', charge: 'mullet', count: 3, t4: 'argent', ref: null, motto: '', mottoOn: true, mottoCol: 'argent' });
+  const blank = () => ({ shape: 'heater', div: 'plain', t1: 'azure', t2: 'or', ord: 'none', t3: 'or', charge: 'mullet', count: 3, t4: 'argent', ref: null, motto: '', mottoOn: true, mottoCol: 'argent', layout: 'auto', size: 1, pos: null });
 
   // ================================================================== DRAWING
   const col = t => (T[t] || T.argent)[2];
@@ -90,7 +90,32 @@
     }
   }
   // where the charges go: in the open field, around whatever band is there
+  // how the symbols are arranged: the usual places (which follow the band), or a layout people pick, or where they put them
+  const LAYOUTS = {
+    auto: ['Usual', ''], row: ['In a row', 'in fess'], column: ['In a column', 'in pale'], bend: ['Slanting', 'in bend'],
+    onetwo: ['One, then two', 'one and two'], around: ['Around the edge', 'in orle'], custom: ['Where I put them', '']
+  };
+  const layoutsFor = n => n <= 1 ? ['auto', 'custom'] : n === 2 ? ['auto', 'row', 'column', 'bend', 'custom'] : ['auto', 'onetwo', 'row', 'column', 'bend', 'around', 'custom'];
+  function laid(d) {
+    const n = d.count || 1, L = d.layout || 'auto';
+    if (L === 'custom' && Array.isArray(d.pos) && d.pos.length) {
+      const base = spotsAuto(d);
+      return base.map((b, i) => d.pos[i] ? [d.pos[i][0], d.pos[i][1], b[2]] : b);
+    }
+    if (!layoutsFor(n).includes(L) || L === 'auto' || L === 'custom') return spotsAuto(d);
+    const sc = { 1: 1.1, 2: .62, 3: .48, 4: .38 }[n];
+    if (L === 'row') return ({ 1: [100], 2: [64, 136], 3: [46, 100, 154], 4: [38, 79, 121, 162] })[n].map(x => [x, 116, sc]);
+    if (L === 'column') return ({ 1: [116], 2: [72, 160], 3: [56, 116, 176], 4: [48, 94, 140, 186] })[n].map(y => [100, y, n === 3 ? .5 : n === 4 ? .4 : sc]);
+    if (L === 'bend') { const ts = { 1: [.5], 2: [.2, .8], 3: [0, .5, 1], 4: [0, .333, .667, 1] }[n]; return ts.map(t => [50 + 100 * t, 60 + 120 * t, n === 4 ? .38 : n === 3 ? .45 : .5]); }
+    if (L === 'onetwo') return n === 3 ? [[100, 70, .55], [64, 148, .55], [136, 148, .55]] : [[100, 58, .42], [60, 122, .42], [140, 122, .42], [100, 186, .42]];
+    if (L === 'around') return [...Array(n)].map((_, i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [100 + 62 * Math.cos(a), 120 + 72 * Math.sin(a), n === 3 ? .5 : .42]; });
+    return spotsAuto(d);
+  }
   function spots(d) {
+    const k = Math.max(0.4, Math.min(1.8, +d.size || 1));
+    return (laid(d) || []).map(([x, y, s]) => [x, y, s * k]);
+  }
+  function spotsAuto(d) {
     const n = d.count || 1, o = d.ord;
     if (o === 'chief') return { 1: [[100, 136, 1]], 2: [[66, 130, .6], [134, 130, .6]], 3: [[66, 112, .5], [134, 112, .5], [100, 172, .5]], 4: [[66, 104, .45], [134, 104, .45], [66, 160, .45], [134, 160, .45]] }[n];
     if (o === 'fess') return { 1: [[100, 119, .5]], 2: [[100, 56, .5], [100, 180, .5]], 3: [[64, 56, .45], [136, 56, .45], [100, 180, .45]], 4: [[64, 56, .42], [136, 56, .42], [70, 180, .42], [130, 180, .42]] }[n];
@@ -114,7 +139,7 @@
     const pts = list.map(([x, y, s]) => [x, y, s]);
     const fits = ([x, y, s]) => { const r = R0 * s + EDGE; for (let a = 0; a < 16; a++) { const t = a * Math.PI / 8; if (!inside(sh, x + Math.cos(t) * r, y + Math.sin(t) * r)) return false; } return true; };
     for (const p of pts) for (let i = 0; i < 40 && !fits(p); i++) { p[0] += (cx - p[0]) * 0.05; p[1] += (cy - p[1]) * 0.05; p[2] *= 0.97; }
-    for (let round = 0; round < 30; round++) {
+    for (let round = 0; round < 30 && d.layout !== 'custom'; round++) {   // (symbols you placed yourself may overlap if you want)
       let clash = false;
       for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
         const a = pts[i], b = pts[j];
@@ -144,7 +169,7 @@
       const def = CH[d.charge]; if (!def) return '';
       inner = def[3].map(p => `<path d="${p}" fill="${c}" ${def[4] ? 'fill-rule="evenodd"' : ''} stroke="${line}" stroke-width="2.2" stroke-linejoin="round"/>`).join('') + (def[5] ? `<path d="${def[5]}" fill="${line}"/>` : '');
     }
-    return fitSpots(d, spots(d) || []).map(([x, y, s]) => `<g transform="translate(${x} ${y}) scale(${s})">${inner}</g>`).join('');
+    return fitSpots(d, spots(d) || []).map(([x, y, s], i) => `<g data-chi="${i}" data-x="${x}" data-y="${y}" data-s="${s}" transform="translate(${x} ${y}) scale(${s})">${inner}</g>`).join('');
   }
   function armsSVG(d, refs, size) {
     const sh = (SHAPES[d.shape] || SHAPES.heater)[1];
@@ -178,6 +203,8 @@
         const nm = d.charge === 'rune' ? (g && (g.name || (g.key || '').toUpperCase()) ? `rune${n > 1 ? 's' : ''} “${g.name || g.key.toUpperCase()}”` : `rune${n > 1 ? 's' : ''}`) : `sigil${n > 1 ? 's' : ''}${R ? ` of ${R.title}` : ''}`;
         ch = `${n === 1 ? (/^[aeiou]/i.test(nm) ? 'an' : 'a') : num} ${nm} ${tn(d.t4)}`;
       } else { const def = CH[d.charge]; if (def) { const word = n === 1 ? def[1] : def[2]; ch = `${n === 1 ? (/^[aeiou]/i.test(word) ? 'an' : 'a') : num} ${word} ${tn(d.t4)}`; } }
+      const L = d.layout || 'auto', how = n > 1 && layoutsFor(n).includes(L) ? (L === 'onetwo' && n === 4 ? 'one, two and one' : LAYOUTS[L] ? LAYOUTS[L][1] : '') : '';
+      if (ch && how) ch = ch.replace(new RegExp(` ${tn(d.t4)}$`), ` ${how} ${tn(d.t4)}`);   // the heralds' order: three mullets in fess Or
     }
     const o = d.ord !== 'none' && ORD[d.ord] ? `${ORD[d.ord][1]} ${tn(d.t3)}` : '';
     let s = f;
@@ -254,7 +281,10 @@
           ${runeOpts.length ? '<span class="ar-chl">Your runes</span>' : ''}${runeOpts.slice(0, 60).map(({ r, g }) => { const A = Object.assign(B.runes.blank(), r.data); const gw = B.runes.glyphW(A), gh = B.runes.glyphH(A); return `<button type="button" class="ar-ch rune ${d.charge === 'rune' && d.ref && d.ref.glyph === g.id ? 'on' : ''}" data-rune="${r.id}|${g.id}" title="${esc(r.title)}: ${esc(g.name || (g.key || '').toUpperCase())}"><svg viewBox="${-8} ${-8} ${gw + 16} ${gh + 16}">${B.runes.glyphG({ ...A, width: Math.max(A.width, 4) }, g, 'currentColor')}</svg></button>`; }).join('')}
           ${sigils.length ? '<span class="ar-chl">Your sigils</span>' : ''}${sigils.map(s => `<button type="button" class="ar-ch sigil ${d.charge === 'sigil' && d.ref && d.ref.id === s.id ? 'on' : ''}" data-sigil="${s.id}" title="Sigil: ${esc(s.title)}"><svg viewBox="-104 -104 208 208">${B.sigils.sigilG(Object.assign(B.sigils.blank(), s.data || {}), null, 'currentColor')}</svg></button>`).join('')}</div>
         ${runes.length || sigils.length ? '' : '<p class="bm-help">Runes and sigils you make in Build show up here too.</p>'}
-        ${d.charge !== 'none' ? `<div class="field"><label>How many</label><div class="chip-row" id="ar-count">${[1, 2, 3, 4].map(n => `<button type="button" class="chip ${d.count === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}</div></div>${sw('t4', 'Symbol colour')}` : ''}
+        ${d.charge !== 'none' ? `<div class="field"><label>How many</label><div class="chip-row" id="ar-count">${[1, 2, 3, 4].map(n => `<button type="button" class="chip ${d.count === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}</div></div>${sw('t4', 'Symbol colour')}
+          <div class="field"><label>Arrangement</label><div class="chip-row" id="ar-layout">${layoutsFor(d.count || 1).map(k => `<button type="button" class="chip ${(d.layout || 'auto') === k || (!layoutsFor(d.count || 1).includes(d.layout || 'auto') && k === 'auto') ? 'on' : ''}" data-layout="${k}">${k === 'custom' ? '✋ ' : ''}${LAYOUTS[k][0]}</button>`).join('')}</div>
+            ${d.layout === 'custom' ? '<p class="bm-help">Drag the symbols on the shield to move them. Pick another arrangement to go back.</p>' : ''}</div>
+          <div class="field"><label>Size <small id="ar-size-v">${Math.round((+d.size || 1) * 100)}%</small></label><input type="range" id="ar-size" min="40" max="180" step="5" value="${Math.round((+d.size || 1) * 100)}"></div>` : ''}
         <h3>Motto</h3><div class="field"><input id="ar-motto" value="${esc(d.motto || '')}" placeholder="e.g. We do not kneel"></div>
         ${(d.motto || '').trim() ? `<label class="bd-check"><input type="checkbox" id="ar-mon" ${d.mottoOn ? 'checked' : ''}> Show the motto on a ribbon</label>${sw('mottoCol', 'Ribbon colour')}` : ''}
       </aside></div>`;
@@ -271,15 +301,43 @@
       else { d.charge = b.dataset.ch; d.ref = null; }
       await loadRef(); re();
     });
-    $$('#ar-count .chip', box).forEach(b => b.onclick = () => { d.count = +b.dataset.n; re(); });
+    $$('#ar-count .chip', box).forEach(b => b.onclick = () => { d.count = +b.dataset.n; if (d.layout === 'custom') d.pos = null, d.layout = 'auto'; re(); });
+    $$('#ar-layout .chip', box).forEach(b => b.onclick = () => {
+      const L = b.dataset.layout;
+      if (L === 'custom' && d.layout !== 'custom') { const cur = [...$('#ar-shield', box).querySelectorAll('[data-chi]')].map(g => [+g.dataset.x, +g.dataset.y]); d.pos = cur; }
+      d.layout = L; re();
+    });
+    const size = $('#ar-size', box); if (size) size.oninput = () => { d.size = +size.value / 100; $('#ar-size-v', box).textContent = size.value + '%'; paint(); ctx.changed(); };
     $('#ar-motto', box).oninput = e => { const had = !!(d.motto || '').trim(); d.motto = e.target.value; paint(); ctx.changed(); if (had !== !!d.motto.trim()) { const pos = e.target.selectionStart; drawAll(); const m = $('#ar-motto', box); m.focus(); m.setSelectionRange(pos, pos); } };
     const mon = $('#ar-mon', box); if (mon) mon.onchange = e => { d.mottoOn = e.target.checked; paint(); ctx.changed(); };
   }
   function paint() {
-    $('#ar-shield', box).innerHTML = armsSVG(d, refs);
+    const sh = $('#ar-shield', box);
+    sh.innerHTML = armsSVG(d, refs);
+    sh.classList.toggle('dragging-on', d.layout === 'custom');
+    if (d.layout === 'custom') dragCharges(sh);
     $('#ar-blazon', box).innerHTML = `<small>The herald’s description</small><p>${esc(blazon(d, refs))}</p>`;
     const notes = tinctureNotes(d);
     $('#ar-warn', box).innerHTML = notes.length ? `<b>Heralds’ rule of colour</b><p>Metal (gold, silver) goes on colour, and colour on metal, so arms can be read from far away. Here ${esc(notes.join('; '))}. It’s your world, so break the rule if you mean to: real arms sometimes do.</p>` : '';
+  }
+  // "Where I put them": drag a symbol on the shield (mouse or finger); it stays inside the shield
+  function dragCharges(sh) {
+    const svg = sh.querySelector('svg'); if (!svg) return;
+    svg.querySelectorAll('[data-chi]').forEach(g => g.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const m = svg.getScreenCTM(); if (!m) return;
+      const inv = m.inverse(), pt = svg.createSVGPoint();
+      const at = ev => { pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(inv); return [Math.max(0, Math.min(200, p.x)), Math.max(0, Math.min(244, p.y))]; };
+      const [sx, sy] = at(e), ox = +g.dataset.x - sx, oy = +g.dataset.y - sy, s = +g.dataset.s;
+      svg.setPointerCapture(e.pointerId);
+      const move = ev => { const [x, y] = at(ev); g.dataset.x = (x + ox).toFixed(1); g.dataset.y = (y + oy).toFixed(1); g.setAttribute('transform', `translate(${g.dataset.x} ${g.dataset.y}) scale(${s})`); };
+      const up = () => {
+        svg.removeEventListener('pointermove', move); svg.removeEventListener('pointerup', up); svg.removeEventListener('pointercancel', up);
+        d.pos = [...svg.querySelectorAll('[data-chi]')].map(x => [+x.dataset.x, +x.dataset.y]);
+        paint(); ctx.changed();
+      };
+      svg.addEventListener('pointermove', move); svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+    }));
   }
   async function refsFor(item) { const r = item.data && item.data.ref; return { item: r && r.id ? await B.get(r.id) : null }; }
   B.editors.arms = {
