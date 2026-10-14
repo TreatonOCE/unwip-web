@@ -476,7 +476,13 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     prog.remove();
     if (cancelled) { U.toast('Timelapse cancelled.'); return; }
     const blob = new Blob(parts, { type: type.split(';')[0] });
-    await api.exportBinary(new Uint8Array(await blob.arrayBuffer()), `Timelapse - ${book}`, /mp4/.test(type) ? 'mp4' : 'webm', 'Video');
+    await api.exportBinary(await seekable(new Uint8Array(await blob.arrayBuffer()), type), `Timelapse - ${book}`, /mp4/.test(type) ? 'mp4' : 'webm', 'Video');
+  }
+
+  // a recorded WebM gets its length and an index, so players can skip through it (left as it was if that fails)
+  async function seekable(bytes, type) {
+    if (!/webm/.test(type) || !window.UnwipWebm) return bytes;
+    try { return await window.UnwipWebm.fixBytes(bytes); } catch (e) { console.error('webm fix', e); return bytes; }
   }
 
   // ================================================================== SCREEN VIDEO
@@ -524,9 +530,9 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     const was = { bytes: V.bytes, path: V.path, secs: Math.round((Date.now() - V.started) / 1000) };
     V.rec = null; V.stream = null;
     try {
-      if (V.parts) { const blob = new Blob(V.parts, { type: V.type.split(';')[0] }); V.parts = null; await api.exportBinary(new Uint8Array(await blob.arrayBuffer()), `${V.book} screen video`, /mp4/.test(V.type) ? 'mp4' : 'webm', 'Video'); }
+      if (V.parts) { const blob = new Blob(V.parts, { type: V.type.split(';')[0] }); V.parts = null; await api.exportBinary(await seekable(new Uint8Array(await blob.arrayBuffer()), V.type), `${V.book} screen video`, /mp4/.test(V.type) ? 'mp4' : 'webm', 'Video'); }
       else if (V.writer) { await V.writer.close(); V.writer = null; U.toast(`Screen video saved: ${esc(was.path)} (${size(was.bytes)}).`, '', 8000); }
-      else { const r = await api.videoEnd(); if (r) U.toastAction(`Screen video saved (${size(r.bytes)}, ${clock(was.secs * 1000)}).`, api.platform === 'darwin' ? 'Show in Finder' : 'Show in folder', () => api.videoReveal(r.path), 15000); }
+      else { if (was.bytes > 50e6) U.toast(`Finishing the video so you can skip through it (${size(was.bytes)})…`, '', 8000); const r = await api.videoEnd(); if (r) U.toastAction(`Screen video saved (${size(r.bytes)}, ${clock(was.secs * 1000)}).`, api.platform === 'darwin' ? 'Show in Finder' : 'Show in folder', () => api.videoReveal(r.path), 15000); }
     } catch (e) { U.toast('The video couldn’t be finished: ' + esc(e.message || e), 'warn', 9000); }
     renderStatus();
   }
