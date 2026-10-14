@@ -432,6 +432,7 @@
       entries.zipName = name || '';
       return readScrivEntries(entries);
     },
+    __pick: pickFiles, __download: download,
     __fs: FS, __emit: (name, data) => (LISTENERS[name] || []).forEach(cb => { try { cb(data); } catch (e) { console.warn(e); } }), __device: deviceName,
     async backupExport(slug) { const p = await FS.json(`${pdir(slug)}/project.json`, {}); return download(await projectArchive(slug), `${slugify(p.title || slug)} ${new Date().toLocaleDateString('en-CA')}.unwip`, 'application/zip'); },
     async backupImportFile() { const [f] = await pickFiles({ accept: '.unwip,.zip,application/zip' }); if (!f) return null; return restoreArchive(await unzip(await bytesOf(f)), ' (restored)'); },
