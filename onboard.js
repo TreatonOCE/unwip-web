@@ -117,6 +117,7 @@ window.UnwipIntro = (function () {
       <div class="in-grid three">${Object.entries(STRUCT).map(([id, x]) => `<button class="in-choice tall${ans.structure === id ? ' on' : ''}" data-structure="${id}"><pre class="in-tree">${x.tree.map(esc).join('\n')}</pre><b>${x.name}</b><span>${x.desc}</span></button>`).join('')}</div>`;
     else if (name === 'look') h = `
       <h2>Pick a look</h2>
+      <p class="in-lead">Colours apply everywhere. The font and paragraphs are for new books and the example; books you already have keep their own (change those any time in Manuscript style).</p>
       <div class="in-row"><label>Colours</label><div class="in-chips">${THEME_PICKS.map(t => { const th = window.UnwipLook.THEMES[t]; return `<button class="in-sw${ans.theme === t ? ' on' : ''}" data-theme="${t}" title="${th.name}"><i style="background:${th.sw[0]}"><s style="background:${th.sw[1]}"></s><u style="background:${th.sw[2]}"></u></i>${th.name}</button>`; }).join('')}</div></div>
       <div class="in-row"><label>Writing font</label><div class="in-chips">${FONT_PICKS.map(x => `<button class="in-chip${ans.font === x ? ' on' : ''}" data-font="${esc(x)}" style="font-family:'${esc(x)}'">${esc(x)}</button>`).join('')}</div></div>
       <div class="in-row"><label>Paragraphs</label><div class="in-chips">
@@ -219,7 +220,7 @@ window.UnwipIntro = (function () {
     }
     if (!opened) { U.showLibrary(); return; }
     if (withTour) setTimeout(tour, 500);
-    else if (L.writer) setTimeout(() => U.toast('Press the Writer mode button (or F11) any time for the distraction-free page.', '', 6000), 800);
+    else if (L.writer) setTimeout(() => { U.setWriter(true); U.toast('This is Writer mode: just the page. Press Esc or F11 to see everything else.', '', 7000); }, 800);
   }
 
   // ================================================================== EXAMPLE PROJECT
@@ -415,6 +416,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     tEls.shade.className = 'tour-spot'; tEls.card.className = 'tour-card';
     document.body.append(tEls.shade, tEls.card);
     curIdx = -1; showStep(1);
+    clearInterval(tourWatch); tourWatch = setInterval(() => { const lib = document.getElementById('library'); if (!S.slug || (lib && !lib.classList.contains('hidden'))) { endTour(); curIdx = -1; } }, 300);
     document.addEventListener('keydown', tourKey, true);
     window.addEventListener('resize', placeStep);
   }
@@ -423,7 +425,9 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); showStep(1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); showStep(-1); }
   }
+  let tourWatch = null;
   function endTour() {
+    clearInterval(tourWatch);
     if (!tEls) return;
     tEls.shade.remove(); tEls.card.remove(); tEls = null;
     document.removeEventListener('keydown', tourKey, true);
