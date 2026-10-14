@@ -208,6 +208,7 @@
       card.innerHTML = `<div class="pc-top"><div><div class="pc-spine"></div><h3>${esc(p.title)}</h3></div>
           ${goal ? dial({ pct: p.words / goal, big: Math.floor(p.words / goal * 100) + '%', small: '', size: 58, track: 6 }) : ''}</div>
         ${pace ? `<div class="pc-pace">${esc(pace)}</div>` : ''}
+        ${p.unsynced ? `<div class="pc-unsynced" title="This book has changes on this ${esc(p.unsynced)} that aren’t in Dropbox yet. Press Sync to send them.">● Not synced yet</div>` : ''}
         <div class="pc-meta">${fmt(p.words)}${goal ? ' / ' + fmt(goal) : ''} words · ${when}${p.dev && S.device && p.dev !== S.device ? ` · on ${esc(p.dev)}` : ''}</div><button class="icon-btn small pc-more" title="More">${I.dots}</button>`;
       card.onclick = e => { if (!e.target.closest('.pc-more')) openBook(p); };
       $('.pc-more', card).onclick = e => {
@@ -4462,8 +4463,7 @@
       api.setSettings({ onboarded: true }).then(st => { S.settings = st; });
       setTimeout(() => toastAction('New: a welcome setup and a guided tour of Unwip.', 'Take the tour', () => window.UnwipIntro.start()), 4000);
     }
-    // open the most recent project straight away
-    if (list.length && !new URLSearchParams(location.search).has('library')) openProject(list[0].slug);
+    // the main screen first, on every device: "Continue" there goes back to where you left off
   })();
 
   // test hooks (used by the automated checks, harmless otherwise)

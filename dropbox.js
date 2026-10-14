@@ -35,7 +35,17 @@ window.UnwipDropbox = (function () {
   // every save marks the file as changed, and a sync follows a few seconds later
   const origWrite = FS.write, origRemove = FS.remove;
   const dirty = new Set();
-  const changed = p => { if (!p.startsWith(LOCAL)) return; const rel = p.slice(LOCAL.length); dirty.add(rel.toLowerCase()); if (tracked(rel) && st && !st.pending) { st.pending = true; persist(); renderSoon(); } soon(); };
+  const changed = p => {
+    if (!p.startsWith(LOCAL)) return; const rel = p.slice(LOCAL.length); dirty.add(rel.toLowerCase());
+    if (tracked(rel) && st) {
+      const book = rel.split('/')[0], waiting = st.waiting || [];
+      if (!st.pending || !waiting.includes(book)) { st.pending = true; st.waiting = [...new Set([...waiting, book])]; persist(); renderSoon(); bookMarks(); }
+    }
+    soon();
+  };
+  // the main screen marks books with changes not yet in Dropbox
+  let marksT = null;
+  const bookMarks = () => { clearTimeout(marksT); marksT = setTimeout(() => { const lib = document.getElementById('library'); if (lib && !lib.classList.contains('hidden') && window.__unwip && !window.__unwip.S.slug) window.__unwip.showLibrary(); }, 400); };
   FS.write = async (p, d) => { const r = await origWrite(p, d); changed(p); return r; };
   FS.remove = async (p) => { const r = await origRemove(p); changed(p); return r; };
   let soonT = null, firstDirtyAt = 0;
@@ -249,7 +259,8 @@ window.UnwipDropbox = (function () {
     const worker = async () => { while (next < rest.length) await one(rest[next++]); };
     await Promise.all([worker(), worker(), worker(), worker()]);
     st.last = Date.now(); progress = null; news = false;
-    if (!dirty.size) st.pending = false;
+    if (!dirty.size) { st.pending = false; st.waiting = []; } else st.waiting = [...new Set([...dirty].map(r => r.split('/')[0]))];
+    bookMarks();
     await persist();
     if (touched.size) tell(touched);
   }
@@ -395,7 +406,7 @@ window.UnwipDropbox = (function () {
   const inDropbox = slug => connected() && !st.localOnly.some(x => x.toLowerCase() === String(slug).toLowerCase());
   // on the main screen, books in Dropbox come first, then the ones kept on this device only
   const origList = F.listProjects;
-  F.listProjects = async () => (await origList()).map(p => ({ ...p, ...(inDropbox(p.slug) ? { place: 'Dropbox', placeRank: 0, placePath: 'dropbox' } : { place: `This ${DEVICE}`, placeRank: 3, placePath: 'local' }) }));
+  F.listProjects = async () => { const waiting = new Set(((st && st.waiting) || []).map(x => x.toLowerCase())); return (await origList()).map(p => ({ ...p, ...(inDropbox(p.slug) ? { place: 'Dropbox', placeRank: 0, placePath: 'dropbox', unsynced: waiting.has(String(p.slug).toLowerCase()) ? DEVICE : '' } : { place: `This ${DEVICE}`, placeRank: 3, placePath: 'local' }) })); };
   F.projectPlaces = async () => connected() ? [{ path: 'dropbox', label: 'Dropbox', note: 'also on your PC and other devices', main: true }, { path: 'local', label: `This ${DEVICE} only`, note: 'not synced' }] : [];
   F.createProject = async (title, template, place) => {
     const slug = await origCreate(title, template);

@@ -2388,3 +2388,7 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .sf-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 0 0 16px; border-radius: 10px; background: #FBE3D3; color: #7a3412; font-size: 14px; }
 .sf-banner span { flex: 1; }
 .m-phone #btn-settle { display: none; }   /* no room on a phone's top bar; the setup runs by itself on first launch */
+
+/* a book with changes on this phone/iPad that aren't in Dropbox yet */
+.project-card .pc-unsynced { color: #b8372a; font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+:root[data-theme="dark"] .project-card .pc-unsynced { color: #ff8a7a; }
