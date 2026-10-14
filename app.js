@@ -1572,7 +1572,7 @@
   editor.addEventListener('keydown', e => {
     emit('keydown', e); if (e.defaultPrevented) return;
     if (e.key === 'Tab') { e.preventDefault(); return; } // first-line indents are automatic
-    if (e.ctrlKey && e.shiftKey && (e.key === 'V' || e.key === 'v')) { S.plainPaste = true; setTimeout(() => S.plainPaste = false, 400); }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'V' || e.key === 'v')) { S.plainPaste = true; setTimeout(() => S.plainPaste = false, 400); }
   });
 
   // ---- selection tracking + toolbar state
@@ -2681,7 +2681,7 @@
         <label class="check"><input type="checkbox" id="s-ac" ${acPrefs().on ? 'checked' : ''}> Suggest character, place and item names as I type</label>
         <div class="field"><label>Start suggesting after</label><select id="s-acmin">${opt([[2, '2 letters'], [3, '3 letters'], [4, '4 letters']], acPrefs().min)}</select></div>
         <div class="section-label">Language &amp; spelling</div>
-        ${api.web ? `<div class="field full"><label>Spelling language</label><div class="hint" style="padding-top:4px">${(/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) ? 'Your iPhone or iPad checks spelling in the languages of its keyboards, and Unwip can’t change that. To check another language, add its keyboard: Settings › General › Keyboard › Keyboards › Add New Keyboard, then switch to it with the 🌐 key while you write.' : 'This browser checks spelling in your device’s languages. Add a language in your device or browser settings to check it too.'}</div></div>` : `<div class="field"><label>Spelling language</label>${sp.available.length ? `<select id="s-lang">${spellOptions(sp)}</select>` : '<div style="padding-top:8px;color:var(--muted)">Uses your Windows language settings</div>'}</div>
+        ${api.web ? `<div class="field full"><label>Spelling language</label><div class="hint" style="padding-top:4px">${(/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) ? 'Your iPhone or iPad checks spelling in the languages of its keyboards, and Unwip can’t change that. To check another language, add its keyboard: Settings › General › Keyboard › Keyboards › Add New Keyboard, then switch to it with the 🌐 key while you write.' : 'This browser checks spelling in your device’s languages. Add a language in your device or browser settings to check it too.'}</div></div>` : `<div class="field"><label>Spelling language</label>${sp.available.length ? `<select id="s-lang">${spellOptions(sp)}</select>` : `<div style="padding-top:8px;color:var(--muted)">${api.platform === 'darwin' ? 'Uses your Mac’s spelling languages (System Settings › Keyboard › Text Input)' : 'Uses your Windows language settings'}</div>`}</div>
         <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>`}
         <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
         <div class="section-label">Help</div>

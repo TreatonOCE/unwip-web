@@ -214,7 +214,7 @@ window.UnwipDialogue = (function () {
   U.on('doc', () => { if (st.on) { st.who = ''; setTimeout(paint, 30); } });
   U.on('leave', off);
   document.addEventListener('keydown', e => {
-    if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyD') { e.preventDefault(); toggle(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.code === 'KeyD') { e.preventDefault(); toggle(); return; }
     if (e.key === 'Escape' && st.on && !document.querySelector('.modal-back, .cmdk-back')) off();
   }, true);
 

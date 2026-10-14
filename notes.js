@@ -189,8 +189,8 @@ window.UnwipNotes = (function () {
 
   // ---- keyboard, menu, toolbar
   document.addEventListener('keydown', e => {
-    if (!(e.ctrlKey && e.altKey) || e.shiftKey || !S.project) return;
-    const k = e.key.toLowerCase();
+    if (!((e.ctrlKey || e.metaKey) && e.altKey) || e.shiftKey || !S.project) return;
+    const k = e.code === 'KeyM' ? 'm' : e.code === 'KeyF' ? 'f' : e.key.toLowerCase();   // on a Mac, Option changes the letter (Option+M is µ)
     if (k === 'm') { e.preventDefault(); addComment(); }
     else if (k === 'f') { e.preventDefault(); addFootnote(); }
   }, true);

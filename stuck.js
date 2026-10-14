@@ -295,7 +295,7 @@ window.UnwipStuck = (function () {
     if (e.key === 'Escape') { e.preventDefault(); stopMessy(true); return; }
     if (!messy.noBack) return;
     const k = e.key.toLowerCase();
-    const blocked = e.key === 'Backspace' || e.key === 'Delete' || (e.ctrlKey && (k === 'z' || k === 'x' || k === 'y'));
+    const blocked = e.key === 'Backspace' || e.key === 'Delete' || ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'x' || k === 'y'));
     if (blocked) { e.preventDefault(); bump(); }
   });
   editor.addEventListener('beforeinput', e => { if (messy && messy.noBack && /^(delete|historyUndo|historyRedo)/.test(e.inputType)) { e.preventDefault(); bump(); } });

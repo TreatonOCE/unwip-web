@@ -13,7 +13,7 @@ window.UnwipPCSync = (function () {
   function state() {
     if (!status) return { cls: 'off', text: '' };
     if (busy) return { cls: 'busy', text: 'Checking…' };
-    if (status.provider === 'none') return { cls: 'off', text: status.label === 'This PC' ? 'This PC only' : status.label };
+    if (status.provider === 'none') return { cls: 'off', text: (status.label === 'This PC' || status.label === 'This Mac') ? status.label + ' only' : status.label };
     const app = APP[status.provider];
     if (status.running === false) return { cls: 'warn', text: `${app} app isn’t running`, long: `The ${app} app isn’t running on this PC, so your changes aren’t reaching your other devices (and theirs aren’t arriving). Start ${app} and it catches up by itself.` };
     if (S.slug && status.lastExternal > seenAt) return { cls: 'news', text: `Updated from another device ${ago(status.lastExternal)}`, long: `Another device changed this book ${ago(status.lastExternal)}, and the changes are in. Changed chapters keep your version in Snapshots.` };
