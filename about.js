@@ -34,6 +34,8 @@ window.UnwipAbout = (function () {
     return `${kind}${os ? ' ' + os.replace(/_/g, '.') : ''}, ${web ? (navigator.standalone || matchMedia('(display-mode: standalone)').matches ? 'Home Screen app' : 'browser') : 'PC app'}, ${innerWidth}×${innerHeight}`;
   };
 
+  // file paths name your books and folders, so a report keeps only the file's own name: "…\\project.json"
+  const hidePaths = m => String(m).replace(/(?:[A-Za-z]:\\|\\\\|\/(?:Users|home|private|var|tmp|Volumes|mnt)\/)[^\n]*?(?=['"](?:[\s,;)]|$)|\s+->|$)/gm, p => '…' + (p.includes('\\') ? '\\' : '/') + p.split(/[\\/]/).pop());
   async function reportText(what) {
     let projects = [];
     try { projects = await api.listProjects(); } catch {}
@@ -50,7 +52,7 @@ window.UnwipAbout = (function () {
       what || '(not filled in)',
       '',
       `Recent errors (${log.length}):`,
-      ...(log.length ? log.slice(-15).map(e => `${new Date(e.t).toLocaleString()} [${e.k}] ${e.m}${e.n > 1 ? ` ×${e.n}` : ''}`) : ['none'])
+      ...(log.length ? log.slice(-15).map(e => `${new Date(e.t).toLocaleString()} [${e.k}] ${hidePaths(e.m)}${e.n > 1 ? ` ×${e.n}` : ''}`) : ['none'])
     ];
     return lines.filter(x => x !== '').join('\n').replace(/\nWhat happened:/, '\n\nWhat happened:').replace(/\nRecent errors/, '\n\nRecent errors');
   }
@@ -61,7 +63,7 @@ window.UnwipAbout = (function () {
       <div class="field"><label>What happened?</label><textarea id="rep-what" rows="4" placeholder="e.g. I pressed Copy for Docs in chapter 3 and nothing was copied"></textarea></div>
       <details class="rep-details"><summary>See exactly what will be sent</summary><pre id="rep-pre"></pre></details>`;
     const pre = body.querySelector('#rep-pre'), what = body.querySelector('#rep-what');
-    if (prefill) what.value = prefill;
+    if (typeof prefill === 'string') what.value = prefill;   // (a click handler can pass in the click itself)
     const refresh = async () => { pre.textContent = await reportText(what.value.trim()); };
     what.addEventListener('input', () => { clearTimeout(what._t); what._t = setTimeout(refresh, 300); });
     await refresh();
