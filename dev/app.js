@@ -142,7 +142,13 @@
       back.addEventListener('mousedown', e => { if (e.target === back) close(null); });
       document.body.appendChild(back);
       onOpen && onOpen(back);
-      const first = back.querySelector('input, select'); if (first) { first.focus(); first.select && first.select(); }
+      // put the cursor in the first box to type in, never a drop-down or a tick box (on an iPhone or iPad, focusing a
+      // drop-down pops its picker open straight away). On touch screens only for a dialog that is just one text box,
+      // so the keyboard doesn't jump up over every dialog.
+      const texts = [...back.querySelectorAll('input:not([type]), input[type=text], input[type=search], input[type=number], input[type=email], input[type=url]')].filter(x => !x.disabled && x.offsetParent !== null);
+      const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+      const first = texts[0];
+      if (first && (!touch || texts.length === 1)) { first.focus(); first.select && first.select(); }
     });
   }
   async function promptText(title, label, value = '') {
