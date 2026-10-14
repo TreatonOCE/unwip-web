@@ -20,9 +20,10 @@ window.UnwipDropbox = (function () {
   const shaped = rel => {
     if (CONFLICT.test(rel)) return false;
     const m = /^([^/]+)\/(.+)$/.exec(rel); if (!m || m[1].startsWith('_')) return false;
+    if (/(^|\/)(desktop\.ini|thumbs\.db|\.ds_store|icon\r|~\$[^/]*|\.[^/]*)$/i.test(m[2])) return false;   // system files Dropbox won't store
     return /^project\.json$|^docs\/[\w-]+\.html$|^media\/[^/]+$|^snapshots\/[\w-]+\/[^/]+$|^proof\/[\w-]+\.json$/.test(m[2]);
   };
-  const tracked = rel => shaped(rel) && !(st && [...(st.localOnly || []), ...(st.removedHere || [])].includes(rel.split('/')[0]));
+  const tracked = rel => shaped(rel) && !(st && [...(st.localOnly || []), ...(st.removedHere || [])].some(n => n.toLowerCase() === rel.split('/')[0].toLowerCase()));
   const isText = rel => /\.(html|json)$/.test(rel);
 
   // ---------------------------------------------------------------- state (kept on this device only)
@@ -104,14 +105,22 @@ window.UnwipDropbox = (function () {
     if (!r.ok) throw new Error('Dropbox download failed (' + r.status + ')');
     return new Uint8Array(await r.arrayBuffer());
   }
-  async function upload(rel, bytes, rev) {
+  // Dropbox lets an account write one thing at a time (several at once and it answers "too many write operations",
+  // which is the "Dropbox busy, waiting…"). Reading can go several at once; writing queues up here.
+  let writeQ = Promise.resolve();
+  const oneWrite = f => { const p = writeQ.then(f, f); writeQ = p.catch(() => {}); return p; };
+  const upload = (rel, bytes, rev) => oneWrite(() => uploadNow(rel, bytes, rev));
+  async function uploadNow(rel, bytes, rev) {
     const mode = rev ? { '.tag': 'update', update: rev } : rev === null ? 'overwrite' : 'add';
     const r = await call(CONTENT + '/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'Dropbox-API-Arg': headerJSON({ path: `${REMOTE}/${rel}`, mode, autorename: false, mute: true }) }, body: bytes });
-    if (r.status === 409) return { conflict: true };
+    if (r.status === 409) {
+      let why = ''; try { why = JSON.stringify(await r.json()); } catch {}
+      return /conflict/.test(why) || !why ? { conflict: true } : { refused: why };   // refused: a name Dropbox won't take, or no room
+    }
     if (!r.ok) throw new Error('Dropbox upload failed (' + r.status + ')');
     return r.json();
   }
-  const remove = rel => rpc('/files/delete_v2', { path: `${REMOTE}/${rel}` });
+  const remove = rel => oneWrite(() => rpc('/files/delete_v2', { path: `${REMOTE}/${rel}` }));
 
   // Dropbox's own fingerprint of a file, so unchanged files are never sent twice
   async function contentHash(bytes) {
@@ -142,7 +151,9 @@ window.UnwipDropbox = (function () {
     if (running) { running.again = true; return running.p; }
     running = { again: false };
     running.p = (async () => {
-      try { do { running.again = false; await syncOnce(opts); } while (running.again); lastError = ''; return true; }
+      // "again" is for something saved or clashing mid-sync. A few rounds settle it; more than that and something is
+      // stuck, so stop and let the next sync carry on rather than going round and round (which also wears out Dropbox's patience)
+      try { let rounds = 0; do { running.again = false; await syncOnce(opts); } while (running.again && ++rounds < 3); lastError = ''; return true; }
       catch (e) { lastError = e.message || String(e); console.warn('Dropbox sync:', e); return false; }
       finally { running = null; render(); }
     })();
@@ -202,7 +213,8 @@ window.UnwipDropbox = (function () {
     const changedNow = new Set(dirty); dirty.clear();
     // what's in Dropbox
     const remote = {};
-    for (const [k, v] of Object.entries(await remoteFiles())) if (tracked(v.rel)) remote[k] = { ...v };
+    const all = await remoteFiles(), orphan = bookless(all);
+    for (const [k, v] of Object.entries(all)) if (tracked(v.rel) && !orphan(k)) remote[k] = { ...v };
     // a whole project deleted on this device stays in Dropbox (and on the PC); it just stops syncing here
     const hereList = (await FS.list('Unwip')).dirs;
     const hereDirs = new Set(hereList.map(x => x.toLowerCase()));
@@ -246,6 +258,7 @@ window.UnwipDropbox = (function () {
         if (rec && rec.rev === R.rev) { await remove(R.rel); delete st.records[k]; }      // deleted here: delete there too (Dropbox keeps it 30 days)
         else await pull(k, R, touched);
       } else if (L && !R) {
+        if (!rec && st.refused && st.refused[k] === lh) return;   // a file Dropbox wouldn't take, unchanged since
         if (rec && rec.hash === lh) { await rawRemove(LOCAL + L.rel); delete st.records[k]; touched.add(L.rel); }   // deleted on the other device
         else await push(k, L.rel, lb, lh, undefined);
       } else delete st.records[k];
@@ -294,21 +307,33 @@ window.UnwipDropbox = (function () {
     while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) throw new Error('Dropbox list failed'); j = await r.json(); applyEntries(cache, j.entries); n += j.entries.length; progress.found = n; renderSoon(); }
     st.remote = cache; st.cursor = j.cursor; return cache;
   }
-  // has another device changed anything since the last sync? (asks Dropbox, changes nothing)
+  // files in Dropbox that belong to no book (a book deleted on a PC whose last few files hadn't gone yet) are left alone
+  const bookless = cache => { const books = new Set(Object.keys(cache).filter(k => /^[^/]+\/project\.json$/.test(k)).map(k => k.split('/')[0])); return k => !books.has(k.split('/')[0]); };
+  // is what Dropbox has different from what this device last synced? Same content under a new version number isn't.
+  function differs(cache) {
+    const orphan = bookless(cache);
+    for (const [k, R] of Object.entries(cache)) {
+      if (!tracked(R.rel) || orphan(k)) continue;
+      const rec = st.records[k];
+      if (!rec || (rec.rev !== R.rev && rec.hash !== R.hash)) return true;
+    }
+    for (const k of Object.keys(st.records)) if (!cache[k] && tracked(k)) return true;   // deleted on another device
+    return false;
+  }
+  // has another device changed anything since the last sync? (asks Dropbox what changed, brings nothing in)
   async function check() {
-    if (!connected() || running || !st.cursor || auto()) return news;
+    if (!connected() || running || !st.cursor || !st.remote || auto()) return news;
     try {
+      const cache = { ...st.remote };
       let r = await rpc('/files/list_folder/continue', { cursor: st.cursor });
       if (r.status === 409) { news = true; render(); return news; }
       if (!r.ok) return news;
-      let j = await r.json(); const entries = [...j.entries];
-      while (j.has_more && entries.length < 20000) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) break; j = await r.json(); entries.push(...j.entries); }
-      news = entries.some(e => {
-        const rel = (e.path_display || e.path_lower || '').slice(REMOTE.length + 1), k = (e.path_lower || '').slice(REMOTE.length + 1);
-        if (!tracked(rel)) return false;
-        const rec = st.records[k];
-        return e['.tag'] === 'deleted' ? !!rec : e['.tag'] === 'file' && (!rec || rec.rev !== e.rev);
-      });
+      let j = await r.json(); applyEntries(cache, j.entries);
+      while (j.has_more) { r = await rpc('/files/list_folder/continue', { cursor: j.cursor }); if (!r.ok) return news; j = await r.json(); applyEntries(cache, j.entries); }
+      if (running) return news;
+      // keep what was learned, so the next look only asks about what's newer
+      st.remote = cache; st.cursor = j.cursor; await persist();
+      news = differs(cache);
       lastError = ''; render();
     } catch (e) { lastError = e.message || String(e); render(); }
     return news;
@@ -316,6 +341,7 @@ window.UnwipDropbox = (function () {
   async function push(k, rel, bytes, hash, rev) {
     if (progress) progress.up++;
     const res = await upload(rel, bytes, rev);
+    if (res.refused) { st.refused = { ...(st.refused || {}), [k]: hash }; console.warn('Dropbox would not take', rel, res.refused); return; }   // not tried again until it changes
     if (res.conflict) { st.records[k] = { rev: 'conflict', hash: '' }; running && (running.again = true); dirty.add(k); return; }
     st.records[k] = { rev: res.rev, hash: res.content_hash || hash, ...shapeOf(k, bytes) };
   }
