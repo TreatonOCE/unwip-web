@@ -2353,3 +2353,9 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .rep-via { display: grid; gap: 8px; margin: 8px 0 12px; }
 .rep-via .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 14px; height: auto; }
 .rep-via .btn span { font-size: .85em; opacity: .75; font-weight: 400; }
+
+/* main screen: "Let's get you settled in", then "Take a tour" */
+#btn-settle { white-space: nowrap; }
+#btn-settle.settle-new { font-weight: 600; }
+.m-phone #btn-settle.settle-tour { display: none; }   /* the tour points at the computer layout */
+@media (max-width: 720px) { #btn-settle { padding: 5px 10px; font-size: 13px; } }

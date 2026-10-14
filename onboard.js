@@ -188,8 +188,8 @@ window.UnwipIntro = (function () {
     const tr = $('#in-tour', r); if (tr) tr.onclick = () => finish(true);
   }
   async function skip() {
-    S.settings = await api.setSettings({ onboarded: true });
-    close();
+    S.settings = await api.setSettings({ onboarded: true });   // skipped: the main screen keeps offering it
+    close(); settleButton();
     const list = await api.listProjects();
     if (!list.length) U.toast('Click “New project” to start your first book. Settings › Help has the setup and a tour.', '', 7000);
   }
@@ -200,11 +200,11 @@ window.UnwipIntro = (function () {
       ? { indent: 0, paraSpacing: 8, lineHeight: ans.font === 'Arial' ? 1.15 : 1.3, noIndentFirst: true }
       : { indent: 0.5, paraSpacing: 0, lineHeight: 1.5, noIndentFirst: true }),
       size: ans.font === 'Arial' ? 11 : ans.font === 'Calibri' ? 11 : 12 };
-    S.settings = await api.setSettings({ onboarded: true, from: ans.from || 'new', defaultStyle: style, dailyGoal: +ans.goal || 0,
+    S.settings = await api.setSettings({ onboarded: true, settledIn: true, from: ans.from || 'new', defaultStyle: style, dailyGoal: +ans.goal || 0,
       author: (ans.author || '').trim(), layout: ans.layout, structure: ans.structure });
     window.UnwipLook.setTheme(ans.theme);
     U.setMode(L.mode);
-    close();
+    close(); settleButton();
     let opened = false;
     if (ans.action === 'scriv') { await U.importScrivener(); opened = !!S.slug; }
     else if (ans.action === 'paste' || ans.action === 'files' || ans.action === 'vault') {
@@ -393,8 +393,22 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
   }
   // a step can name several places; the first one actually showing is used
   const target = sel => sel.split('|').map(x => $(x)).find(visible) || null;
+  // The tour walks round a real book. With none open, it uses the example (Dracula), and if that was deleted it's
+  // made again from the copy inside Unwip, laid out the way the welcome setup chose.
+  const EXAMPLE = /^Dracula \(example\)/;
+  async function tourExample() {
+    let list = []; try { list = await api.listProjects(); } catch {}
+    const ex = list.find(p => EXAMPLE.test(p.title || ''));
+    if (ex) await U.openProject(ex.slug, { skipCheck: true });
+    else {
+      const st = S.settings || {};
+      ans = { from: st.from || 'new', layout: st.layout || 'page', structure: st.structure || 'scenes', goal: st.dailyGoal || 0 };
+      await makeExample();
+    }
+    setTimeout(tour, 500);
+  }
   function tour() {
-    if (!S.slug) { U.toast('Open a project first, then take the tour.'); return; }
+    if (!S.slug) { tourExample(); return; }
     if (document.body.classList.contains('writer')) U.setWriter(false);
     endTour();
     tEls = { shade: document.createElement('div'), card: document.createElement('div') };
@@ -448,7 +462,22 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     c.style.top = Math.max(10, Math.min(H - ch - 10, y)) + 'px';
   }
 
+  // ================================================================== ON THE MAIN SCREEN
+  // "Let's get you settled in" until the welcome setup has been done once, then "Take a tour".
+  function settleButton() {
+    const right = document.querySelector('#library .lib-head-right'); if (!right) return;
+    let b = document.getElementById('btn-settle');
+    if (!b) { b = document.createElement('button'); b.id = 'btn-settle'; b.type = 'button'; right.insertBefore(b, right.firstChild); }
+    const settled = !!(S.settings && S.settings.settledIn);
+    b.className = 'btn ' + (settled ? 'settle-tour' : 'primary settle-new');
+    b.textContent = settled ? 'Take a tour' : 'Let’s get you settled in';
+    b.title = settled ? 'A quick walk round the buttons, in the example book' : 'A few questions to set Unwip up the way you like to write';
+    b.onclick = () => settled ? tourExample() : start();
+  }
+  settleButton();
+  setTimeout(settleButton, 1500);   // once the settings have loaded
+
   // the example book on its own (for screenshots and tests): scenes in chapters, laid out for a Scrivener user
   const example = async (o = {}) => { ans = { from: 'scrivener', layout: 'desk', structure: 'scenes', goal: 1000, ...o }; await makeExample(); };
-  return { start, tour, endTour, example };
+  return { start, tour, tourExample, endTour, example, settleButton };
 })();
