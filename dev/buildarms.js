@@ -102,6 +102,28 @@
     const sh = o === 'bordure' ? 0.88 : 1;
     return { 1: [[100, 112, 1.1]], 2: [[64, 108, .62], [136, 108, .62]], 3: [[64, 78, .55], [136, 78, .55], [100, 152, .55]], 4: [[64, 76, .5], [136, 76, .5], [64, 146, .5], [136, 146, .5]] }[n].map(([x, y, s]) => [x, y, s * sh]);
   }
+  // Keep every charge inside the shield: the places above suit the usual shield, but a diamond, round or banner shield
+  // is narrower at the edges, so a charge that would poke out moves in towards the middle and shrinks a little
+  // (and charges that end up touching shrink a little more).
+  const R0 = 44, EDGE = 7;
+  let probe = null;
+  function inside(path, x, y) { if (!probe) { try { probe = document.createElement('canvas').getContext('2d'); } catch { return true; } } return probe.isPointInPath(path, x, y); }
+  function fitSpots(d, list) {
+    if (typeof Path2D === 'undefined') return list;
+    const sh = new Path2D((SHAPES[d.shape] || SHAPES.heater)[1]), cx = 100, cy = 122;
+    const pts = list.map(([x, y, s]) => [x, y, s]);
+    const fits = ([x, y, s]) => { const r = R0 * s + EDGE; for (let a = 0; a < 16; a++) { const t = a * Math.PI / 8; if (!inside(sh, x + Math.cos(t) * r, y + Math.sin(t) * r)) return false; } return true; };
+    for (const p of pts) for (let i = 0; i < 40 && !fits(p); i++) { p[0] += (cx - p[0]) * 0.05; p[1] += (cy - p[1]) * 0.05; p[2] *= 0.97; }
+    for (let round = 0; round < 30; round++) {
+      let clash = false;
+      for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+        const a = pts[i], b = pts[j];
+        if (Math.hypot(a[0] - b[0], a[1] - b[1]) < R0 * (a[2] + b[2]) * 0.92) { a[2] *= 0.96; b[2] *= 0.96; clash = true; }
+      }
+      if (!clash) break;
+    }
+    return pts.map(([x, y, s]) => [+x.toFixed(1), +y.toFixed(1), +s.toFixed(3)]);
+  }
   function chargeG(d, refs) {
     if (!d.charge || d.charge === 'none') return '';
     const c = col(d.t4), line = d.t4 === 'sable' ? '#6b6b6b' : '#1d1d1f';
@@ -122,7 +144,7 @@
       const def = CH[d.charge]; if (!def) return '';
       inner = def[3].map(p => `<path d="${p}" fill="${c}" ${def[4] ? 'fill-rule="evenodd"' : ''} stroke="${line}" stroke-width="2.2" stroke-linejoin="round"/>`).join('') + (def[5] ? `<path d="${def[5]}" fill="${line}"/>` : '');
     }
-    return (spots(d) || []).map(([x, y, s]) => `<g transform="translate(${x} ${y}) scale(${s})">${inner}</g>`).join('');
+    return fitSpots(d, spots(d) || []).map(([x, y, s]) => `<g transform="translate(${x} ${y}) scale(${s})">${inner}</g>`).join('');
   }
   function armsSVG(d, refs, size) {
     const sh = (SHAPES[d.shape] || SHAPES.heater)[1];
