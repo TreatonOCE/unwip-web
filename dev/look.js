@@ -214,6 +214,7 @@ window.UnwipLook = (function () {
     const g = document.createElement('span');
     g.className = 'tw-ghost ' + typing.anim;
     if (typing.anim === 'strike') g.style.setProperty('--tilt', (Math.random() * 6 - 3).toFixed(1) + 'deg');
+    if (typing.anim === 'scatter') { const a = Math.random() * Math.PI * 2; g.style.setProperty('--dx', (Math.cos(a) * 1.6).toFixed(2) + 'em'); g.style.setProperty('--dy', (Math.sin(a) * 1.6).toFixed(2) + 'em'); g.style.setProperty('--rot', (Math.random() * 120 - 60).toFixed(0) + 'deg'); }
     g.textContent = e.data;
     g.style.cssText = `left:${rc.left / z}px; top:${rc.top / z}px; height:${rc.height / z}px; line-height:${rc.height / z}px; font:${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}; color:${cs.color}; letter-spacing:${cs.letterSpacing};`;
     layer.appendChild(g);
@@ -374,7 +375,10 @@ window.UnwipLook = (function () {
         ['drop', 'Drop', 'Each letter falls in from above and lands with a small bounce.'],
         ['pop', 'Pop', 'Each letter starts big and shrinks into place.'],
         ['ink', 'Ink', 'Each letter starts blurry and sharpens, like ink soaking into paper.'],
-        ['strike', 'Typewriter strike', 'Each letter slams onto the page, dark and slightly crooked, like a typewriter key hitting the ribbon.']])}
+        ['strike', 'Typewriter strike', 'Each letter slams onto the page, dark and slightly crooked, like a typewriter key hitting the ribbon.'],
+        ['glow', 'Glow', 'Each letter lights up warm and bright, then cools to the normal colour, like an ember.'],
+        ['spin', 'Spin', 'Each letter spins in from small and settles into place.'],
+        ['scatter', 'Scatter', 'Each letter flies in from a random direction and lands in its place.']])}
       <div class="ip-label">Cursor ${q('The flashing line that shows where your next letter goes.')}</div>${chips('caret', [
         ['normal', 'Normal', 'The standard thin line.'],
         ['thick', 'Thick', 'A wider line that’s easier to spot on a big screen.'],

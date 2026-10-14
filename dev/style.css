@@ -2691,3 +2691,25 @@ body.writer .pf-remind { bottom: 18px; }
 .ar-shield.dragging-on svg { touch-action: none; }
 .ar-shield.dragging-on [data-chi] { cursor: grab; }
 #ar-size { width: 100%; }
+
+/* 0.44.12: letter effects that look clearly different from each other, and shown above dialogs (so the demo shows them) */
+.tw-layer { z-index: 990; }
+.tw-ghost.fade { animation: tw-fade .55s ease-in both; }
+.tw-ghost.rise { animation: tw-rise .42s cubic-bezier(.2,1.3,.4,1) both; }
+.tw-ghost.drop { animation: tw-drop .55s linear both; }
+.tw-ghost.pop { animation: tw-pop .38s ease-out both; }
+.tw-ghost.ink { animation: tw-ink .7s ease-out both; }
+.tw-ghost.strike { animation: tw-strike .26s ease-out both; }
+.tw-ghost.glow { animation: tw-glow .8s ease-out both; }
+.tw-ghost.spin { animation: tw-spin .45s cubic-bezier(.2,1.2,.4,1) both; }
+.tw-ghost.scatter { animation: tw-scatter .45s cubic-bezier(.2,1.1,.3,1) both; }
+@keyframes tw-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes tw-rise { 0% { opacity: 0; transform: translateY(1.1em); } 70% { opacity: 1; transform: translateY(-.14em); } 100% { opacity: 1; transform: none; } }
+@keyframes tw-drop { 0% { opacity: 0; transform: translateY(-1.8em) rotate(-14deg); animation-timing-function: ease-in; } 45% { opacity: 1; transform: translateY(0) rotate(3deg); animation-timing-function: ease-out; } 65% { transform: translateY(-.32em) rotate(-2deg); animation-timing-function: ease-in; } 82% { transform: translateY(0); animation-timing-function: ease-out; } 91% { transform: translateY(-.08em); } 100% { opacity: 1; transform: none; } }
+@keyframes tw-pop { 0% { opacity: 0; transform: scale(3.2); } 60% { opacity: 1; transform: scale(.8); } 80% { transform: scale(1.12); } 100% { opacity: 1; transform: none; } }
+@keyframes tw-ink { 0% { opacity: 0; transform: scale(1.9); filter: blur(9px); color: var(--ink-blot, #111); } 35% { opacity: .9; transform: scale(1.25); filter: blur(4px); } 100% { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes tw-strike { 0% { opacity: 1; transform: translateY(-.55em) scale(1.35) rotate(var(--tilt, 0deg)); color: var(--strike, #000); text-shadow: 0 0 2px var(--strike, #000); } 35% { transform: translateY(.1em) scale(.92) rotate(var(--tilt, 0deg)); } 55% { transform: translate(-.04em, 0) rotate(var(--tilt, 0deg)); } 75% { transform: translate(.03em, 0); } 100% { opacity: 1; transform: none; } }
+@keyframes tw-glow { 0% { opacity: 0; color: #ffd27a; text-shadow: 0 0 .5em #ff9a2e, 0 0 1em #ffb347; transform: scale(1.15); } 30% { opacity: 1; color: #ffcf70; text-shadow: 0 0 .45em #ff9a2e, 0 0 .9em #ffb347; } 100% { text-shadow: 0 0 0 transparent; transform: none; } }
+@keyframes tw-spin { 0% { opacity: 0; transform: scale(.1) rotate(-540deg); } 100% { opacity: 1; transform: none; } }
+@keyframes tw-scatter { 0% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, -1em)) rotate(var(--rot, 0deg)) scale(1.3); } 100% { opacity: 1; transform: none; } }
+:root[data-theme="dark"] { --ink-blot: #fff; }
