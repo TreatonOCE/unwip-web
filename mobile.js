@@ -67,6 +67,7 @@ window.UnwipMobile = (function () {
       { label: 'Dialogue view', action: () => window.UnwipDialogue && window.UnwipDialogue.toggle('dialogue') },
       { label: 'Find in this chapter', action: () => click('#m-find') },
       { label: 'Writer mode', action: () => click('#btn-writer') },
+      { label: window.UnwipProof && window.UnwipProof.isOn() ? 'Proof of writing (Replay on)' : 'Proof of writing', action: () => window.UnwipProof && window.UnwipProof.open() },
       { sep: true },
       { label: 'Help', action: () => window.UnwipHelp && window.UnwipHelp.open() }
     ], { up: true });

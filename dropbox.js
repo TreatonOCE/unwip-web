@@ -20,7 +20,7 @@ window.UnwipDropbox = (function () {
   const shaped = rel => {
     if (CONFLICT.test(rel)) return false;
     const m = /^([^/]+)\/(.+)$/.exec(rel); if (!m || m[1].startsWith('_')) return false;
-    return /^project\.json$|^docs\/[\w-]+\.html$|^media\/[^/]+$|^snapshots\/[\w-]+\/[^/]+$/.test(m[2]);
+    return /^project\.json$|^docs\/[\w-]+\.html$|^media\/[^/]+$|^snapshots\/[\w-]+\/[^/]+$|^proof\/[\w-]+\.json$/.test(m[2]);
   };
   const tracked = rel => shaped(rel) && !(st && [...(st.localOnly || []), ...(st.removedHere || [])].includes(rel.split('/')[0]));
   const isText = rel => /\.(html|json)$/.test(rel);

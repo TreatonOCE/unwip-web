@@ -2304,3 +2304,42 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
   .form-grid .field input, .form-grid .field select { width: 100%; box-sizing: border-box; }
 }
 @media (min-width: 641px) { .dash-card.dials:has(.dash-setgoal) .stat-stack { margin-top: 20px; } }
+
+/* ---- Proof of writing ---- */
+.st-proof { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; }
+.st-proof .pf-dot { width: 8px; height: 8px; border-radius: 50%; background: #d64535; display: inline-block; }
+.st-proof .pf-dot.off { background: transparent; border: 1.5px solid currentColor; opacity: .7; }
+.st-proof.on { color: #c23b2c; font-weight: 600; }
+.st-proof.on .pf-dot { animation: pfpulse 1.6s ease-in-out infinite; }
+@keyframes pfpulse { 50% { opacity: .35; } }
+.pf-dialog .pf-lead { margin: 0 0 14px; color: var(--muted); }
+.pf-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; background: var(--paper); }
+.pf-card h3 { margin: 0 0 6px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.pf-card p { margin: 0 0 10px; }
+.pf-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.pf-tag.warn { background: rgba(214, 69, 53, .12); color: #c23b2c; }
+.pf-warn { background: rgba(214, 69, 53, .08); border: 1px solid rgba(214, 69, 53, .35); border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; }
+.pf-q { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; }
+.pf-q label { cursor: pointer; }
+.pf-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+.pf-small { font-size: 13px; color: var(--muted); }
+.pf-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.pf-sum div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--paper); }
+.pf-sum b { display: block; font-size: 22px; } .pf-sum span { font-size: 13px; color: var(--muted); }
+.pf-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pf-table th, .pf-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.pf-table th { color: var(--muted); font-weight: 600; }
+.pf-table small { display: block; color: var(--muted); font-size: 12px; }
+.pf-acts { white-space: nowrap; text-align: right; }
+.pf-back { position: fixed; inset: 0; z-index: 400; background: rgba(20, 18, 15, .55); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.pf-shell { width: min(980px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 8px; }
+.pf-head { display: flex; align-items: center; justify-content: space-between; color: #fff; }
+.pf-head .icon-btn { color: #fff; }
+.pf-prog { position: fixed; right: 20px; bottom: 50px; z-index: 450; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; width: 280px; }
+.pf-bar { height: 6px; background: var(--panel); border-radius: 3px; overflow: hidden; } .pf-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+@media (max-width: 640px) {
+  .pf-sum { grid-template-columns: 1fr 1fr; }
+  .pf-table { display: block; overflow-x: auto; }
+  .pf-back { padding: 8px; }
+  .pf-page { height: 60vh; }
+}

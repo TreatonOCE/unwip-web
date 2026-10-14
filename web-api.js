@@ -387,6 +387,15 @@
     async pdfPages() { throw new Error('Exact page counts need the PC app.'); },
     async exportHTML(html, name) { return download(html, slugify(name) + '.html', 'text/html'); },
     async exportBinary(bytes, name, ext) { return download(new Uint8Array(bytes), slugify(name) + '.' + ext); },
+    // Proof of writing: replays are kept with the book (and travel through Dropbox like its chapters)
+    async proofList(slug) {
+      const dir = `${pdir(slug)}/proof`, l = await FS.list(dir), out = [];
+      for (const f of l.files.filter(f => /^[\w-]+\.json$/.test(f))) { const t = await FS.text(`${dir}/${f}`); out.push({ name: f.slice(0, -5), size: t ? t.length : 0, at: 0 }); }
+      return out;
+    },
+    async proofRead(slug, name) { return FS.text(`${pdir(slug)}/proof/${String(name).replace(/[^\w-]/g, '')}.json`); },
+    async proofWrite(slug, name, text) { await FS.write(`${pdir(slug)}/proof/${String(name).replace(/[^\w-]/g, '')}.json`, String(text)); if (window.UnwipDropbox && window.UnwipDropbox.changed) window.UnwipDropbox.changed(); return true; },
+    async proofDelete(slug, name) { await FS.remove(`${pdir(slug)}/proof/${String(name).replace(/[^\w-]/g, '')}.json`); return true; },
     async fullscreen(on) { try { if (on) await document.documentElement.requestFullscreen(); else if (document.fullscreenElement) await document.exitFullscreen(); } catch {} return !!document.fullscreenElement; },
     async setZoom(f) { const z = Math.min(1.5, Math.max(0.75, +f || 1)); document.documentElement.style.zoom = z; return z; },
     // working on two devices: only matters once Dropbox is connected
