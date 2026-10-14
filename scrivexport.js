@@ -231,6 +231,7 @@ ${statuses.map((s, i) => `            <Status ID="${i}">${xml(s.name)}</Status>`
       if (api.exportScriv) where = await api.exportScriv(safe, res.files);
       else { const zip = window.FolioEPUB.zip(res.files.map(f => ({ name: `${safe}.scriv/${f.name}`, data: f.data }))); await api.exportBinary(zip, safe + '.scriv', 'zip', 'Scrivener project (zip)'); where = safe + '.scriv (in a .zip: unzip it, then open it in Scrivener)'; }
       if (!where) return;
+      window.UnwipStart && window.UnwipStart.done('export');
       await U.modal({ title: 'Packed up', body: `<p>“${esc(where)}” is ready: ${res.docs} document${res.docs === 1 ? '' : 's'}${res.pics ? ` and ${res.pics} map${res.pics === 1 ? '' : 's'} as pictures` : ''}.</p>
         <p>In Scrivener, choose <b>File › Open</b> and pick it. It may take a moment to rebuild its search index the first time.</p>
         <p class="sim-small">Your book is still here in Unwip, untouched. All the best with it.</p>`, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });

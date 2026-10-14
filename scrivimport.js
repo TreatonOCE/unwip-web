@@ -204,6 +204,7 @@ window.UnwipScriv = (function () {
     const r = res.report, where = Object.fromEntries(TARGETS);
     await U.modal({ title: 'Import finished', body: `<div class="import-report">
         <p><b>${r.documents}</b> documents and <b>${r.folders}</b> folders from “${esc(data.name)}” are in the new project “${esc(v.name)}”. Your Scrivener project is untouched.</p>
+        ${(() => { const k = window.UnwipBookImport && window.UnwipBookImport.keptIn(Object.values(res.docs)); return k ? `<p><b>${U.fmt(k.words)}</b> words${k.kept.length ? `, with ${k.kept.join(', ')}` : ''}.</p>` : ''; })()}
         <ul>
           ${(r.placed || []).map(p => `<li>${esc(p.title)} → ${p.target === 'new' ? `a new section, “${esc(p.title)}”` : esc(where[p.target] || p.target)}</li>`).join('')}
           ${tidied ? `<li>${tidied} chapter title${tidied === 1 ? ' was' : 's were'} typed into the text; ${v.titles === 'typed' ? (tidied === 1 ? 'it’s now the chapter’s name' : 'they’re now the chapter names') : 'the binder names were kept'} and the typed line${tidied === 1 ? ' was' : 's were'} taken out, so nothing shows twice.</li>` : ''}

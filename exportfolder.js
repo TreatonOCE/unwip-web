@@ -120,10 +120,10 @@ window.UnwipExportFolder = (function () {
   const slugName = t => (t || 'picture').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'picture';
 
   async function save(files, book, docs) {
-    if (api.exportFolder) { const where = await api.exportFolder(book, files.map(f => ({ name: f.name, data: f.data }))); if (where) U.toast(`Exported ${plural(docs, 'file')} to the folder “${esc(where)}”.`, '', 7000); return where; }
+    if (api.exportFolder) { const where = await api.exportFolder(book, files.map(f => ({ name: f.name, data: f.data }))); if (where) { window.UnwipStart && window.UnwipStart.done('export'); U.toast(`Exported ${plural(docs, 'file')} to the folder “${esc(where)}”.`, '', 7000); } return where; }
     const zip = window.FolioEPUB.zip(files.map(f => ({ name: `${book}/${f.name}`, data: f.data })));
     const p = await api.exportBinary(zip, book, 'zip', 'Folder of files (zip)');
-    if (p) U.toast(`Exported ${plural(docs, 'file')} as a .zip. Unzip it to get the folder.`, '', 7000);
+    if (p) { window.UnwipStart && window.UnwipStart.done('export'); U.toast(`Exported ${plural(docs, 'file')} as a .zip. Unzip it to get the folder.`, '', 7000); }
     return p;
   }
   const errText = e => esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));

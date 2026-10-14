@@ -2365,3 +2365,25 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .in-hello svg { width: 120px; height: auto; display: block; }
 .in-hello .in-slogan { margin: 0; }
 .in-custom { margin: 14px 0 0; font-size: 13.5px; }
+
+/* main screen: the Getting started card (hide it with its ×) */
+.gs-card { margin: 0 0 22px; padding: 18px 20px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.gs-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.gs-head h2 { margin: 0; font-size: 17px; }
+.gs-head span { color: var(--muted); font-size: 12.5px; }
+.gs-x { border: 0; background: none; color: var(--muted); font-size: 22px; line-height: 1; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
+.gs-x:hover { background: var(--bg); color: var(--text); }
+.gs-bar { height: 4px; border-radius: 4px; background: var(--line); margin: 12px 0 10px; overflow: hidden; }
+.gs-bar i { display: block; height: 100%; background: var(--accent, #EE6038); border-radius: 4px; transition: width .4s ease; }
+.gs-card ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 18px; }
+.gs-card li { display: flex; gap: 10px; align-items: flex-start; }
+.gs-card li b { display: block; font-size: 14px; }
+.gs-card li small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.35; margin-top: 2px; }
+.gs-tick { flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--line); }
+.gs-card li.on .gs-tick { border-color: #EE6038; background: #EE6038 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat; }
+.gs-card li.on b { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
+.sf-step { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; }
+.sf-step span { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.sf-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 0 0 16px; border-radius: 10px; background: #FBE3D3; color: #7a3412; font-size: 14px; }
+.sf-banner span { flex: 1; }
+.m-phone #btn-settle { display: none; }   /* no room on a phone's top bar; the setup runs by itself on first launch */

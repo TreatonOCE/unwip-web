@@ -1391,6 +1391,7 @@
     $('#st-doc').textContent = S.docId ? `${fmt(docWords)} words in this document` : 'No document open';
     const total = manuscriptWords();
     const sess = S.sessionTyped;
+    if (sess > 0) window.UnwipStart && window.UnwipStart.done('wrote');
     $('#st-session').textContent = `Written this session: ${sess >= 0 ? '+' : ''}${fmt(sess)}`;
     $('#st-session').title = 'Words you typed (pasted text and big deletions are not counted). Click for goals and history.';
     const goals = S.project.goals || {};
@@ -2479,7 +2480,7 @@
           btn.disabled = false; return;
         }
         btn.disabled = true; const was = btn.textContent; btn.textContent = 'Making the PDF…';
-        try { const r = await api.exportPDF(html, name, size, { raw: true }); if (r) toast(`Print PDF saved (${fmt(r.pages)} page${r.pages === 1 ? "" : "s"}, ${esc(PV.book.design.trim)}).`, '', 6000); }
+        try { const r = await api.exportPDF(html, name, size, { raw: true }); if (r) window.UnwipStart && window.UnwipStart.done('export'); if (r) toast(`Print PDF saved (${fmt(r.pages)} page${r.pages === 1 ? "" : "s"}, ${esc(PV.book.design.trim)}).`, '', 6000); }
         finally { btn.disabled = false; btn.textContent = was; }
         return;
       }
@@ -2495,6 +2496,7 @@
           btn.disabled = false; return;
         }
         const r = await api.exportPDF(pageDoc(g), name, { width: g.w, height: g.h }, opts);
+        if (r) window.UnwipStart && window.UnwipStart.done('export');
         if (r) toast(`PDF saved (${fmt(r.pages)} page${r.pages === 1 ? "" : "s"}).`);
       } else if (kind === 'epub') {
         const lang = ((await api.spellSettings().catch(() => ({ current: ['en'] }))).current[0]) || 'en';
@@ -2503,6 +2505,7 @@
         const typeset = TS ? { t: TS.resolved(bookDesign()), d: bookDesign(), book: bk } : null;
         const { bytes, chapters } = window.FolioEPUB.build({ blocks: PV.blocks, style: S.project.style, title: PV.scope === 'doc' ? name : (bk.title || name), author: bk.author || settings.author || '', lang, id: S.project.epubId, typeset: PV.scope === 'doc' ? null : typeset });
         const p = await api.exportBinary(bytes, name, 'epub', 'EPUB e-book');
+        if (p) window.UnwipStart && window.UnwipStart.done('export');
         if (p) toast(`EPUB saved with ${chapters} chapter${chapters === 1 ? '' : 's'}.${settings.author ? '' : ' Tip: add your author name in Settings.'}`, '', 6000);
       } else if (kind === 'copy') {
         const out = Clip.exportFromBlocks(PV.blocks, PV.smf ? smfStyle() : exportSettings(), { pageBreaks: true, plainRuns: PV.smf });
@@ -2516,9 +2519,11 @@
         try { wblocks = PV.scope === 'doc' ? await docBlocks(S.docId, titleMode()) : await compileManuscript(); } catch { wblocks = PV.blocks; } finally { Clip.keepChanges = false; }
         const bytes = window.FolioDOCX.build(wblocks, PV.smf ? smfStyle() : S.project.style, { title: name, author: settings.author || '', page: PV.docPage, smf: PV.smf, pageBreaks: true, lang });
         const p = await api.exportBinary(bytes, name, 'docx', 'Word document');
+        if (p) window.UnwipStart && window.UnwipStart.done('export');
         if (p) toast(`Word file saved.${PV.smf ? ' It has the name / title / page header agents expect.' : ''} It also opens in Google Docs (upload it to Drive).`, '', 6000);
       } else if (kind === 'html') {
         const p = await api.exportHTML(pageDoc(geometry('docs')), name);
+        if (p) window.UnwipStart && window.UnwipStart.done('export');
         if (p) toast('Saved. Open it in Word, or upload it to Google Drive and open with Google Docs.');
       }
     }
@@ -3559,6 +3564,7 @@
     await flushSave();
     await api.snapSave(S.slug, S.docId, editor.innerHTML, label || '', false);
     refreshSnapCount();
+    window.UnwipStart && window.UnwipStart.done('snapshot');
     toast(`Snapshot saved${label ? `: “${esc(label)}”` : ''}.`);
   }
   // first change to a document each day keeps a copy of how it was before
@@ -3706,6 +3712,7 @@
   }
   function setMode(m) {
     S.mode = m;
+    if (m === 'detailed' && S.project) window.UnwipStart && window.UnwipStart.done('detailed');
     try { localStorage.setItem('folio-mode', m); } catch {}
     document.body.classList.toggle('detailed', m === 'detailed');
     $$('#mode-switch button').forEach(b => b.classList.toggle('on', b.dataset.m === m));

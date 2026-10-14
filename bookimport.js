@@ -37,9 +37,14 @@ window.UnwipBookImport = (function () {
     return out.join('');
   }
 
+  // what an import had to leave out, for the summary at the end
+  let LEFT = { embeds: 0, pictures: 0 };
+
   // Markdown (Obsidian, Ulysses, iA Writer, Notion, Bear exports)
   function mdInline(s) {
     // Obsidian: embedded notes/pictures ![[…]] and %%hidden comments%% go; ==highlights== keep their words
+    for (const m of s.match(/!\[\[[^\]]*\]\]/g) || []) { if (/\.(png|jpe?g|gif|webp|svg|bmp|avif)\s*(\|[^\]]*)?\]\]$/i.test(m)) LEFT.pictures++; else LEFT.embeds++; }
+    LEFT.pictures += (s.match(/!\[[^\]]*\]\([^)]*\)/g) || []).length;
     s = s.replace(/!\[\[[^\]]*\]\]/g, '').replace(/%%.*?%%/g, '').replace(/==(.+?)==/g, '$1');
     // HTML formatting written into the Markdown (<u>, <b>, <i>, <br>…) is kept as formatting; other tags (<span>,
     // <font>, <div>…) are dropped but their words kept. Kept tags travel through esc() as private markers.
@@ -462,9 +467,33 @@ window.UnwipBookImport = (function () {
       parent.children.push(...nodes); parent.open = true;
       U.scheduleMeta(); U.renderBinder(); U.updateStatus();
     }
-    let n = 0; U.walkTree(nodes, x => { if (x.type === 'doc') n++; });
-    U.toast(`Imported ${n} document${n === 1 ? '' : 's'}. ${opts.dest === 'new' ? 'Your book is ready.' : ''}`, '', 5000);
     return { nodes, docs };
+  }
+
+  // ================================================================== "YOUR BOOK CAME IN"
+  // After an import: what arrived, what formatting came with it, and anything that was left out, said plainly.
+  // words, and the formatting found in a set of chapters: "312 italics, 4 footnotes…"
+  function keptIn(htmls) {
+    const box = document.createElement('div'); box.innerHTML = htmls.join('');
+    const q = sel => box.querySelectorAll(sel).length, pl = (n, w, ws) => `${U.fmt(n)} ${n === 1 ? w : (ws || w + 's')}`;
+    const kept = [[q('i,em'), 'italic', 'italics'], [q('b,strong'), 'bold'], [q('u'), 'underline'], [q('sup.fn'), 'footnote'], [q('span.cmt'), 'comment'], [q('img'), 'picture'], [q('p.scene'), 'scene break'], [q('h1,h2,h3'), 'heading'], [q('blockquote'), 'quote']]
+      .filter(([n]) => n > 0).map(([n, w, ws]) => pl(n, w, ws));
+    return { words: U.countWords(box.textContent || ''), kept };
+  }
+  async function summary(nodes, docs, o = {}) {
+    let chapters = 0, folders = 0; U.walkTree(nodes, x => { if (x.type === 'doc') chapters++; else folders++; });
+    const { words, kept } = keptIn(Object.values(docs));
+    const pl = (n, w, ws) => `${U.fmt(n)} ${n === 1 ? w : (ws || w + 's')}`;
+    const left = [];
+    if (o.left && o.left.embeds) left.push(`${pl(o.left.embeds, 'embedded note')} (Obsidian’s ![[…]]): the note itself isn’t copied into the chapter. Import those notes on their own if you need them.`);
+    if (o.left && o.left.pictures) left.push(`${pl(o.left.pictures, 'picture')} linked from the Markdown didn’t come in: add ${o.left.pictures === 1 ? 'it' : 'them'} with the picture button in the toolbar, or paste ${o.left.pictures === 1 ? 'it' : 'them'} in.`);
+    const body = `<div class="import-report">
+      <p><b>${pl(chapters, o.added ? 'document' : 'chapter')}</b>${folders ? ` in <b>${pl(folders, 'folder')}</b>` : ''}, <b>${pl(words, 'word')}</b>${o.added ? ', added to this book' : ''}.</p>
+      ${kept.length ? `<p>Formatting that came with it: ${kept.join(', ')}.</p>` : ''}
+      <p>Your original ${o.from === 'Paste' ? 'document' : 'files'} weren’t changed${o.from === 'Paste' ? '' : ' or moved'}.</p>
+      ${left.length ? `<h4>Left out</h4><ul>${left.map(x => `<li class="ir-warn">${x}</li>`).join('')}</ul>` : ''}
+      <p class="sim-small">Have a read of the first chapter to check it looks right. If anything’s off, Report a problem (on the main screen) helps get it fixed.</p></div>`;
+    await U.modal({ title: o.added ? 'Imported' : 'Your book is in', body, buttons: [{ label: o.added ? 'Done' : 'Open my book', value: true, kind: 'primary' }] });
   }
 
   // ================================================================== THE PREVIEW SCREEN
@@ -540,7 +569,7 @@ window.UnwipBookImport = (function () {
       const pt = $('#bi-ptitle', ov); pt.oninput = () => { st.title = pt.value; }; pt.onfocus = () => { st.dest = 'new'; const r = $('[name="bi-dest"][value="new"]', ov); if (r) r.checked = true; };
       $('#bi-go', ov).onclick = async () => {
         const b = $('#bi-go', ov); b.disabled = true; b.textContent = 'Importing…';
-        try { await commit(p.chapters, { ...st, parentId: ctx.parentId, from: ctx.from }); close(); if (ctx.onDone) ctx.onDone(); }
+        try { const o = { ...st, parentId: ctx.parentId, from: ctx.from }; const r = await commit(p.chapters, o); close(); await summary(r.nodes, r.docs, { from: o.from, added: o.dest !== 'new', left: LEFT }); if (ctx.onDone) ctx.onDone(); }
         catch (e) { b.disabled = false; b.textContent = 'Try again'; U.toast(esc(e.message || 'Import failed.'), 'warn', 7000); }
       };
     }
@@ -550,6 +579,7 @@ window.UnwipBookImport = (function () {
 
   // ================================================================== WAYS IN
   async function readFiles(files) {
+    LEFT = { embeds: 0, pictures: 0 };
     const sources = [], bad = [];
     // in folder order: a folder's own files first, then its sub-folders, each sorted 1, 2, … 10 (not 1, 10, 2)
     const cmp = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
@@ -612,6 +642,6 @@ window.UnwipBookImport = (function () {
     ];
   }
 
-  return { menuItems, fromFiles, fromFolder, fromPaste, preview, close,
+  return { menuItems, fromFiles, fromFolder, fromPaste, preview, close, keptIn,
     _test: { decodeText, textToHTML, mdToHTML, odtToHTML, fileToHTML, toBlocks, METHODS, autoMethod, clean, segment, plan, warnings, buildNodes, readFiles } };
 })();

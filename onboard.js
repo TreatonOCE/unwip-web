@@ -219,6 +219,7 @@ window.UnwipIntro = (function () {
       const title = await U.promptText('Your book', 'Title (you can change it later)', '');
       if (title) { const slug = await api.createProject(title, blankTemplate()); await U.openProject(slug, { skipCheck: true }); opened = true; }
     }
+    if (window.UnwipStart && !withTour) setTimeout(() => window.UnwipStart.safety(), 2500);   // phone/iPad: keep writing safe
     if (!opened) { U.showLibrary(); return; }
     if (withTour) { writerAfterTour = !!L.writer; setTimeout(tour, 500); }
     else if (L.writer) setTimeout(() => { U.setWriter(true); U.toast('This is Writer mode: just the page. Press Esc or F11 to see everything else.', '', 7000); }, 800);
