@@ -403,7 +403,7 @@ window.UnwipLook = (function () {
     const apply = () => { typing = { ...d }; placeCaret(); updateFocus(); };
     $$('.chip-row[data-key]', body).forEach(row => $$('.chip', row).forEach(c => c.onclick = () => {
       $$('.chip', row).forEach(x => x.classList.remove('on')); c.classList.add('on'); d[row.dataset.key] = c.dataset.v; apply();
-      if (d.autoDemo !== false) demo(row.dataset.key === 'sound' ? 'Tap tap. ' : 'Hello there. '); else pad.focus();
+      if (d.autoDemo !== false) demo(row.dataset.key === 'sound' ? 'Tap tap. ' : 'Hello there. ', true); else pad.focus();
     }));
     // type a phrase into the try-it box with the chosen effect, cursor and sound
     let demoT = null, demoOn = false;
