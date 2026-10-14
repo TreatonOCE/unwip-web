@@ -30,6 +30,39 @@ window.UnwipTrack = (function () {
     }
   }, true);
 
+  // ---------------------------------------------------------------- typing while NOT tracking
+  // The browser treats an added or deleted mark like bold: type beside one, or press Enter at its end, and the new words
+  // carry the mark on (green, underlined, listed as a suggestion). With tracking off, new words are never marked.
+  const tcAt = n => up(n, 'tc-ins') || up(n, 'tc-del');
+  function stepOut(r) {
+    const el = tcAt(r.startContainer); if (!el) return null;
+    // where in the mark the caret is: at its start, at its end, or in the middle (then the mark is split in two)
+    const before = document.createRange(); before.selectNodeContents(el); before.setEnd(r.startContainer, r.startOffset);
+    const atStart = !before.toString().length, atEnd = before.toString().length >= el.textContent.length;
+    const out = document.createRange();
+    if (atEnd) out.setStartAfter(el);
+    else if (atStart) out.setStartBefore(el);
+    else { const rest = document.createRange(); rest.setStart(r.startContainer, r.startOffset); rest.setEnd(el, el.childNodes.length); const tail = el.cloneNode(false); tail.appendChild(rest.extractContents()); el.after(tail); out.setStartAfter(el); }
+    out.collapse(true); return out;
+  }
+  editor.addEventListener('beforeinput', e => {
+    if (on() || S.programmatic || (e.inputType !== 'insertText' && e.inputType !== 'insertReplacementText') || e.data == null) return;
+    const sel = getSelection(); if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return;
+    const out = stepOut(sel.getRangeAt(0)); if (!out) return;
+    e.preventDefault();
+    const tn = document.createTextNode(e.data.replace(/ /g, '\u00a0')); out.insertNode(tn);   // (a plain space on its own at a line's end would vanish)
+    const nr = document.createRange(); nr.setStart(tn, tn.length); nr.collapse(true); sel.removeAllRanges(); sel.addRange(nr);
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: e.data }));
+  }, true);
+  // Enter at the end of a mark: the new line must not start inside a copy of it
+  editor.addEventListener('input', e => {
+    if (on() || S.programmatic || e.inputType !== 'insertParagraph') return;
+    const sel = getSelection(); if (!sel.rangeCount) return;
+    let n = sel.getRangeAt(0).startContainer; let block = n.nodeType === 3 ? n.parentNode : n; while (block && block !== editor && !/^(P|DIV|H[1-6]|LI|BLOCKQUOTE)$/.test(block.tagName)) block = block.parentNode;
+    if (!block || block === editor) return;
+    for (const el of [...block.querySelectorAll('ins.tc-ins, del.tc-del')]) if (!el.textContent.replace(/\u200b/g, '')) { while (el.firstChild) el.before(el.firstChild); el.remove(); }
+  });
+
   function typeText(text) {
     const sel = getSelection(); if (!sel.rangeCount) return;
     let r = sel.getRangeAt(0);

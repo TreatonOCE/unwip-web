@@ -66,7 +66,12 @@ window.UnwipBookImport = (function () {
     t = t.replace(/%%[\s\S]*?%%/g, '');                                   // Obsidian comments over several lines
     t = t.replace(/^(>\s*)\[![\w-]+\][+-]?\s*/gm, '$1');                    // Obsidian callouts: "> [!note] Title" keeps "Title"
     const out = []; let para = [];
-    const flush = () => { if (para.length) { out.push(`<p>${mdInline(para.join(' '))}</p>`); para = []; } };
+    // Obsidian (like Ulysses, Bear and most writing apps) shows each line of a note on its own line, even with only one
+    // line break between them ("soft" breaks). Strict Markdown joins them into one paragraph, which runs a novel's
+    // paragraphs together. So lines stay separate paragraphs, unless the text was wrapped at a fixed width on purpose
+    // (most lines short and stopping mid-sentence), in which case they're joined back up.
+    const wrapped = lines => { if (lines.length < 3) return false; const mid = lines.slice(0, -1); return mid.filter(l => l.length <= 90 && !/[.!?:;"'”’)\]…—-]$/.test(l)).length >= mid.length * 0.7; };
+    const flush = () => { if (!para.length) return; if (para.length === 1 || wrapped(para)) out.push(`<p>${mdInline(para.join(' '))}</p>`); else for (const l of para) out.push(`<p>${mdInline(l)}</p>`); para = []; };
     for (const raw of t.split('\n')) {
       const l = raw.trim();
       if (!l) { flush(); continue; }

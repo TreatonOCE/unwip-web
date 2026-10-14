@@ -330,7 +330,7 @@ window.UnwipSync = (function () {
   }
 
   // ================================================================== SETTINGS: WHERE PROJECTS LIVE
-  const ICON = { dropbox: '📦', onedrive: '☁️', default: '💻', custom: '📁' };
+  const ICON = new Proxy({ dropbox: '📦', onedrive: '☁️', icloud: '☁️', gdrive: '☁️', default: '💻', custom: '📁' }, { get: (o, k) => o[k] || '📁' });   // any other place gets a folder, never "undefined"
   async function settingsSection(body) {
     const box = $('#s-lib', body), extra = $('#s-extra', body);
     let info; try { info = await api.libraryInfo(); } catch { return; }

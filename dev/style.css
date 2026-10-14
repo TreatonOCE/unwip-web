@@ -1350,7 +1350,7 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .np-t { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .np-t b { font-size: 13.5px; } .np-t small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
 .np-item kbd { font-size: 10.5px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
-.np-prev { flex: 1; background: var(--panel); border-left: 1px solid var(--line); display: grid; place-items: center; padding: 14px; min-height: 230px; }
+.np-prev { flex: 1; background: var(--panel); border-left: 1px solid var(--line); display: grid; place-items: center; padding: 14px; min-height: 230px; contain: size; overflow: hidden; }   /* its size never moves the list */
 .np-page { width: 120px; height: 160px; background: #fffefb; border-radius: 3px; box-shadow: 0 2px 8px rgba(0,0,0,.15); padding: 16px 12px; display: flex; flex-direction: column; gap: 7px; }
 .np-page i { display: block; height: 3px; background: #d8d4cc; border-radius: 2px; } .np-page i.s { width: 60%; }
 .np-tree { font-size: 12.5px; line-height: 1.9; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
@@ -1360,13 +1360,13 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .sp-h { font-size: 14px; font-weight: 700; margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
 .sp-f { display: flex; gap: 6px; align-items: baseline; } .sp-f i { flex: 1; border-bottom: 1px dotted #bbb; }
 .sp-s { font-weight: 700; margin-top: 7px; font-size: 11.5px; } .sp-l { height: 3px; width: 80%; background: #e2ded6; border-radius: 2px; margin-top: 4px; }
-.tg-cols { display: flex; gap: 14px; margin-top: 10px; }
-.tg-list { width: 240px; max-height: 380px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.tg-cols { display: flex; gap: 14px; margin-top: 10px; height: min(380px, 60vh); }   /* fixed, so the dialog never jumps as the preview changes */
+.tg-list { width: 240px; max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
 .tg-item { text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 8px; cursor: pointer; color: var(--text); font: inherit; display: flex; gap: 8px; align-items: center; }
 .tg-item.on { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); font-weight: 600; }
 .tg-item small { color: var(--yes, #2f7a5b); }
 .tg-ic { font-size: 18px; width: 24px; text-align: center; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
-.tg-prev { flex: 1; background: var(--panel); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; }
+.tg-prev { flex: 1; background: var(--panel); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 10px; padding: 16px; overflow: auto; }
 .tg-prev .sp-sheet { width: 240px; font-size: 12px; }
 .tg-cap { color: var(--muted); font-size: 12.5px; }
 .help-back { position: fixed; inset: 0; z-index: 880; background: rgba(10,10,14,.4); display: flex; align-items: center; justify-content: center; padding: 24px; }
@@ -2621,3 +2621,46 @@ html.web .lib-head { padding-top: calc(18px + env(safe-area-inset-top)); padding
 .dev-tag { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 6px; background: #e8590c; color: #fff; font: 700 11px/1.4 system-ui, sans-serif; letter-spacing: .8px; vertical-align: middle; }
 html.flavor-dev .lib-head { border-bottom: 3px solid #e8590c; }
 html.flavor-dev .topbar { box-shadow: inset 0 3px 0 #e8590c; }
+
+/* name chips (timeline event characters, chapters) */
+.chipin { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 40px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); cursor: text; }
+.chipin:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.chipin-c { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 11px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 16%, var(--paper)); color: var(--text); font-size: 13.5px; font-weight: 500; }
+.chipin-c button { border: 0; background: none; color: var(--muted); font-size: 15px; line-height: 1; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; }
+.chipin-c button:hover { background: rgba(0,0,0,.08); color: var(--text); }
+.chipin-w { position: relative; flex: 1; min-width: 120px; }
+.chipin-in { width: 100%; border: 0 !important; outline: none; background: transparent; padding: 4px 2px !important; font: inherit; color: var(--text); box-shadow: none !important; }
+.chipin-s { position: absolute; left: 0; top: calc(100% + 6px); min-width: 200px; max-height: 220px; overflow: auto; z-index: 50; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 4px; display: flex; flex-direction: column; }
+.chipin-s.hidden { display: none; }
+.chipin-s button { text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 7px; cursor: pointer; color: var(--text); font: inherit; font-size: 14px; }
+.chipin-s button.on, .chipin-s button:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ev-chs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; min-height: 28px; align-items: center; }
+#ev-ch-add { max-width: 280px; }
+.tl-fbtn.on { border-color: var(--accent); color: var(--accent); }
+.tl-fmenu { position: fixed; z-index: 120; width: 260px; max-height: 60vh; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.tl-fmenu .tl-fmode { align-self: flex-start; }
+.tl-flist { overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.tl-flist .check { display: flex; gap: 8px; align-items: center; padding: 5px 4px; border-radius: 6px; cursor: pointer; }
+.tl-flist .check:hover { background: var(--panel-2); }
+.tl-ffoot { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 6px; }
+.dial-copy { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 3px 4px; margin-left: 2px; border-radius: 6px; vertical-align: -2px; }
+.dial-copy:hover { color: var(--accent); background: var(--panel-2); }
+@media (pointer: coarse) { .dial-copy { padding: 8px; margin: -6px -4px -6px 0; } }
+
+/* ---- "Not recording" reminder (Proof of writing, a setting per book) */
+.pf-remind { position: fixed; left: 50%; bottom: 46px; transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px 7px 16px; border-radius: 999px; background: #d64535; color: #fff; box-shadow: 0 6px 22px rgba(150, 30, 20, .35); font-size: 14px; animation: pf-remind-in .3s ease-out; }
+.pf-remind b { letter-spacing: .02em; }
+.pf-remind .pf-dot { width: 11px; height: 11px; border-radius: 50%; background: #fff; display: inline-block; animation: pfpulse 1.2s ease-in-out infinite; }
+.pf-remind .pf-dot.off { background: transparent; border: 2px solid #fff; box-sizing: border-box; animation: none; }
+.pf-remind .btn.primary { background: #fff; color: #b8372a; border-color: #fff; }
+.pf-remind .icon-btn { color: #fff; opacity: .8; } .pf-remind .icon-btn:hover { opacity: 1; background: rgba(255, 255, 255, .15); }
+.pf-remind.hidden { display: none; }
+body.writer .pf-remind { bottom: 18px; }
+@keyframes pf-remind-in { from { transform: translate(-50%, 12px); opacity: 0; } }
+.pf-remind-set { display: block; margin-top: 12px; }
+.statusbar .st-proof.on.paused { background: #8a6d1f; border-color: #8a6d1f; }
+.st-proof.on.paused .pf-dot { animation: none; background: transparent; border: 2px solid #fff; box-sizing: border-box; }
+
+/* editing the sheet of Characters, Places or Items: only the fields and headings */
+.cs-dlg.sheet-only .cs-name, .cs-dlg.sheet-only .cs-single-f { display: none; }

@@ -18,7 +18,7 @@ window.UnwipMaps = (function () {
   const FRAMES = { double: 'Double line', simple: 'Single line', thick: 'Thick line', ornate: 'Ornate corners', none: 'No frame' };
   const FRAME_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3a3a3a"><rect x="3" y="5" width="18" height="14" stroke-width="2"/><rect x="6" y="8" width="12" height="8" stroke-width="1"/></svg>';
   const TOOLS = [
-    ['select', '✋', 'Move & select: drag things around, double-click a label or pin to edit it, Delete removes it. Drag empty space to pan; scroll to zoom'],
+    ['select', '✋', 'Move & select: drag things around, double-click a label or pin to edit it, Delete removes it. To turn a landmark or label, drag the round handle that appears when it’s selected (it turns in small steps; hold Shift to turn it freely), or press R and Shift+R. Drag a bridge’s end to turn and stretch it. Drag empty space to pan; scroll to zoom'],
     ['land', '🟫', 'Paint land'], ['water', '🌊', 'Paint water (rub out land)'],
     ['forest', '🌲', 'Forest: drag to scatter trees'], ['mountain', '⛰️', 'Mountains: drag to place a range'], ['hill', '🏔️', 'Hills: drag to scatter'],
     ['town', '🏠', 'Town: click to place'], ['city', '🏰', 'City or castle: click to place'], ['tower', '🗼', 'Tower: click to place'], ['ruin', '🏚️', 'Ruins: click to place'],
@@ -204,7 +204,7 @@ window.UnwipMaps = (function () {
   }
   function stamp(g, s, P) {
     if (T && T.stamp(g, s, P)) return;
-    const z = s.s || 1; g.save(); g.translate(s.x, s.y); g.scale(z, z); g.lineWidth = 1.6; g.strokeStyle = P.ink; g.lineJoin = 'round';
+    const z = s.s || 1; g.save(); g.translate(s.x, s.y); g.rotate(s.rot || 0); g.scale(z, z); g.lineWidth = 1.6; g.strokeStyle = P.ink; g.lineJoin = 'round';
     if (s.k === 'tree') { g.fillStyle = P.forest; g.beginPath(); g.moveTo(0, -12); g.quadraticCurveTo(9, -9, 7, 0); g.quadraticCurveTo(0, 4, -7, 0); g.quadraticCurveTo(-9, -9, 0, -12); g.fill(); g.stroke(); g.beginPath(); g.moveTo(0, 1); g.lineTo(0, 6); g.stroke(); }
     else if (s.k === 'mountain') { g.fillStyle = P.mountain; g.beginPath(); g.moveTo(-18, 8); g.lineTo(-2, -20); g.lineTo(18, 8); g.closePath(); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-2, -20); g.lineTo(3, -6); g.lineTo(0, 8); g.stroke(); g.globalAlpha = 0.35; g.fillStyle = P.ink; g.beginPath(); g.moveTo(-2, -20); g.lineTo(18, 8); g.lineTo(3, 8); g.lineTo(3, -6); g.closePath(); g.fill(); }
     else if (s.k === 'hill') { g.beginPath(); g.moveTo(-14, 4); g.quadraticCurveTo(0, -12, 14, 4); g.stroke(); }
@@ -243,7 +243,8 @@ window.UnwipMaps = (function () {
     if (l.k === 'region') { g.font = `600 ${l.size || 44}px Georgia, serif`; g.letterSpacing = '10px'; }
     else if (l.k === 'sea') { g.font = `italic ${l.size || 30}px Georgia, serif`; g.letterSpacing = '3px'; g.fillStyle = P.seaLine === P.sea ? P.label : P.coast; }
     else { g.font = `${l.size || 20}px Georgia, serif`; }
-    g.lineWidth = 4; g.strokeStyle = P.land; g.globalAlpha = 0.85; if (l.k !== 'sea') g.strokeText(l.text, l.x, l.y); g.globalAlpha = 1; g.fillText(l.text, l.x, l.y); g.restore();
+    let x = l.x, y = l.y; if (l.rot) { g.translate(x, y); g.rotate(l.rot); x = 0; y = 0; }
+    g.lineWidth = 4; g.strokeStyle = P.land; g.globalAlpha = 0.85; if (l.k !== 'sea') g.strokeText(l.text, x, y); g.globalAlpha = 1; g.fillText(l.text, x, y); g.restore();
   }
   function drawPin(g, p, P) {
     g.save(); g.translate(p.x, p.y); g.fillStyle = P.pin; g.strokeStyle = P.ink; g.lineWidth = 1.5;
@@ -342,7 +343,8 @@ window.UnwipMaps = (function () {
     // selection and brush outline
     if (sel) {
       if (sel.type === 'path' && st.paths[sel.i]) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.globalAlpha = 0.35; ctx.lineWidth = 10; ctx.lineCap = 'round'; smoothPath(ctx, st.paths[sel.i].pts); ctx.stroke(); ctx.restore(); }
-      else { const b = bounds(sel); if (b) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.setLineDash([5, 4]); ctx.lineWidth = 2; ctx.strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8); ctx.restore(); } }
+      else { const b = bounds(sel), o = turnable(sel); if (b) { ctx.save(); if (o && o.rot && sel.type === 'label') { ctx.translate(o.x, o.y); ctx.rotate(o.rot); ctx.translate(-o.x, -o.y); } ctx.strokeStyle = '#3d7bd9'; ctx.setLineDash([5, 4]); ctx.lineWidth = 2; ctx.strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8); ctx.restore(); } }
+      const hd = handle(); if (hd) { const o = turnable(sel); ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.fillStyle = '#fff'; ctx.lineWidth = 2 / cam.z; if (!isBridge(o)) { ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(hd.x, hd.y); ctx.setLineDash([3 / cam.z, 3 / cam.z]); ctx.stroke(); ctx.setLineDash([]); } ctx.beginPath(); ctx.arc(hd.x, hd.y, 7 / cam.z, 0, 7); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(hd.x, hd.y, 3.5 / cam.z, -2.4, 1.2); ctx.stroke(); ctx.restore(); }
     }
     if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i], hs = 12 / cam.z; ctx.save(); ctx.fillStyle = '#3d7bd9'; ctx.fillRect(b.x + b.w - hs / 2, b.y + b.h - hs / 2, hs, hs); ctx.restore(); }
     if (drawing && drawing.path) drawPath(ctx, drawing.path, P);
@@ -356,6 +358,27 @@ window.UnwipMaps = (function () {
   let hover = null;
   const BRUSHY = ['land', 'water', 'forest', 'mountain', 'hill'];
 
+  // ================================================================== TURNING (landmarks, symbols and labels)
+  // A selected one gets a round handle above it: drag it round to turn it (snaps to 15° steps; Shift turns freely).
+  // A bridge's handle sits on its end instead, so dragging it turns the bridge and makes it longer or shorter.
+  const turnable = s => s && (s.type === 'stamp' ? st.stamps[s.i] : s.type === 'label' ? st.labels[s.i] : null) || null;
+  const isBridge = o => !!o && o.k === 't-bridge';
+  function handle() {
+    const o = turnable(sel); if (!o) return null;
+    const a = o.rot || 0;
+    if (isBridge(o)) { const L = (o.len || 60) * (o.s || 1) / 2; return { x: o.x + Math.cos(a) * L, y: o.y + Math.sin(a) * L }; }
+    const b = bounds(sel); if (!b) return null;
+    const d = (sel.type === 'label' ? b.h / 2 : Math.max(b.h, b.w) / 2) + 22 / cam.z;
+    return { x: o.x + Math.sin(a) * d, y: o.y - Math.cos(a) * d };
+  }
+  const snapAngle = (a, free) => { a = Math.atan2(Math.sin(a), Math.cos(a)); return free ? Math.round(a * 1000) / 1000 : Math.round(a / (Math.PI / 12)) * (Math.PI / 12); };
+  function turnTo(p, free) {
+    const o = turnable(sel); if (!o) return;
+    const dx = p.x - o.x, dy = p.y - o.y;
+    if (isBridge(o)) { o.rot = snapAngle(Math.atan2(dy, dx), free); o.len = Math.max(24, Math.min(400, Math.round(2 * Math.hypot(dx, dy) / (o.s || 1)))); }
+    else o.rot = snapAngle(Math.atan2(dx, -dy), free);
+    if (!o.rot) delete o.rot;
+  }
   // ================================================================== HIT TESTING
   function bounds(s) {
     if (s.type === 'stamp' && st.stamps[s.i] && T && /^t-/.test(st.stamps[s.i].k)) return T.stampBounds(st.stamps[s.i]);
@@ -369,7 +392,7 @@ window.UnwipMaps = (function () {
   function hit(x, y) {
     const inB = b => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
     for (let i = st.pins.length - 1; i >= 0; i--) if (inB(bounds({ type: 'pin', i }))) return { type: 'pin', i };
-    for (let i = st.labels.length - 1; i >= 0; i--) if (inB(bounds({ type: 'label', i }))) return { type: 'label', i };
+    for (let i = st.labels.length - 1; i >= 0; i--) { const l = st.labels[i], c = Math.cos(-(l.rot || 0)), s2 = Math.sin(-(l.rot || 0)), lx = l.x + (x - l.x) * c - (y - l.y) * s2, ly = l.y + (x - l.x) * s2 + (y - l.y) * c; const b = bounds({ type: 'label', i }); if (b && lx >= b.x && lx <= b.x + b.w && ly >= b.y && ly <= b.y + b.h) return { type: 'label', i }; }
     for (let i = st.stamps.length - 1; i >= 0; i--) if (inB(bounds({ type: 'stamp', i }))) return { type: 'stamp', i };
     for (let i = st.paths.length - 1; i >= 0; i--) if (st.paths[i].pts.some(p => Math.hypot(p[0] - x, p[1] - y) < 10)) return { type: 'path', i };
     if (isTown()) { const h = T.hit(x, y); if (h && h.type !== 'area') return h; const b = hitBox(x, y); if (b) return b; return h; }
@@ -397,6 +420,7 @@ window.UnwipMaps = (function () {
   function pointerDown(e) {
     if (e.button !== 0 && e.button !== 1) return;
     const p = world(e);
+    if (e.button === 0 && tool === 'select' && !e.altKey) { const hd = handle(); if (hd && Math.hypot(p.x - hd.x, p.y - hd.y) < 12 / cam.z) { cv.setPointerCapture(e.pointerId); push(); drawing = { turn: true }; return; } }
     if (e.button === 1 || (tool === 'select' && !hit(p.x, p.y)) || e.altKey) { drawing = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; sel = null; redraw(); return; }
     cv.setPointerCapture(e.pointerId);
     // resize the selected frame by its corner
@@ -428,7 +452,7 @@ window.UnwipMaps = (function () {
   function pointerMove(e) {
     const p = world(e); hover = p;
     if (T && T.busy) { T.pointerMove(p); return; }
-    if (!drawing) { if (BRUSHY.includes(tool)) redraw(); return; }
+    if (!drawing) { if (BRUSHY.includes(tool)) redraw(); else if (tool === 'select') { const hd = handle(); cv.style.cursor = hd && Math.hypot(p.x - hd.x, p.y - hd.y) < 12 / cam.z ? 'grab' : 'default'; } return; }
     if (drawing.pan) { cam.x = drawing.cx + e.clientX - drawing.sx; cam.y = drawing.cy + e.clientY - drawing.sy; redraw(); return; }
     if (drawing.move && sel) {
       const dx = p.x - drawing.last.x, dy = p.y - drawing.last.y; drawing.last = p;
@@ -438,6 +462,7 @@ window.UnwipMaps = (function () {
       redraw(); return;                      // the dragged item is drawn on its own layer, so nothing else is redrawn
     }
     if (drawing.box) { drawing.box.x1 = p.x; drawing.box.y1 = p.y; redraw(); return; }
+    if (drawing.turn) { turnTo(p, e.shiftKey); itemsDirty = true; redraw(); return; }
     if (drawing.resize) { const b = drawing.resize; b.w = Math.max(30, p.x - b.x); b.h = Math.max(30, p.y - b.y); itemsDirty = true; redraw(); return; }
     if (drawing.brush) { paint(p.x, p.y, drawing.on, drawing.last); drawing.last = p; redraw(); return; }
     if (drawing.scatter) { if (Math.hypot(p.x - drawing.last.x, p.y - drawing.last.y) > (drawing.scatter === 'mountain' ? 22 : 10)) { drawing.last = p; scatter(p); changed(); } return; }
@@ -734,6 +759,7 @@ window.UnwipMaps = (function () {
     const ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && e.key.toLowerCase() === 'z') { e.preventDefault(); e.stopPropagation(); $('#mp-undo', view).click(); }
     else if (ctrl && e.key.toLowerCase() === 'y') { e.preventDefault(); e.stopPropagation(); $('#mp-redo', view).click(); }
+    else if (!ctrl && !e.altKey && e.key.toLowerCase() === 'r' && turnable(sel)) { e.preventDefault(); e.stopPropagation(); push(); const o = turnable(sel); o.rot = snapAngle((o.rot || 0) + (e.shiftKey ? -1 : 1) * Math.PI / 12); if (!o.rot) delete o.rot; changed(); schedule(); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) { e.preventDefault(); e.stopPropagation(); removeSel(); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (sel) { sel = null; redraw(); } else close(); }
   }
