@@ -1350,7 +1350,32 @@
   // each thing that failed to save keeps its own retry (a chapter's words, the binder), so none replaces another
   let troubleTimer = null; const pending = new Map();
   let troubleRetry = null;   // truthy while anything is waiting to be saved
+  // ---- a book deleted on another device while it's open here (PC/Mac): its folder has moved to Deleted books.
+  // The saves that follow go into that Deleted copy (main.js), so the latest words are kept there; here the book
+  // closes, and nothing makes it again in the old place.
+  async function bookGone(how) {
+    if (S.bookGone || !S.slug) return;
+    S.bookGone = true;
+    const title = (S.project && S.project.title) || S.slug, slug = S.slug;
+    try { await flushSave(); } catch {}
+    try { if (S.metaTimer) await saveMetaNow(); } catch {}
+    pending.clear(); saveTrouble(null);
+    if (api.popoutClose && S.popped && S.popped.size) await api.popoutClose(slug).catch(() => {});
+    clearInterval(S.backupTimer); setRevise(false);
+    emit('leave');
+    S.slug = null; S.project = null; S.docId = null; S.bookGone = false;
+    setWriter(false);
+    await showLibrary();
+    const where = /bin/.test(how || 'bin') ? `It’s in Deleted books at the bottom of this screen${/kept/.test(how || '') ? ', with the last changes you made here' : ''}, if you need it back.` : 'It’s no longer in its folder.';
+    toast(`“${esc(title)}” was deleted on another device, so it closed here. ${where}`, 'warn', 12000);
+  }
+  if (api.projectAlive) setInterval(async () => {
+    if (!S.slug || S.bookGone || document.hidden) return;
+    try { if (!(await api.projectAlive(S.slug))) bookGone('bin'); } catch {}
+  }, 4000);
+
   function saveTrouble(e, retry, key) {
+    if (e && /BOOK_GONE/.test(String(e.message || e))) { if (!S.bookGone) bookGone(String(e.message || e)); return; }
     let bar = $('#save-trouble');
     if (!e) { if (bar && !pending.size) { bar.remove(); clearInterval(troubleTimer); troubleTimer = null; troubleRetry = null; if (api.setSaveTrouble) api.setSaveTrouble(false); } return; }
     if (retry) pending.set(key || 'x' + Math.random(), retry);
