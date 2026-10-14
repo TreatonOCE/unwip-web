@@ -286,8 +286,8 @@ window.UnwipSync = (function () {
     const body = document.createElement('div');
     body.innerHTML = `<p>Dropbox found ${list.length === 1 ? 'a document that was' : 'documents that were'} changed on two devices at once, so it kept both versions. Nothing is lost. Choose what to do with each one.</p>
       <div class="sy-list">${list.map((c, i) => `<div class="sy-row" data-i="${i}"><div><b>${esc(titleOf(c))}</b><span>Other version from ${esc(c.device)}</span></div>
-        <button class="btn small" data-a="keep">${c.kind === 'doc' ? 'Keep both' : 'Compare and bring in'}</button><button class="btn small ghost" data-a="drop">Not needed</button></div>`).join('')}</div>
-      <p class="rp-note">“Keep both” adds the other version as a new document right under the original, so you can compare them. “Not needed” moves it to the project’s backups folder rather than deleting it.</p>`;
+        <button class="btn primary" data-a="keep">${c.kind === 'doc' ? 'Keep both' : 'Compare and bring in'}</button><button class="btn" data-a="drop">Not needed</button></div>`).join('')}</div>
+      <p class="rp-note"><b>${list.some(c => c.kind === 'doc') ? 'Keep both' : 'Compare and bring in'}</b> ${list.some(c => c.kind === 'doc') ? 'adds the other version as a new document right under the original, so you can compare them' : 'brings across anything only the other device has, and shows you any names or synopses that differ so you can pick'}. <b>Not needed</b> moves the other version to the book’s backups folder rather than deleting it.</p>`;
     const handle = async (c, row, action) => {
       try {
         if (action === 'keep' && c.kind === 'doc') {
