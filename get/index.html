@@ -58,6 +58,13 @@ h1{font-family:var(--serif);font-weight:500;font-size:clamp(34px,6vw,50px);line-
 .card a{color:var(--accent);font-weight:600;text-decoration:none}
 .card a:hover{text-decoration:underline}
 .card.here{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.card{display:flex;flex-direction:column}
+.cbtns{display:flex;flex-direction:column;gap:8px;margin-top:auto}
+.card a.cbtn{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:var(--accent-text);padding:10px 14px;border-radius:9px;font-weight:600;font-size:15px;text-decoration:none}
+.card a.cbtn:hover{filter:brightness(1.08);text-decoration:none}
+.card a.cbtn.alt{background:var(--panel);color:var(--text);border:1px solid var(--line)}
+.card a.cbtn svg{width:17px;height:17px}
+.card p.cnote{margin:10px 0 0;font-size:13px}
 h2.sec{font-family:var(--serif);font-weight:500;font-size:28px;margin:52px 0 10px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .two .card p{margin:0}
@@ -93,19 +100,22 @@ kbd{font:inherit;font-weight:600}
   <div class="grid" id="all">
     <div class="card" data-os="win">
       <h3>Windows</h3>
-      <p>The full app. Installs in a minute and keeps itself up to date.</p>
-      <a href="https://github.com/TreatonOCE/unwip-releases/raw/main/Unwip-Setup.exe">Download for Windows</a>
-    </div>
-    <div class="card" data-os="ios">
-      <h3>iPhone &amp; iPad</h3>
-      <p>Open it in Safari, then Share › <b>Add to Home Screen</b> so it opens like an app.</p>
-      <a href="../">Open Unwip</a>
+      <p>The full app. Installs itself and keeps itself up to date.</p>
+      <div class="cbtns"><a class="cbtn" href="https://github.com/TreatonOCE/unwip-releases/raw/main/Unwip-Setup.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download</a></div>
     </div>
     <div class="card" data-os="mac">
       <h3>Mac</h3>
-      <p>The full app for Apple-chip and Intel Macs. Or no download: open it in Safari, then <b>File › Add to Dock</b>.</p>
-      <a href="https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/Unwip-Mac-AppleSilicon.zip">Apple chip</a> · <a href="https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/Unwip-Mac-Intel.zip">Intel</a> · <a href="../">In Safari</a>
+      <p>The full app. Not sure which? Apple menu  › About This Mac.</p>
+      <div class="cbtns"><a class="cbtn" href="https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/Unwip-Mac-AppleSilicon.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Apple chip (M1 and later)</a>
+      <a class="cbtn alt" href="https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/Unwip-Mac-Intel.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Intel</a></div>
+      <p class="cnote">First open: System Settings › Privacy &amp; Security › <b>Open Anyway</b>.</p>
     </div>
+    <div class="card" data-os="ios">
+      <h3>iPhone &amp; iPad</h3>
+      <p>No App Store needed. Open it in Safari, then Share › <b>Add to Home Screen</b>.</p>
+      <div class="cbtns"><a class="cbtn" href="../">Open Unwip</a></div>
+    </div>
+  </div>
   </div>
 
   <h2 class="sec">Moving from another app?</h2>

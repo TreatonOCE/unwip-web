@@ -41,7 +41,16 @@ window.UnwipBookImport = (function () {
   function mdInline(s) {
     // Obsidian: embedded notes/pictures ![[…]] and %%hidden comments%% go; ==highlights== keep their words
     s = s.replace(/!\[\[[^\]]*\]\]/g, '').replace(/%%.*?%%/g, '').replace(/==(.+?)==/g, '$1');
+    // HTML formatting written into the Markdown (<u>, <b>, <i>, <br>…) is kept as formatting; other tags (<span>,
+    // <font>, <div>…) are dropped but their words kept. Kept tags travel through esc() as private markers.
+    const KEEP = { b: 'b', strong: 'b', i: 'i', em: 'i', u: 'u', s: 's', strike: 's', del: 's', sup: 'sup', sub: 'sub', br: 'br' };
+    s = s.replace(/<(\/?)([a-zA-Z][\w-]*)\b[^<>]*?(\/?)>/g, (m, close, tag) => {
+      const t = KEEP[tag.toLowerCase()];
+      if (!t) return '';
+      return t === 'br' ? '\u0001br\u0002' : `\u0001${close}${t}\u0002`;
+    });
     s = esc(s);
+    s = s.replace(/\u0001(\/?)(b|i|u|s|sup|sub)\u0002/g, '<$1$2>').replace(/\u0001br\u0002/g, '<br>');
     s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<b><i>$1</i></b>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/__(.+?)__/g, '<b>$1</b>');
     s = s.replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1<i>$2</i>').replace(/(^|[^_\w])_(?!\s)(.+?)_(?!\w)/g, '$1<i>$2</i>');
     s = s.replace(/~~(.+?)~~/g, '<s>$1</s>').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, '$2');
