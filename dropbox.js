@@ -218,19 +218,19 @@ window.UnwipDropbox = (function () {
       .sort((a, b) => (/^[^/]+\/project\.json$/.test(b) ? 1 : 0) - (/^[^/]+\/project\.json$/.test(a) ? 1 : 0) || (/\/docs\//.test(b) ? 1 : 0) - (/\/docs\//.test(a) ? 1 : 0));
     const todo = keys.length; let done = 0; progress = { phase: 'files', done, todo, down: 0, up: 0 }; renderSoon();
     const touched = new Set();
-    for (const k of keys) {
+    const one = async k => {
       const R = remote[k], L = local[k], rec = st.records[k];
       progress.done = ++done; renderSoon();
       if (done % 40 === 0) { await persist(); if (touched.size) { tell(touched); touched.clear(); } }   // a closed app or lost signal picks up from here
       let lb = null, lh = null;
       if (L) {
-        if (rec && rec.hash && !changedNow.has(k) && R && rec.rev === R.rev) continue;   // nothing happened on either side
+        if (rec && rec.hash && !changedNow.has(k) && R && rec.rev === R.rev) return;   // nothing happened on either side
         lb = asBytes(await FS.read(LOCAL + L.rel)); lh = await contentHash(lb);
       }
       if (R && L) {
-        if (lh === R.hash) { st.records[k] = { rev: R.rev, hash: lh, ...shapeOf(k, lb) }; continue; }
+        if (lh === R.hash) { st.records[k] = { rev: R.rev, hash: lh, ...shapeOf(k, lb) }; return; }
         const remoteChanged = !rec || rec.rev !== R.rev, localChanged = !rec || rec.hash !== lh;
-        if (localChanged && !remoteChanged) { await push(k, L.rel, lb, lh, rec.rev); continue; }
+        if (localChanged && !remoteChanged) { await push(k, L.rel, lb, lh, rec.rev); return; }
         await pull(k, R, touched, localChanged && remoteChanged ? lb : null);
       } else if (R && !L) {
         if (rec && rec.rev === R.rev) { await remove(R.rel); delete st.records[k]; }      // deleted here: delete there too (Dropbox keeps it 30 days)
@@ -239,7 +239,15 @@ window.UnwipDropbox = (function () {
         if (rec && rec.hash === lh) { await rawRemove(LOCAL + L.rel); delete st.records[k]; touched.add(L.rel); }   // deleted on the other device
         else await push(k, L.rel, lb, lh, undefined);
       } else delete st.records[k];
-    }
+    };
+    // Each book's project file goes first, on its own (so another device never sees chapters it can't place yet);
+    // the rest go a few at a time. One at a time, a big book on a phone took minutes: each file is its own trip to
+    // Dropbox. Four at once is well inside what Dropbox allows, and a "slow down" from Dropbox is waited out as before.
+    const first = keys.filter(k => /^[^/]+\/project\.json$/.test(k)), rest = keys.filter(k => !/^[^/]+\/project\.json$/.test(k));
+    for (const k of first) await one(k);
+    let next = 0;
+    const worker = async () => { while (next < rest.length) await one(rest[next++]); };
+    await Promise.all([worker(), worker(), worker(), worker()]);
     st.last = Date.now(); progress = null; news = false;
     if (!dirty.size) st.pending = false;
     await persist();
