@@ -2732,3 +2732,6 @@ body.writer .pf-remind { bottom: 18px; }
 /* the Record button in the library, Build and Play top bars: a touch taller to sit with the other buttons */
 .rec-btn { height: 30px; margin-right: 6px; font-size: 13px; white-space: nowrap; flex: none; }
 @media (max-width: 640px) { .rec-btn .rb-label { display: none; } .rec-btn { padding: 0 9px; } }
+/* Build's top bar: the title gives way so "Saving…" never slides under the Record button */
+.bd-top .tb-left .pl-title { flex: 0 1 auto; min-width: 60px; }
+#bd-saved { flex: none; white-space: nowrap; }

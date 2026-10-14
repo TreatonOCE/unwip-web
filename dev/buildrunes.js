@@ -84,7 +84,7 @@
     const n = A.cols * A.rows, sig = g => (g.strokes || []).map(s => [Math.min(s.a, s.b), Math.max(s.a, s.b), s.c || 0].join('-')).sort().join('|');
     const have = new Set(A.glyphs.map(sig));
     for (let tries = 0; tries < 60; tries++) {
-      const strokes = [], k = 2 + rnd(3); let at = rnd(n);
+      const strokes = [], k = 2 + rnd(3) + (n > 16 ? rnd(3) : 0); let at = rnd(n);
       for (let i = 0; i < k; i++) {
         const near = [...Array(n).keys()].filter(j => { if (j === at) return false; const [x1, y1] = dotXY(A, at), [x2, y2] = dotXY(A, j); const d = Math.hypot(x2 - x1, y2 - y1) / CELL; return d <= 2.3; });
         const to = near[rnd(near.length)];
@@ -126,16 +126,32 @@
         <div class="field"><label>Ends</label><select id="br-cap"><option value="round">Ink (round)</option><option value="square">Carved (square)</option></select></div>
         <div class="field"><label>Slant</label><input type="range" id="br-slant" min="-20" max="20" step="1"></div>
         <div class="field"><label>Colour</label><input type="color" id="br-col"></div>
-        <div class="field"><label>Dot grid</label><select id="br-grid"><option value="3x3">3 × 3</option><option value="3x4">3 wide × 4 tall</option><option value="4x4">4 × 4</option><option value="2x4">2 wide × 4 tall</option></select></div>
+        <div class="field"><label>Dot grid</label><select id="br-grid"></select></div>
       </aside></div>`;
     const W = $('#br-w', box), cap = $('#br-cap', box), sl = $('#br-slant', box), col = $('#br-col', box), grid = $('#br-grid', box);
-    W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; col.value = A.color; grid.value = `${A.cols}x${A.rows}`;
+    // the dot grid: the more dots, the more shapes a rune can take (any size from 2 to 9 dots each way)
+    const GRIDS = [[2, 4], [3, 3], [3, 4], [3, 5], [4, 4], [4, 5], [4, 6], [5, 5], [5, 6], [5, 7], [6, 6], [7, 7]];
+    const gridOpts = () => {
+      const list = GRIDS.some(([c, r]) => c === A.cols && r === A.rows) ? GRIDS : [...GRIDS, [A.cols, A.rows]];
+      grid.innerHTML = list.map(([c, r]) => `<option value="${c}x${r}">${c === r ? `${c} × ${r}` : `${c} wide × ${r} tall`} (${c * r} dots)</option>`).join('') + '<option value="custom">Other size…</option>';
+      grid.value = `${A.cols}x${A.rows}`;
+    };
+    gridOpts();
+    W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; col.value = A.color;
     W.oninput = () => { A.width = +W.value; all(); }; cap.onchange = () => { A.cap = cap.value; all(); }; sl.oninput = () => { A.slant = +sl.value; all(); }; col.oninput = () => { A.color = col.value; all(); };
     grid.onchange = async () => {
-      const [c2, r2] = grid.value.split('x').map(Number);
-      if (A.glyphs.some(g => g.strokes.length) && !await U.confirmBox('Change the dot grid?', 'Runes keep their strokes where they can; strokes that fall off the new grid are removed.', 'Change it')) { grid.value = `${A.cols}x${A.rows}`; return; }
+      let v = grid.value;
+      if (v === 'custom') {
+        const t = await U.promptText('Dot grid size', 'Dots wide × dots tall (2 to 9 each), e.g. 6 x 8', `${A.cols} x ${A.rows}`);
+        const m = t && t.match(/(\d+)\D+(\d+)/);
+        if (!m) { grid.value = `${A.cols}x${A.rows}`; return; }
+        v = `${Math.min(9, Math.max(2, +m[1]))}x${Math.min(9, Math.max(2, +m[2]))}`;
+        if (v === `${A.cols}x${A.rows}`) { grid.value = v; return; }
+      }
+      const [c2, r2] = v.split('x').map(Number);
+      if ((c2 < A.cols || r2 < A.rows) && A.glyphs.some(g => g.strokes.length) && !await U.confirmBox('Change the dot grid?', 'Runes keep their strokes where they can; strokes that fall off the smaller grid are removed.', 'Change it')) { grid.value = `${A.cols}x${A.rows}`; return; }
       for (const g of A.glyphs) g.strokes = g.strokes.map(s => { const m = i => { const c = i % A.cols, r = Math.floor(i / A.cols); return c < c2 && r < r2 ? r * c2 + c : -1; }; return { ...s, a: m(s.a), b: m(s.b) }; }).filter(s => s.a >= 0 && s.b >= 0);
-      A.cols = c2; A.rows = r2; all();
+      A.cols = c2; A.rows = r2; gridOpts(); all();
     };
     $('#br-sample', box).value = A.sample || '';
     $('#br-sample', box).oninput = e => { A.sample = e.target.value; preview(); ctx.changed(); };
