@@ -2839,6 +2839,8 @@
         <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>`}
         <label class="check full"><input type="checkbox" id="s-dash" ${smartDash() ? 'checked' : ''}> Turn two hyphens (--) into an em dash (—) as I type</label>
         <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
+        <div class="section-label">Licence</div>
+        <div class="field full" id="s-licence"></div>
         <div class="section-label">Help</div>
         <div class="field"><label>New here, or showing someone?</label><button class="btn" id="g-intro" type="button">Welcome setup…</button></div>
         <div class="field"><label>A quick look around a book</label><button class="btn" id="g-tour" type="button">Take the tour</button></div>
@@ -2858,6 +2860,7 @@
     $('#s-typing', body).onclick = () => window.UnwipLook && window.UnwipLook.openTyping();
     if ($('#s-dict', body)) $('#s-dict', body).onclick = dictionaryDialog;
     if (window.UnwipSync) window.UnwipSync.settingsSection(body);
+    if (window.UnwipLicence) window.UnwipLicence.settingsSection(body);
     $('#g-intro', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.start(); };
     $('#g-tour', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.tour(); };
     $('#g-help', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipHelp && window.UnwipHelp.open(); };
@@ -4722,6 +4725,8 @@
 
   // ================================================================== START
   (async function start() {
+    // every window says it's the beta: "… — Unwip Beta" (one watcher, so every page title gets it)
+    if (!window.__betaTitle) { window.__betaTitle = 1; const t = document.querySelector('title'); const fix = () => { const n = document.title.replace(/Unwip(?= —|$)(?! Beta)/, 'Unwip Beta'); if (n !== document.title) document.title = n; }; fix(); if (t) new MutationObserver(fix).observe(t, { childList: true, characterData: true, subtree: true }); }
     try { S.settings = await api.getSettings(); } catch { S.settings = {}; }
     // a Build piece in its own window (PC/Mac, opened from inside a book): show just that piece
     const buildWin = new URLSearchParams(location.search).get('buildwin');

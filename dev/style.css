@@ -2737,3 +2737,11 @@ body.writer .pf-remind { bottom: 18px; }
 #bd-saved { flex: none; white-space: nowrap; }
 .pf-left { font-size: 12px; color: var(--muted); margin-top: -4px; } .pf-left:empty { display: none; }
 .pf-table .pf-acts { white-space: nowrap; } .pf-table .pf-acts .btn + .btn { margin-left: 4px; }
+/* ---- Licence key */
+.lic-dialog textarea { width: 100%; box-sizing: border-box; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--text); resize: vertical; }
+.lic-msg { min-height: 1.4em; margin: 8px 0 0; }
+.lic-msg.bad { color: #c23b2c; }
+.lic-msg.good, .lic-ok { color: #2f7d4a; }
+.lic-bar { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 900; display: flex; align-items: center; gap: 12px; max-width: min(760px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0,0,0,.18); font-size: 14px; }
+.lic-bar .btn { flex: none; }
+.brand-beta { align-self: center; margin: 0 2px 0 6px; padding: 2px 8px; border-radius: 999px; font: 600 11px/1.4 system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: #b4472a; background: rgba(238, 96, 56, .13); }
