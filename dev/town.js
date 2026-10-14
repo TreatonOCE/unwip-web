@@ -175,7 +175,12 @@ window.UnwipTownFactory = function (M) {
       g.save(); g.beginPath();
       for (const [a] of list) { const q = ccw(a.pts); g.moveTo(q[0][0], q[0][1]); for (let j = 1; j < q.length; j++) g.lineTo(q[j][0], q[j][1]); g.closePath(); }
       g.clip('nonzero');
-      for (const [a, i] of list) drawArea(g, a, P, i, true, 'tex');
+      if (k === 'field') for (const [a, i] of list) drawArea(g, a, P, i, true, 'tex');   // each field keeps its own furrows
+      else {   // trees and marks spread once over the whole joined shape (overlaps don't get twice as many)
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (const [a] of list) for (const [x, y] of a.pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+        drawArea(g, { k, pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]] }, P, list[0][1], true, 'tex');
+      }
       g.restore();
       areaEdges(g, list.map(x => x[0]), P, k);
     }
