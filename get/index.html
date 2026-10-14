@@ -75,20 +75,18 @@ p{margin:0}
 .hero .btn-row{justify-content:center}
 .hero .note{margin-top:16px}
 .dots{display:inline-flex;gap:14px;margin-bottom:26px}
-.dots i{width:30px;height:30px;border-radius:50%;border:6px solid var(--coral);position:relative;overflow:hidden;display:block}
-.dots i::after{content:"";position:absolute;inset:-1px;background:var(--coral);transform-origin:100% 50%;transform:scaleX(0);transition:transform .7s cubic-bezier(.2,.8,.2,1)}
-.dots.go i:nth-child(2)::after{transform:scaleX(.5)}
-.dots.go i:nth-child(3)::after{transform:scaleX(1);transition-delay:.45s}
-.dots.go i:nth-child(3){background:var(--coral);transition:background 0s 1.15s}
+.dots .pd{width:32px;height:32px;display:block}
+.dots.go .d2 .fr{transform:scaleX(.5)}
+.dots.go .d3 .fr{transform:scaleX(1);transition-delay:.45s}
 .stage{perspective:1600px;margin:52px auto 0;max-width:1060px;position:relative}
 .frame{position:relative;border-radius:16px;overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--rule);background:var(--panel);transform-origin:50% 0;transform:rotateX(var(--tilt,14deg)) scale(var(--sc,.94));will-change:transform}
 .frame .bar{height:34px;display:flex;align-items:center;gap:7px;padding:0 14px;background:color-mix(in srgb,var(--panel) 92%,var(--sky));border-bottom:1px solid var(--rule)}
 .frame .bar i{width:11px;height:11px;border-radius:50%;background:var(--rule)}
 .float{position:absolute;background:var(--panel);border:1px solid var(--rule);border-radius:14px;box-shadow:0 18px 40px -20px rgba(28,42,66,.5);padding:12px 14px;font-size:.875rem;display:flex;align-items:center;gap:10px;text-align:left;z-index:3}
 .float b{display:block;font-size:1rem}
-.float.goal{left:-28px;top:38%;animation:bob 6s ease-in-out infinite}
+.float.goal{left:-28px;top:30%;animation:bob 6s ease-in-out infinite}
 .float.rec{right:-24px;top:14%;animation:bob 7s ease-in-out -2s infinite}
-.float.sync{right:6%;bottom:-22px;animation:bob 6.5s ease-in-out -4s infinite}
+.float.sync{left:-20px;bottom:18%;animation:bob 6.5s ease-in-out -4s infinite}
 @keyframes bob{50%{transform:translateY(-8px)}}
 .ring{width:42px;height:42px;flex:none}
 .ring circle{fill:none;stroke-width:5}
@@ -112,12 +110,12 @@ section{padding:96px 0;position:relative}
 .flow .line i{display:block;height:100%;background:var(--coral);transform-origin:0 50%;transform:scaleX(var(--p,0))}
 .step{position:relative;text-align:center;padding:0 6px}
 .mk{width:58px;height:58px;margin:0 auto 22px;border-radius:50%;background:var(--bg);display:grid;place-items:center;position:relative;z-index:1}
-.mk span{width:44px;height:44px;border-radius:50%;border:8px solid var(--coral);position:relative;overflow:hidden;transition:transform .4s ease}
-.mk span::after{content:"";position:absolute;inset:-1px;background:var(--coral);transform-origin:100% 50%;transform:scaleX(0);transition:transform .8s cubic-bezier(.2,.8,.2,1)}
-.step.on .mk span{transform:scale(1.08)}
-.step.on:nth-child(3) .mk span::after{transform:scaleX(.5)}
-.step.on:nth-child(4) .mk span::after{transform:scaleX(1)}
-.step.on:nth-child(4) .mk span{background:var(--coral);transition:transform .4s ease,background 0s .8s}
+.mk .pd{width:46px;height:46px;display:block;transition:transform .4s ease}
+.step.on .mk .pd{transform:scale(1.08)}
+.step.on .k2 .fr{transform:scaleX(.5)}
+.step.on .k3 .fr{transform:scaleX(1)}
+/* each dot: a ring, with a full coral circle over it shown from the right (so a half or full dot has no seam) */
+.pd .fr{transform-box:fill-box;transform-origin:100% 50%;transform:scaleX(0);transition:transform .8s cubic-bezier(.2,.8,.2,1)}
 .step h3{font-size:1.45rem}
 .step p{color:var(--muted);margin:10px auto 16px;max-width:22rem}
 .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
@@ -224,7 +222,7 @@ footer a{font-weight:600;font-size:.9375rem}
   .rv{opacity:1;transform:none;transition:none}
   .frame{transform:none}
   .float{animation:none}
-  .dots i::after,.mk span::after{transition:none}
+  .pd .fr{transition:none}
   html{scroll-behavior:auto}
 }
 
@@ -233,7 +231,7 @@ footer a{font-weight:600;font-size:.9375rem}
   .zig,.zig.flip{grid-template-columns:1fr;gap:32px;margin-top:72px}
   .zig.flip .txt{order:0}
   .groups{grid-template-columns:1fr;gap:28px}
-  .float.goal{left:8px}.float.rec{right:8px}
+  .float.goal{left:8px}.float.rec{right:8px}.float.sync{left:8px}
   .tiles{grid-template-columns:1fr}
   .tiles.n2{grid-template-columns:1fr 1fr}
 }
@@ -291,7 +289,7 @@ footer a{font-weight:600;font-size:.9375rem}
 
 <div class="hero" id="hero">
   <div class="wrap hero-inner">
-    <div class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="dots" id="dots" aria-hidden="true"><svg class="pd d1" viewBox="0 0 44 44" aria-hidden="true"><defs><clipPath id="pdc1"><rect class="fr" x="0" y="0" width="44" height="44"/></clipPath></defs><circle cx="22" cy="22" r="17.5" fill="none" stroke="#EE6038" stroke-width="9"/><circle cx="22" cy="22" r="22" fill="#EE6038" clip-path="url(#pdc1)"/></svg><svg class="pd d2" viewBox="0 0 44 44" aria-hidden="true"><defs><clipPath id="pdc2"><rect class="fr" x="0" y="0" width="44" height="44"/></clipPath></defs><circle cx="22" cy="22" r="17.5" fill="none" stroke="#EE6038" stroke-width="9"/><circle cx="22" cy="22" r="22" fill="#EE6038" clip-path="url(#pdc2)"/></svg><svg class="pd d3" viewBox="0 0 44 44" aria-hidden="true"><defs><clipPath id="pdc3"><rect class="fr" x="0" y="0" width="44" height="44"/></clipPath></defs><circle cx="22" cy="22" r="17.5" fill="none" stroke="#EE6038" stroke-width="9"/><circle cx="22" cy="22" r="22" fill="#EE6038" clip-path="url(#pdc3)"/></svg></div>
     <h1><span>Bring your book in.</span> <span>Write it to the end.</span></h1>
     <p class="lede">Unwip is a quiet writing app for novelists. It opens your Scrivener projects with their folders and formatting, keeps your pages clean when you paste, and lets you leave with the whole book whenever you want.</p>
     <div class="btn-row" id="hero-cta">
@@ -331,9 +329,9 @@ footer a{font-weight:600;font-size:.9375rem}
       <p class="lede rv d1" style="margin-top:14px">The three dots in Unwip’s name are the life of a book. Each one fills as you go.</p>
       <div class="flow" id="flowsteps">
         <div class="line" aria-hidden="true"><i></i></div>
-        <div class="step rv"><div class="mk" aria-hidden="true"><span></span></div><h3>Bring it in</h3><p>Open a Scrivener project, an Obsidian vault, Word files or a whole folder. Your original stays untouched.</p><div class="chips"><span>Scrivener</span><span>Obsidian</span><span>Word</span><span>Markdown</span></div></div>
-        <div class="step rv d1"><div class="mk" aria-hidden="true"><span></span></div><h3>Write</h3><p>A calm page, a binder, goals and sprints. Switch on the corkboard, outline and timeline when you want them.</p><div class="chips"><span>Goals</span><span>Sprints</span><span>Snapshots</span><span>Revise</span></div></div>
-        <div class="step rv d2"><div class="mk" aria-hidden="true"><span></span></div><h3>Finish</h3><p>A print-ready paperback, an e-book, a Word file for an agent, or the whole project back to Scrivener.</p><div class="chips"><span>PDF</span><span>EPUB</span><span>Word</span><span>Scrivener</span></div></div>
+        <div class="step rv"><div class="mk" aria-hidden="true"><svg class="pd k1" viewBox="0 0 44 44" aria-hidden="true"><defs><clipPath id="pdc4"><rect class="fr" x="0" y="0" width="44" height="44"/></clipPath></defs><circle cx="22" cy="22" r="17.5" fill="none" stroke="#EE6038" stroke-width="9"/><circle cx="22" cy="22" r="22" fill="#EE6038" clip-path="url(#pdc4)"/></svg></div><h3>Bring it in</h3><p>Open a Scrivener project, an Obsidian vault, Word files or a whole folder. Your original stays untouched.</p><div class="chips"><span>Scrivener</span><span>Obsidian</span><span>Word</span><span>Markdown</span></div></div>
+        <div class="step rv d1"><div class="mk" aria-hidden="true"><svg class="pd k2" viewBox="0 0 44 44" aria-hidden="true"><defs><clipPath id="pdc5"><rect class="fr" x="0" y="0" width="44" height="44"/></clipPath></defs><circle cx="22" cy="22" r="17.5" fill="none" stroke="#EE6038" stroke-width="9"/><circle cx="22" cy="22" r="22" fill="#EE6038" clip-path="url(#pdc5)"/></svg></div><h3>Write</h3><p>A calm page, a binder, goals and sprints. Switch on the corkboard, outline and timeline when you want them.</p><div class="chips"><span>Goals</span><span>Sprints</span><span>Snapshots</span><span>Revise</span></div></div>
+        <div class="step rv d2"><div class="mk" aria-hidden="true"><svg class="pd k3" viewBox="0 0 44 44" aria-hidden="true"><defs><clipPath id="pdc6"><rect class="fr" x="0" y="0" width="44" height="44"/></clipPath></defs><circle cx="22" cy="22" r="17.5" fill="none" stroke="#EE6038" stroke-width="9"/><circle cx="22" cy="22" r="22" fill="#EE6038" clip-path="url(#pdc6)"/></svg></div><h3>Finish</h3><p>A print-ready paperback, an e-book, a Word file for an agent, or the whole project back to Scrivener.</p><div class="chips"><span>PDF</span><span>EPUB</span><span>Word</span><span>Scrivener</span></div></div>
       </div>
     </div>
   </section>
