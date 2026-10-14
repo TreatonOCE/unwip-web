@@ -86,7 +86,7 @@ kbd{font:inherit;font-weight:600}
   <section class="hero" id="hero">
     <!-- filled in for the device you're on; this is what shows without JavaScript -->
     <h2>Get Unwip</h2>
-    <p>For Windows, iPhone, iPad, or any computer with a web browser.</p>
+    <p>For Windows, Mac, iPhone, iPad, or any computer with a web browser.</p>
     <a class="btn" href="#all">See the options</a>
   </section>
 
@@ -101,10 +101,10 @@ kbd{font:inherit;font-weight:600}
       <p>Open it in Safari, then Share › <b>Add to Home Screen</b> so it opens like an app.</p>
       <a href="../">Open Unwip</a>
     </div>
-    <div class="card" data-os="web">
-      <h3>Mac, Android, anything else</h3>
-      <p>Unwip runs in your web browser and works offline once it has opened.</p>
-      <a href="../">Open Unwip in your browser</a>
+    <div class="card" data-os="mac">
+      <h3>Mac</h3>
+      <p>Open it in Safari, then <b>File › Add to Dock</b>. It gets its own window and icon, and works offline.</p>
+      <a href="../">Open Unwip</a>
     </div>
   </div>
 
@@ -139,6 +139,8 @@ kbd{font:inherit;font-weight:600}
   var ua = navigator.userAgent, hero = document.getElementById('hero');
   var ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var win = /Windows/.test(ua) && !/Windows Phone/.test(ua);
+  var mac = !ios && /Macintosh|Mac OS X/.test(ua);
+  var chromeish = /Chrome|Edg\//.test(ua);
   var dl = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>';
   if (win) {
     hero.innerHTML = '<h2>Unwip for Windows</h2><p>Unwip installs itself with shortcuts on your Desktop and in the Start menu, then keeps itself up to date. The first time, it also downloads the app engine (about 110 MB).</p>' +
@@ -151,12 +153,19 @@ kbd{font:inherit;font-weight:600}
       '<ol class="steps"><li>Tap <b>Open Unwip</b> below.</li><li>Tap the <b>Share</b> button (the square with an arrow).</li><li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>' +
       '<p style="margin:16px 0 0"><a class="btn" href="../">Open Unwip</a></p>' +
       '<p class="small">This keeps your books safe: Safari clears a website’s saved data after 7 days without a visit, but not for apps on the Home Screen.</p>';
+  } else if (mac) {
+    hero.innerHTML = '<h2>Unwip for Mac</h2><p>No download needed. Unwip runs from the web and can sit in your Dock like any other app, with its own window and icon. It works offline once it has opened.</p>' +
+      (chromeish
+        ? '<ol class="steps"><li>Click <b>Open Unwip</b> below.</li><li>In Chrome’s address bar, click the <b>Install</b> icon (a little screen with an arrow), or open the ⋮ menu › <b>Cast, save and share</b> › <b>Install page as app</b>.</li></ol>'
+        : '<ol class="steps"><li>Open this page in <b>Safari</b> and click <b>Open Unwip</b> below.</li><li>In the menu bar choose <b>File</b> › <b>Add to Dock</b>, then <b>Add</b>.</li></ol>') +
+      '<p style="margin:16px 0 0"><a class="btn" href="../">Open Unwip</a></p>' +
+      '<p class="small">Add to Dock needs macOS Sonoma (14) or later. On an older Mac, just bookmark Unwip.</p>';
   } else {
     hero.innerHTML = '<h2>Unwip in your browser</h2><p>Nothing to install. It runs in the browser, saves as you type, and works offline once it has opened.</p>' +
       '<a class="btn" href="../">Open Unwip</a><p class="small">On Windows? There’s a full app too: <a href="https://github.com/TreatonOCE/unwip-releases/raw/main/Unwip-Setup.exe" style="color:var(--accent)">download it here</a>.</p>';
   }
   var cards = document.querySelectorAll('.card[data-os]');
-  for (var i = 0; i < cards.length; i++) { var os = cards[i].getAttribute('data-os'); if ((win && os === 'win') || (ios && os === 'ios') || (!win && !ios && os === 'web')) cards[i].className += ' here'; }
+  for (var i = 0; i < cards.length; i++) { var os = cards[i].getAttribute('data-os'); if ((win && os === 'win') || (ios && os === 'ios') || (mac && os === 'mac')) cards[i].className += ' here'; }
 })();
 </script>
 </body>
