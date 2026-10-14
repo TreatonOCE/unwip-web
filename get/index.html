@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Get Unwip</title>
-<meta name="description" content="Unwip is a writing app for novels: chapters, a corkboard, goals, and a print-ready book at the end. Free, no AI, no account.">
+<meta name="description" content="Unwip is a writing app for novels: chapters, a corkboard, goals, and a print-ready book at the end. Free during the beta, no AI, no account.">
 <meta property="og:title" content="Unwip: write to finish">
 <meta property="og:description" content="A writing app for novels. Free, no AI, no account. Windows, iPhone, iPad and any browser.">
 <meta property="og:image" content="https://treatonoce.github.io/unwip-web/icon-512.png">
@@ -58,6 +59,16 @@ h1{font-family:var(--serif);font-weight:500;font-size:clamp(34px,6vw,50px);line-
 .card a{color:var(--accent);font-weight:600;text-decoration:none}
 .card a:hover{text-decoration:underline}
 .card.here{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.grid.n2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.beta{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:#fbe8d4;color:#9a4a12;vertical-align:middle;margin-left:4px;letter-spacing:0}
+.note-warn{margin:14px 0 0;padding:10px 12px;border-radius:8px;background:rgba(238,96,56,.10);border:1px solid rgba(238,96,56,.35);font-size:15px}
+.betacard{border-color:#e7c9a5;background:linear-gradient(0deg,var(--paper),var(--paper))}
+.card ul.ticks,.card ul.crosses{margin:8px 0 0;padding:0;list-style:none}
+.card ul.ticks li,.card ul.crosses li{position:relative;padding-left:24px;margin:6px 0;color:var(--muted);font-size:15px}
+.card ul.ticks li b{color:var(--text)}
+.card ul.ticks li::before{content:'✓';position:absolute;left:2px;color:#2f7d4f;font-weight:700}
+.card ul.crosses li::before{content:'–';position:absolute;left:4px;color:#9a4a12;font-weight:700}
+.card a{color:var(--accent)}
 .card{display:flex;flex-direction:column}
 .cbtns{display:flex;flex-direction:column;gap:8px;margin-top:auto}
 .card a.cbtn{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:var(--accent-text);padding:10px 14px;border-radius:9px;font-weight:600;font-size:15px;text-decoration:none}
@@ -87,7 +98,7 @@ kbd{font:inherit;font-weight:600}
   <h1>A quiet place to write your novel, and get it done.</h1>
   <p class="lead">Chapters and scenes in a binder, a corkboard, daily goals, and a print-ready paperback, e-book or Word file at the end.</p>
   <ul class="facts">
-    <li>Free</li><li>No AI</li><li>No account needed</li><li>Your books stay on your device or your own Dropbox</li>
+    <li>Free during beta</li><li>No AI</li><li>No account needed</li><li>Your books stay on your device or your own Dropbox</li>
   </ul>
 
   <section class="hero" id="hero">
@@ -104,7 +115,7 @@ kbd{font:inherit;font-weight:600}
       <div class="cbtns"><a class="cbtn" href="https://github.com/TreatonOCE/unwip-releases/raw/main/Unwip-Setup.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download</a></div>
     </div>
     <div class="card" data-os="mac">
-      <h3>Mac</h3>
+      <h3>Mac <span class="beta">beta, not yet tested</span></h3>
       <p>The full app. Not sure which? Apple menu  › About This Mac.</p>
       <div class="cbtns"><a class="cbtn" href="https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/Unwip-Mac-AppleSilicon.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Apple chip (M1 and later)</a>
       <a class="cbtn alt" href="https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/Unwip-Mac-Intel.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Intel</a></div>
@@ -113,9 +124,9 @@ kbd{font:inherit;font-weight:600}
     <div class="card" data-os="ios">
       <h3>iPhone &amp; iPad</h3>
       <p>No App Store needed. Open it in Safari, then Share › <b>Add to Home Screen</b>.</p>
+      <p class="cnote"><b>Turn on Dropbox sync or make regular backups.</b> Your device can clear browser storage.</p>
       <div class="cbtns"><a class="cbtn" href="../">Open Unwip</a></div>
     </div>
-  </div>
   </div>
 
   <h2 class="sec">Moving from another app?</h2>
@@ -142,9 +153,49 @@ kbd{font:inherit;font-weight:600}
     </div>
   </div>
 
+  <h2 class="sec" id="beta">This is a beta</h2>
+  <div class="card betacard">
+    <p>Thanks for trying Unwip early. A few things, so nothing you care about is at risk:</p>
+    <ul class="ticks">
+      <li><b>Keep your original.</b> If you’re bringing in a Scrivener project or an Obsidian vault, Unwip makes a copy and doesn’t change the original. Keep it until you’re happy.</li>
+      <li><b>Keep backups.</b> Unwip makes its own backups, but also save one now and then: on the main screen, open a book’s ⋯ menu › <b>Save a full backup file</b>, and keep it somewhere safe.</li>
+      <li><b>Tell me what breaks.</b> Even small things. That’s the whole point of a beta.</li>
+    </ul>
+  </div>
+  <div class="two" style="margin-top:14px">
+    <div class="card">
+      <h3>What’s been tested</h3>
+      <ul class="ticks">
+        <li>The Windows app: used by its maker, plus automated tests that edit, paste, undo and move chapters thousands of times and check no words are lost</li>
+        <li>iPhone and iPad (in Safari, added to the Home Screen)</li>
+        <li>Dropbox sync between the PC, iPhone and iPad</li>
+        <li>Scrivener import and export, there and back</li>
+        <li>Obsidian and Markdown folder import</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Not tested yet</h3>
+      <ul class="crosses">
+        <li>The Mac app: no Mac user has tried it yet. If you have a Mac, you’d be the first.</li>
+        <li>Android phones and tablets (the browser version should work)</li>
+        <li>Screen video recording on a Mac</li>
+        <li>Very large books (over about 300,000 words) on a phone</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px" id="report">
+    <h3>Found a problem?</h3>
+    <p>In Unwip, click <b>Report a problem</b> at the bottom of the main screen (or search for it). It adds the details that help fix it (your version and device, never your writing) and lets you see exactly what’s sent.</p>
+    <p class="if-discord">Or tell us in the <a id="discord" href="#">Unwip Discord</a>, where you can also ask questions and see what’s coming.</p>
+    <p>Or email <a id="mailto" href="#"></a>.</p>
+  </div>
+
   <footer>Unwip is made by one writer, for writers. No ads, no tracking.</footer>
 </main>
 <script>
+// The beta's Discord invite and the address problem reports go to (empty: not shown)
+var DISCORD = '';
+var SUPPORT = '';
 (function () {
   var ua = navigator.userAgent, hero = document.getElementById('hero');
   var ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -153,7 +204,7 @@ kbd{font:inherit;font-weight:600}
   var chromeish = /Chrome|Edg\//.test(ua);
   var dl = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>';
   if (win) {
-    hero.innerHTML = '<h2>Unwip for Windows</h2><p>Unwip installs itself with shortcuts on your Desktop and in the Start menu, then keeps itself up to date. The first time, it also downloads the app engine (about 110 MB).</p>' +
+    hero.innerHTML = '<h2>Unwip for Windows</h2><p>Unwip installs itself with shortcuts on your Desktop and in the Start menu, then keeps itself up to date. </p><p>The first launch downloads about 110 MB, so you need an internet connection once.</p>' +
       '<a class="btn" href="https://github.com/TreatonOCE/unwip-releases/raw/main/Unwip-Setup.exe">' + dl + 'Download for Windows</a>' +
       '<p class="small">If Windows says “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.</p>';
   } else if (ios) {
@@ -162,10 +213,11 @@ kbd{font:inherit;font-weight:600}
       (safari ? '' : '<p class="small" style="margin:0 0 14px">Open this page in <b>Safari</b> first: other browsers on iPhone can’t add it to the Home Screen.</p>') +
       '<ol class="steps"><li>Tap <b>Open Unwip</b> below.</li><li>Tap the <b>Share</b> button (the square with an arrow).</li><li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>' +
       '<p style="margin:16px 0 0"><a class="btn" href="../">Open Unwip</a></p>' +
-      '<p class="small">This keeps your books safe: Safari clears a website’s saved data after 7 days without a visit, but not for apps on the Home Screen.</p>';
+      '<p class="small">This keeps your books safe: Safari clears a website’s saved data after 7 days without a visit, but not for apps on the Home Screen.</p>' +
+      '<div class="note-warn"><b>Turn on Dropbox sync or make regular backups.</b> Your device can clear browser storage.</div>';
   } else if (mac) {
     var M = 'https://github.com/TreatonOCE/unwip-releases/releases/download/mac-app/';
-    hero.innerHTML = '<h2>Unwip for Mac</h2><p>The full app, for macOS 10.15 or later. It keeps itself up to date.</p>' +
+    hero.innerHTML = '<h2>Unwip for Mac <span class="beta">beta, not yet tested</span></h2><p>The full app, for macOS 10.15 or later. It keeps itself up to date.</p>' +
       '<p style="display:flex;gap:10px;flex-wrap:wrap;margin:0"><a class="btn" href="' + M + 'Unwip-Mac-AppleSilicon.zip">' + dl + 'Mac with Apple chip</a>' +
       '<a class="btn" style="background:var(--panel);color:var(--text);border:1px solid var(--line)" href="' + M + 'Unwip-Mac-Intel.zip">' + dl + 'Mac with Intel</a></p>' +
       '<p class="small">Not sure which? Apple menu  › <b>About This Mac</b>. If it says <b>Chip: Apple M…</b>, choose Apple chip; if it says <b>Processor: Intel</b>, choose Intel.</p>' +
@@ -179,8 +231,16 @@ kbd{font:inherit;font-weight:600}
     hero.innerHTML = '<h2>Unwip in your browser</h2><p>Nothing to install. It runs in the browser, saves as you type, and works offline once it has opened.</p>' +
       '<a class="btn" href="../">Open Unwip</a><p class="small">On Windows? There’s a full app too: <a href="https://github.com/TreatonOCE/unwip-releases/raw/main/Unwip-Setup.exe" style="color:var(--accent)">download it here</a>.</p>';
   }
-  var cards = document.querySelectorAll('.card[data-os]');
-  for (var i = 0; i < cards.length; i++) { var os = cards[i].getAttribute('data-os'); if ((win && os === 'win') || (ios && os === 'ios') || (mac && os === 'mac')) cards[i].className += ' here'; }
+  // the big card above is this device's; the row below offers the others, so nothing appears twice
+  var mine = win ? 'win' : ios ? 'ios' : mac ? 'mac' : '';
+  var cards = document.querySelectorAll('#all .card[data-os]');
+  for (var i = 0; i < cards.length; i++) if (cards[i].getAttribute('data-os') === mine) cards[i].parentNode.removeChild(cards[i]);
+  document.getElementById('all').className += ' n' + document.querySelectorAll('#all .card').length;
+  // links filled in at the top of the page
+  var d = document.getElementById('discord'), dl2 = document.querySelectorAll('.if-discord');
+  for (var j = 0; j < dl2.length; j++) dl2[j].style.display = DISCORD ? '' : 'none';
+  if (d && DISCORD) d.href = DISCORD;
+  var m = document.getElementById('mailto'); if (m) { if (SUPPORT) { m.href = 'mailto:' + SUPPORT + '?subject=' + encodeURIComponent('Unwip beta'); m.textContent = SUPPORT; } else m.parentNode.style.display = 'none'; }
 })();
 </script>
 </body>
