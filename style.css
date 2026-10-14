@@ -2306,11 +2306,16 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 @media (min-width: 641px) { .dash-card.dials:has(.dash-setgoal) .stat-stack { margin-top: 20px; } }
 
 /* ---- Proof of writing ---- */
-.st-proof { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; }
-.st-proof .pf-dot { width: 8px; height: 8px; border-radius: 50%; background: #d64535; display: inline-block; }
-.st-proof .pf-dot.off { background: transparent; border: 1.5px solid currentColor; opacity: .7; }
-.st-proof.on { color: #c23b2c; font-weight: 600; }
-.st-proof.on .pf-dot { animation: pfpulse 1.6s ease-in-out infinite; }
+/* the Record button: a recorder's button, a red dot in a coral outline; solid red while recording */
+.statusbar .st-proof { display: inline-flex; align-items: center; gap: 7px; margin-right: 12px; height: 22px; padding: 0 11px 0 9px; border-radius: 999px;
+  border: 1.5px solid rgba(214, 69, 53, .55); background: rgba(214, 69, 53, .07); color: #b8372a; font-weight: 600; font-size: 12.5px; cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s; }
+.statusbar .st-proof:hover { background: rgba(214, 69, 53, .14); border-color: #d64535; box-shadow: 0 0 0 3px rgba(214, 69, 53, .12); }
+.st-proof .pf-dot { width: 9px; height: 9px; border-radius: 50%; background: #d64535; display: inline-block; box-shadow: 0 0 0 2px rgba(214, 69, 53, .18); }
+.st-proof .pf-dot.off { background: #d64535; border: 0; opacity: 1; }
+.statusbar .st-proof.on { background: #d64535; border-color: #d64535; color: #fff; }
+.statusbar .st-proof.on:hover { background: #c23b2c; }
+.st-proof.on .pf-dot { background: #fff; box-shadow: none; animation: pfpulse 1.6s ease-in-out infinite; }
+:root[data-theme="dark"] .statusbar .st-proof:not(.on) { color: #ff8a7a; border-color: rgba(255, 138, 122, .55); background: rgba(255, 138, 122, .08); }
 @keyframes pfpulse { 50% { opacity: .35; } }
 .pf-dialog .pf-lead { margin: 0 0 14px; color: var(--muted); }
 .pf-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; background: var(--paper); }
