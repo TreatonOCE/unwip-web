@@ -88,7 +88,8 @@ window.UnwipMaps = (function () {
   let itemsDirty = true;
   function push() { undo.push(snapshot()); if (undo.length > 40) undo.shift(); redo = []; }
   async function restore(json) { const d = JSON.parse(json); Object.keys(st).forEach(k => delete st[k]); Object.assign(st, d); itemsDirty = true; fogDirty = true; const im = new Image(); im.src = d.land; await im.decode().catch(() => {}); mctx.clearRect(0, 0, MW, MH); mctx.drawImage(im, 0, 0); landDirty = true; itemsDirty = true; sel = null; baseKey = ''; redraw(); schedule(); }
-  function schedule() { clearTimeout(saveT); saveT = setTimeout(saveNow, 700); $('#mp-saved') && ($('#mp-saved').textContent = 'Saving…'); }
+  function schedule() { if (hintToast) { hintToast.remove(); hintToast = null; }   // the "empty map" tip is done once something's on it
+    clearTimeout(saveT); saveT = setTimeout(saveNow, 700); $('#mp-saved') && ($('#mp-saved').textContent = 'Saving…'); }
   async function saveNow() {
     clearTimeout(saveT); if (!st || !nodeId) return;
     st.land = maskData();
@@ -190,7 +191,7 @@ window.UnwipMaps = (function () {
       }
     } else {
       st.labels.push({ x: W / 2, y: 120, text: (kind === 'archipelago' ? 'The ' + name(r) + ' Isles' : name(r)).toUpperCase(), k: 'region' });
-      st.labels.push({ x: 180, y: H - 140, text: 'The ' + name(r) + ' Sea', k: 'sea' });
+      const sea = 'The ' + name(r) + ' Sea'; st.labels.push({ x: Math.max(180, 70 + sea.length * 11), y: H - 140, text: sea, k: 'sea' });   // centred, so a long name (or the wider Holo lettering) mustn't run off the left edge
     }
     st.stamps.sort((a, b) => a.y - b.y);
     changed(); schedule();

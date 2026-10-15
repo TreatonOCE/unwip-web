@@ -208,7 +208,7 @@ window.UnwipBookImport = (function () {
   }
 
   // ================================================================== FINDING THE CHAPTERS
-  const titleLike = b => b.text && b.words <= 12 && b.text.length <= 90 && !/[,;]$/.test(b.text) && !(/[.!?]["”’]?$/.test(b.text) && b.words > 4);
+  const titleLike = b => b.text && b.words <= 12 && b.text.length <= 90 && !/[,;]$/.test(b.text) && !(/[.!?]["”’]?$/.test(b.text) && b.words > 4 && !b.level);   // a line styled as a heading is a title even if it ends in ? or ! ("Are you talking to me?")
   const looksChapterLine = b => titleLike(b) && (CH_RE.test(b.text) || (NUM_RE.test(b.text) && b.words <= 4));
   const WORDNUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
   function numValue(t) {
