@@ -65,27 +65,33 @@
   }
   // a block of text written in runes, wrapped at about `per` runes a line
   function textSVG(A, text, opts = {}) {
-    const col = opts.color || A.color, gw = glyphW(A), gh = glyphH(A), gap = CELL * 0.6, space = CELL * 1.2, lineH = gh + CELL * 1.4, per = opts.per || 14;
+    // spacing: how far apart runes and words sit (the Spacing slider); direction: left to right, right to left (each
+    // line starts at the right), or top to bottom (each line is a column, read left to right)
+    const sp = Math.max(0.3, Math.min(3, +A.spacing || 1)), dir = A.dir || 'ltr', vert = dir === 'ttb';
+    const col = opts.color || A.color, gw = glyphW(A), gh = glyphH(A), gap = CELL * 0.6 * sp, space = CELL * 1.2 * sp, lineH = gh + CELL * 1.4, colW = gw + CELL * 1.4, per = opts.per || 14;
     const words = []; let w = [];
     for (const t of tokens(A, text)) { if (t.space || t.nl) { if (w.length) words.push(w); w = []; if (t.nl) words.push('nl'); } else w.push(t); }
     if (w.length) words.push(w);
     for (let i = 0; i < words.length; i++) if (words[i] !== 'nl' && words[i].length > per) { const wd = words[i], parts = []; for (let j = 0; j < wd.length; j += per) parts.push(wd.slice(j, j + per)); words.splice(i, 1, ...parts); i += parts.length - 1; }
-    const lines = [[]]; let n = 0;
+    let lines = [[]]; let n = 0;
     for (const wd of words) { if (wd === 'nl') { lines.push([]); n = 0; continue; } if (n && n + wd.length > per) { lines.push([]); n = 0; } lines[lines.length - 1].push(wd); n += wd.length + 1; }
-    let parts = '', maxW = 0;
-    lines.forEach((ln, li) => {
-      let x = 0; const y = li * lineH;
-      ln.forEach((wd, wi) => {
-        if (wi) x += space;
-        wd.forEach((t, ti) => {
-          if (ti) x += gap;
-          if (t.g) { parts += `<g transform="translate(${x} ${y})">${glyphG(A, t.g, col)}</g>`; x += gw; }
-          else { parts += `<text x="${x + 5}" y="${y + gh * 0.75}" font-family="${A.cap === 'circuit' ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${gh * 0.8}" fill="${col}" opacity=".35">${esc(t.ch)}</text>`; x += 14; }
-        });
-      });
-      maxW = Math.max(maxW, x);
-    });
-    const pad = CELL, W = Math.max(maxW, gw) + pad * 2, H = lines.length * lineH - CELL * 1.4 + pad * 2;
+    if (vert) lines = words.filter(wd => wd !== 'nl').map(wd => [wd]);   // top to bottom: a column for each word
+    if (!lines.length) lines = [[]];
+    // lay each line out along its own direction first (pos = distance from the line's start), then place it
+    const runeLen = vert ? gh : gw, chLen = vert ? gh : 14;
+    const laid = lines.map(ln => { let pos = 0; const items = [];
+      ln.forEach((wd, wi) => { if (wi) pos += space; wd.forEach((t, ti) => { if (ti) pos += gap; const size = t.g ? runeLen : chLen; items.push({ t, pos, size }); pos += size; }); });
+      return { items, len: pos }; });
+    const maxLen = Math.max(vert ? gh : gw, ...laid.map(l => l.len));
+    let parts = '';
+    laid.forEach((ln, li) => ln.items.forEach(({ t, pos, size }) => {
+      let x, y;
+      if (vert) { x = li * colW; y = pos; } else { y = li * lineH; x = dir === 'rtl' ? maxLen - pos - size : pos; }
+      if (t.g) parts += `<g transform="translate(${x} ${y})">${glyphG(A, t.g, col)}</g>`;
+      else parts += `<text x="${x + (vert ? gw / 2 : 5)}" y="${y + gh * 0.75}"${vert ? ' text-anchor="middle"' : ''} font-family="${A.cap === 'circuit' ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${gh * 0.8}" fill="${col}" opacity=".35">${esc(t.ch)}</text>`;
+    }));
+    const pad = CELL;
+    const W = (vert ? lines.length * colW - CELL * 1.4 : maxLen) + pad * 2, H = (vert ? maxLen : lines.length * lineH - CELL * 1.4) + pad * 2;
     const bg = opts.bg ? `<rect x="${-pad}" y="${-pad}" width="${W}" height="${H}" fill="${opts.bg}"/>` : '';
     return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-pad} ${-pad} ${W} ${H}" width="${W * (opts.scale || 1)}" height="${H * (opts.scale || 1)}">${bg}${parts}</svg>`, w: W, h: H };
   }
@@ -144,6 +150,8 @@
         <div class="field"><label>Ends</label><select id="br-cap"><option value="round">Ink (round)</option><option value="square">Carved (square)</option><option value="circuit">System (circuit traces)</option></select></div>
         <div class="field"><label>Background</label><select id="br-panel"><option value="">Parchment</option><option value="dark">Dark panel (glows)</option></select></div>
         <div class="field"><label>Slant</label><input type="range" id="br-slant" min="-20" max="20" step="1"></div>
+        <div class="field"><label>Spacing</label><input type="range" id="br-sp" min="0.4" max="2.5" step="0.1"></div>
+        <div class="field"><label>Direction</label><select id="br-dir"><option value="ltr">Left to right</option><option value="rtl">Right to left</option><option value="ttb">Top to bottom (columns)</option></select></div>
         <div class="field"><label>Colour</label><input type="color" id="br-col"></div>
         <div class="field"><label>Dot grid</label><select id="br-grid"></select></div>
       </aside></div>`;
@@ -159,6 +167,10 @@
     const panel = $('#br-panel', box);
     const dark = () => box.querySelector('.br-wrap').classList.toggle('br-dark', A.panel === 'dark');
     W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; col.value = A.color; panel.value = A.panel || ''; dark();
+    const spx = $('#br-sp', box), dirx = $('#br-dir', box);
+    spx.value = A.spacing || 1; dirx.value = A.dir || 'ltr';
+    spx.oninput = () => { A.spacing = +spx.value; preview(); ctx.changed(); };
+    dirx.onchange = () => { A.dir = dirx.value; preview(); ctx.changed(); };
     W.oninput = () => { A.width = +W.value; all(); };
     // picking circuit traces the first time: a dark panel and a cyan line, like a game's interface (change either after)
     cap.onchange = () => { A.cap = cap.value; if (A.cap === 'circuit' && !A.panel && /^#2b2118$/i.test(A.color)) { A.panel = 'dark'; A.color = '#5fd0ff'; col.value = A.color; panel.value = 'dark'; dark(); } all(); };
@@ -227,7 +239,13 @@
   function wireStage() {
     const svg = $('#br-svg', box);
     const pt = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return [q.x, q.y]; };
-    const near = ([x, y]) => { let best = -1, bd = CELL * 0.45; for (let i = 0; i < A.cols * A.rows; i++) { const [dx, dy] = dotXY(A, i), d = Math.hypot(dx - x, dy - y); if (d < bd) { bd = d; best = i; } } return best; };
+    // a finger is less exact than a mouse: dots catch it from a little further away
+    const reach = matchMedia('(pointer: coarse)').matches ? 0.62 : 0.45;
+    // on a phone, a drag on the drawing area must draw, never scroll the page (Safari would take the gesture over
+    // half-way and cancel the stroke)
+    const stage = svg.closest('.br-stage') || svg;
+    for (const el of new Set([stage, svg])) { el.addEventListener('touchstart', e => { if (e.touches.length === 1) e.preventDefault(); }, { passive: false }); el.addEventListener('touchmove', e => { if (e.touches.length === 1) e.preventDefault(); }, { passive: false }); }
+    const near = ([x, y]) => { let best = -1, bd = CELL * reach; for (let i = 0; i < A.cols * A.rows; i++) { const [dx, dy] = dotXY(A, i), d = Math.hypot(dx - x, dy - y); if (d < bd) { bd = d; best = i; } } return best; };
     svg.onpointerdown = e => {
       e.preventDefault();
       const hit = e.target.closest && e.target.closest('.br-hit');
