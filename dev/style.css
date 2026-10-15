@@ -1171,7 +1171,7 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .mp-tools { width: 54px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0; border-right: 1px solid var(--line); background: var(--panel); overflow-y: auto; }
 .mp-tool { width: 40px; height: 36px; border: 0; border-radius: 8px; background: none; cursor: pointer; font-size: 19px; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
 .mp-tool:hover { background: var(--panel-2); } .mp-tool.on { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
-.mp-brush { margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; } .mp-brush.dim { opacity: .3; }
+.mp-brush { margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; } .mp-brush.dim { opacity: .6; }
 .mp-brush input { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 96px; }
 .mp-brush-ic { font-size: 18px; line-height: 1; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
 .mp-brush-n { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -2972,3 +2972,13 @@ html.m-kb-open .modal { max-height: calc(var(--vv-h, 100vh) - 16px) !important; 
 }
 /* runes: the whole drawing area is for drawing on touch screens, not scrolling */
 .br-stage { touch-action: none; -webkit-user-select: none; user-select: none; }
+/* a picture in a chapter is never wider than the page (Build's "Add to book" pictures come with a fixed width) */
+.editor img, .pl-editor img, #split-editor img { max-width: 100%; height: auto; }
+/* phones: the map's buttons are one row you swipe along, so the map itself gets the screen */
+@media (max-width: 720px) {
+  .mp-top { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .mp-top::-webkit-scrollbar { display: none; }
+  .mp-top > * { flex: none; }
+  .mp-top .mp-title { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mp-top .mp-sp { display: none; }
+}

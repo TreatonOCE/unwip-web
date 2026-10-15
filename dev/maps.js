@@ -285,7 +285,7 @@ window.UnwipMaps = (function () {
   }
   // the map is drawn in two cached layers (sea + land, then everything on top) so dragging and painting stay smooth
   function renderBase(g, P) {
-    if (isTown()) { T.renderBase(g, P); landDirty = false; return; }
+    if (isTown()) { T.renderBase(g, P); landDirty = false; if (!isDungeon() && st.grid) hexGrid(g, P); return; }
     g.fillStyle = P.sea; g.fillRect(0, 0, W, H);
     g.strokeStyle = P.seaLine; g.globalAlpha = 0.25; g.lineWidth = 1;
     const r = rng(42); for (let i = 0; i < 140; i++) { const x = r() * W, y = r() * H; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 8, y - 5, x + 16, y); g.quadraticCurveTo(x + 24, y + 5, x + 32, y); g.stroke(); }
@@ -293,8 +293,9 @@ window.UnwipMaps = (function () {
     if (landDirty || !landCache) { landCache = renderLand(P); landDirty = false; }
     g.drawImage(landCache, 0, 0);
     if (P.mono) { g.strokeStyle = P.seaLine; g.globalAlpha = 0.55; g.lineWidth = 1; g.beginPath(); for (let x = 0; x <= W; x += 50) { g.moveTo(x, 0); g.lineTo(x, H); } for (let y = 0; y <= H; y += 50) { g.moveTo(0, y); g.lineTo(W, y); } g.stroke(); g.globalAlpha = 1; }
-    if (st.grid) { g.strokeStyle = P.ink; g.globalAlpha = 0.12; g.lineWidth = 1; const s = 40, h = s * Math.sqrt(3); for (let y = 0; y < H + h; y += h / 2) for (let x = ((y / (h / 2)) % 2) * s * 1.5; x < W + s * 3; x += s * 3) { g.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k; g.lineTo(x + s * Math.cos(a), y + s * Math.sin(a)); } g.closePath(); g.stroke(); } g.globalAlpha = 1; }
+    if (st.grid) hexGrid(g, P);
   }
+  function hexGrid(g, P) { g.save(); g.strokeStyle = P.ink; g.globalAlpha = 0.16; g.lineWidth = 1; const s = 40, h = s * Math.sqrt(3); for (let y = 0; y < H + h; y += h / 2) for (let x = ((y / (h / 2)) % 2) * s * 1.5; x < W + s * 3; x += s * 3) { g.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k; g.lineTo(x + s * Math.cos(a), y + s * Math.sin(a)); } g.closePath(); g.stroke(); } g.restore(); }
   function drawPath(g, p, P) {
     if (p.pts.length < 2) return;
     g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
@@ -574,7 +575,7 @@ window.UnwipMaps = (function () {
   function wheel(e) {
     e.preventDefault();
     const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-    const z = Math.min(4, Math.max(0.25, cam.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+    const z = Math.min(4, Math.max(minZ(), cam.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
     cam.x = mx - (mx - cam.x) * z / cam.z; cam.y = my - (my - cam.y) * z / cam.z; cam.z = z; redraw();
   }
   function places() { const out = []; if (!host.inBook || !S.project) return out; const r = S.project.binder.find(n => n.root && n.kind === 'places'); if (r) U.walkTree(r.children || [], n => { if (n.type === 'doc' && !n.map) out.push(n); }); return out; }
@@ -687,6 +688,9 @@ window.UnwipMaps = (function () {
     if (copy) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); U.toast('Map copied. Paste it into any chapter with Ctrl+V.'); } catch { U.toast('Couldn’t copy the picture.', 'warn'); } return; }
     await api.exportBinary(new Uint8Array(await blob.arrayBuffer()), host.title(nodeId) || 'Map', 'png', 'PNG picture');
   }
+  // how far out you can zoom: at least to half the size of the whole map on screen (a phone needs further out than a PC)
+  function syncGridBtn() { const b = view && $('#mp-grid', view); if (!b) return; const dg = isDungeon(); b.classList.toggle('on', dg ? !st.noGrid : !!st.grid); b.textContent = dg ? '▦ Grid' : '⬡ Grid'; b.dataset.tip = dg ? 'The square grid on the floor (one square is a room tile)' : 'Hex grid over the map'; }
+  function minZ() { const st2 = view && view.querySelector('.mp-stage'); if (!st2) return 0.25; const r = st2.getBoundingClientRect(); return Math.min(0.25, Math.min(r.width / W, r.height / H) * 0.5); }
   function fit() { const r = view.querySelector('.mp-stage').getBoundingClientRect(); const z = Math.min(r.width / W, r.height / H) * 0.96; cam = { z, x: (r.width - W * z) / 2, y: (r.height - H * z) / 2 }; }
   function resize() { if (!cv) return; const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; draw(); }
   function buildTools() {
@@ -740,7 +744,7 @@ window.UnwipMaps = (function () {
     host.mount(view);
     if (window.UnwipProof && window.UnwipProof.renderStatus) window.UnwipProof.renderStatus();   // fill in the Record button (or the timer if a video is going)
     cv = $('canvas', view); ctx = cv.getContext('2d');
-    buildTools(); resize(); fit(); setTool('select'); draw();
+    buildTools(); resize(); fit(); setTool('select'); syncGridBtn(); draw();
     // touch screens: one finger uses the tool, two fingers pinch to zoom and drag to move around (a stroke the first
     // finger had just started is taken back, so a pinch never leaves a stray mark)
     const touches = new Map(); let pinch = null;
@@ -766,7 +770,7 @@ window.UnwipMaps = (function () {
       if (e.pointerType === 'touch' && touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch) {
         if (touches.size < 2) return;
-        const m = two(), r = cv.getBoundingClientRect(), z = Math.min(4, Math.max(0.25, pinch.z0 * m.d / pinch.d0));
+        const m = two(), r = cv.getBoundingClientRect(), z = Math.min(4, Math.max(minZ(), pinch.z0 * m.d / pinch.d0));
         const wx = (pinch.x0 - r.left - pinch.cx) / pinch.z0, wy = (pinch.y0 - r.top - pinch.cy) / pinch.z0;
         cam.z = z; cam.x = m.x - r.left - wx * z; cam.y = m.y - r.top - wy * z; redraw(); return;
       }
@@ -792,7 +796,8 @@ window.UnwipMaps = (function () {
     $('#mp-size', view).oninput = e => { brush = +e.target.value; $('#mp-size-n', view).textContent = brush; redraw(); };
     $('#mp-close', view).onclick = () => close();
     $('#mp-style', view).onchange = e => { push(); st.style = e.target.value; landDirty = true; changed(); schedule(); };
-    $('#mp-grid', view).onclick = e => { push(); st.grid = !st.grid; e.currentTarget.classList.toggle('on', st.grid); redraw(); schedule(); };
+    // the Grid button: a hex grid on world and town maps; on a dungeon floor, its square grid on or off
+    $('#mp-grid', view).onclick = e => { push(); if (isDungeon()) st.noGrid = !st.noGrid; else st.grid = !st.grid; syncGridBtn(); baseKey = ''; landDirty = true; changed(); schedule(); };
     $('#mp-compass', view).onclick = e => { push(); st.compass = !st.compass; e.currentTarget.classList.toggle('on', st.compass); changed(); schedule(); };
     $('#mp-frame', view).onchange = e => {
       const v = e.target.value, box = sel && sel.type === 'box' && st.boxes[sel.i];
@@ -850,7 +855,7 @@ window.UnwipMaps = (function () {
     const v = view; if (!v) return;
     $('#mp-style', v).value = st.style; $('#mp-frame', v).value = st.frame || 'double';
     buildTools(); setTool(tool && $$('.mp-tool', v).some(b => b.dataset.t === tool) ? tool : 'select');
-    $('#mp-grid', v).classList.toggle('on', !!st.grid); $('#mp-compass', v).classList.toggle('on', !!st.compass);
+    syncGridBtn(); $('#mp-compass', v).classList.toggle('on', !!st.compass);
   }
   async function renameSection(i) {
     const name = await U.promptText('Rename section', 'Name', docData.sections[i].name || ''); if (!name) return;

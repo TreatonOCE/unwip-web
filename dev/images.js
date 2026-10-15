@@ -62,11 +62,20 @@ window.UnwipImages = (function () {
   // paste and drop: pictures are handled here, before the normal text paste
   document.addEventListener('paste', async e => {
     if (!editor.contains(e.target) && e.target !== editor) return;
-    const files = [...(e.clipboardData.files || [])].filter(f => /^image\//.test(f.type));
-    const text = e.clipboardData.getData('text/plain');
-    if (!files.length || text.trim()) return;      // text (even with a picture alongside) goes the normal way
+    const dt = e.clipboardData, files = [...(dt.files || [])].filter(f => /^image\//.test(f.type));
+    const text = dt.getData('text/plain');
+    if (!files.length) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    await fromFiles(files);
+    if (!text.trim()) { await fromFiles(files); return; }
+    // text with pictures (a note from the iPhone's Notes app, a web page…): the text's own picture tags point at
+    // things only the other app can see, and the pictures themselves come as files. Put them in, in order.
+    const pics = [];
+    for (const f of files) { try { pics.push(await shrink(f)); } catch {} }
+    let html = dt.getData('text/html'); let used = 0;
+    if (html) html = html.replace(/<img\b[^>]*>/gi, tag => { if (/src=["']data:image/i.test(tag)) return tag; const p = pics[used++]; return p ? `<p style="text-align:center">${imgHTML(p)}</p>` : ''; });
+    else html = U.esc(text).split(/\n{2,}|\r\n\r\n/).map(x => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('');
+    for (; used < pics.length; used++) html += `<p style="text-align:center">${imgHTML(pics[used])}</p>`;   // any left over go at the end
+    await U.pasteContent({ html, text });
   }, true);
   document.addEventListener('drop', async e => {
     if (!editor.contains(e.target)) return;

@@ -2062,9 +2062,11 @@
   editor.addEventListener('paste', async e => {
     e.preventDefault();
     const dt = e.clipboardData;
-    let html = dt.getData('application/x-unwip') || dt.getData('text/html');
-    let rtf = dt.getData('text/rtf');
-    const text = dt.getData('text/plain');
+    await pasteContent({ html: dt.getData('application/x-unwip') || dt.getData('text/html'), rtf: dt.getData('text/rtf'), text: dt.getData('text/plain') });
+  });
+  // the normal paste, from whatever the clipboard gave (images.js calls it too, once it has turned pasted pictures
+  // into ones stored in the chapter)
+  async function pasteContent({ html = '', rtf = '', text = '' }) {
     const plain = S.plainPaste;
     S.plainPaste = false;
     const st = S.project.style;
@@ -2093,7 +2095,7 @@
       }, 15000);
     }
     offerTitleFromPaste(text || '');
-  });
+  }
   api.onPastePlain(() => { S.plainPaste = true; restoreRange(); api.paste(); });
   api.onSplit(() => { restoreRange(); splitAtCursor(); });
 
@@ -4958,7 +4960,7 @@
   // test hooks (used by the automated checks, harmless otherwise)
   window.__folio = { S, openProject, openDoc, copyDocForDocs, compileManuscript, flushSave, addNode, setWriter, insertCleanHTML };
   window.__unwip = {
-    get saveFailing() { return !!troubleRetry; },
+    get saveFailing() { return !!troubleRetry; }, pasteContent,
     S, api, I, $, $$, esc, fmt, makeRoom, countWords, today, editor, editorWrap, on, emit,
     modal, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
     findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave, refreshSnapCount,

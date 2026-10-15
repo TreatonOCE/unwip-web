@@ -66,7 +66,7 @@ window.UnwipDungeonFactory = function (M) {
     // floor, then its grid, then the walls along every edge where floor meets rock
     g.fillStyle = c.floor;
     for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (gd[y * GW + x]) g.fillRect(x * CS, y * CS, CS, CS);
-    g.strokeStyle = c.grid; g.lineWidth = 1; g.globalAlpha = holo ? 0.8 : 0.7; g.beginPath();
+    g.strokeStyle = c.grid; g.lineWidth = 1; g.globalAlpha = st().noGrid ? 0 : holo ? 0.8 : 0.7; g.beginPath();
     for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (gd[y * GW + x]) { if (at(gd, x + 1, y)) { g.moveTo((x + 1) * CS, y * CS); g.lineTo((x + 1) * CS, (y + 1) * CS); } if (at(gd, x, y + 1)) { g.moveTo(x * CS, (y + 1) * CS); g.lineTo((x + 1) * CS, (y + 1) * CS); } }
     g.stroke(); g.globalAlpha = 1;
     g.strokeStyle = c.wall; g.lineWidth = holo ? 2.5 : 4; g.lineCap = 'round';
