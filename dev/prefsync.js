@@ -14,7 +14,7 @@ window.UnwipPrefs = (function () {
   // kept in the settings file
   const SHARED = ['litrpg', 'snippets', 'defaultStyle', 'author', 'dailyGoal', 'quotes', 'myTemplates', 'fontFavs', 'trackStuck', 'stuckNudge', 'proofOn', 'proofRemind', 'wordList'];
   // kept in this browser's storage (look.js); the screen size stays per device
-  const STORE = { 'unwip-look': v => { const o = { ...v }; delete o.uiSize; return o; }, 'unwip-typing': v => v };
+  const STORE = { 'unwip-look': v => { const o = { ...v }; delete o.uiSize; delete o.pageZoom; return o; }, 'unwip-typing': v => v };
   const ALL = [...SHARED, ...Object.keys(STORE)];
 
   // the time of each setting this device has already taken in or sent
@@ -76,7 +76,7 @@ window.UnwipPrefs = (function () {
       for (const [k, e] of Object.entries(take)) {
         if (STORE[k]) {
           let cur = {}; try { cur = JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch {}
-          const v = { ...(e.val || {}) }; if (k === 'unwip-look' && cur.uiSize) v.uiSize = cur.uiSize;
+          const v = { ...(e.val || {}) }; if (k === 'unwip-look' && cur.uiSize) v.uiSize = cur.uiSize; if (k === 'unwip-look' && cur.pageZoom) v.pageZoom = cur.pageZoom;
           try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
         } else patch[k] = e.val;
         seen[k] = e.at;

@@ -52,7 +52,7 @@ window.UnwipLook = (function () {
   const PAGE_COL = { white: ['#ffffff', '#1d1b18'], cream: ['#fbf6e9', '#2b261d'], grey: ['#eceae6', '#26241f'], dark: ['#1e1f22', '#e2dfd8'] };
   const ROOMS = { page: 'Same as the page', theme: 'Theme background', dark: 'Dark room', black: 'Black' };
 
-  const DEF_LOOK = { theme: 'system', light: 'paper', dark: 'night', accent: '', page: 'theme', pageStyle: 'card', room: 'page', uiSize: 100 };
+  const DEF_LOOK = { theme: 'system', light: 'paper', dark: 'night', accent: '', page: 'theme', pageStyle: 'card', room: 'page', uiSize: 100, pageZoom: 100 };
   const DEF_TYPE = { tw: 'writer', twPos: 0.45, twSmooth: true, focus: 'off', focusWhere: 'writer', caret: 'normal', blink: true,
     anim: 'none', sound: 'off', volume: 0.5, bell: true };
 
@@ -96,7 +96,33 @@ window.UnwipLook = (function () {
     if (room) root.style.setProperty('--room', room);
     document.body.classList.toggle('page-flat', l.pageStyle === 'flat');
     if (U.api.setZoom) U.api.setZoom((l.uiSize || 100) / 100);
+    // page zoom: only the writing page gets bigger (text and page width together); toolbars stay as they are
+    const pz = Math.min(2, Math.max(0.8, (l.pageZoom || 100) / 100));
+    root.style.setProperty('--page-zoom', pz);
+    const zl = document.getElementById('st-zoom'); if (zl) zl.textContent = Math.round(pz * 100) + '%';
   }
+  // Ctrl/⌘ + Alt + = / - / 0, the buttons in the status bar, and Ctrl+K all land here
+  const ZOOMS = [80, 90, 100, 110, 125, 150, 175, 200];
+  function pageZoom(step) {
+    const cur = look.pageZoom || 100;
+    let next = step === 0 ? 100 : step > 0 ? (ZOOMS.find(z => z > cur) || 200) : ([...ZOOMS].reverse().find(z => z < cur) || 80);
+    look = { ...look, pageZoom: next }; save('unwip-look', look); applyLook();
+    if (window.UnwipLook && typewriterActive()) try { U.typewriterScroll(true); } catch {}
+    try { placeCaret(); } catch {}
+    const zl = document.getElementById('st-zoom'); if (zl) { zl.classList.remove('flash'); void zl.offsetWidth; zl.classList.add('flash'); }
+  }
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || !e.altKey || e.shiftKey) return;
+    const k = e.code === 'Equal' || e.code === 'NumpadAdd' ? 1 : e.code === 'Minus' || e.code === 'NumpadSubtract' ? -1 : e.code === 'Digit0' || e.code === 'Numpad0' ? 0 : null;
+    if (k === null || !U.S.project) return;
+    e.preventDefault(); pageZoom(k);
+  }, true);
+  { const sb = document.getElementById('statusbar'), sp = sb && sb.querySelector('.st-spacer');
+    if (sp) { const z = document.createElement('span'); z.className = 'st-zoomer';
+      z.innerHTML = '<button class="st-btn" type="button" id="st-zoom-out" title="Smaller page (Ctrl+Alt+−)" aria-label="Smaller page">−</button><button class="st-btn" type="button" id="st-zoom" title="Page size: only the writing page, not the toolbars. Click for 100%">100%</button><button class="st-btn" type="button" id="st-zoom-in" title="Bigger page (Ctrl+Alt+=)" aria-label="Bigger page">+</button>';
+      sp.after(z);
+      z.querySelector('#st-zoom-out').onclick = () => pageZoom(-1); z.querySelector('#st-zoom-in').onclick = () => pageZoom(1); z.querySelector('#st-zoom').onclick = () => pageZoom(0);
+    } }
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyLook());
   applyLook();
 
@@ -123,6 +149,7 @@ window.UnwipLook = (function () {
           <div class="field"><label>Writing page colour</label><select id="th-page">${opt(PAGES, draft.page)}</select></div>
           <div class="field"><label>Page look</label><select id="th-pstyle">${opt({ card: 'A sheet of paper', flat: 'Full width, no edges' }, draft.pageStyle)}</select></div>
           <div class="field"><label>Writer mode background</label><select id="th-room">${opt(ROOMS, draft.room)}</select></div>
+          <div class="field"><label>Page size (just the writing page)</label><select id="th-pz">${opt({ 80: '80%', 90: '90%', 100: '100%', 110: '110%', 125: '125%', 150: '150%', 175: '175%', 200: '200%' }, draft.pageZoom || 100)}</select></div>
           <div class="field"><label>Interface size</label><select id="th-ui">${opt({ 90: 'Small', 100: 'Normal', 110: 'Large', 125: 'Extra large' }, draft.uiSize)}</select></div>
         </div>
         <p class="rp-note">Changes show straight away so you can see them. Cancel puts everything back. Exports always use your manuscript style, never these colours.</p>`;
@@ -131,7 +158,7 @@ window.UnwipLook = (function () {
       $('#th-color', body).oninput = e => { draft.accent = e.target.value; applyLook(draft); $$('.th-acc', body).forEach(x => x.classList.remove('on')); };
       $('#th-color', body).onchange = () => update();
       const sel = (id, key, num) => $(id, body).onchange = e => { draft[key] = num ? +e.target.value : e.target.value; update(); };
-      sel('#th-light', 'light'); sel('#th-dark', 'dark'); sel('#th-page', 'page'); sel('#th-pstyle', 'pageStyle'); sel('#th-room', 'room'); sel('#th-ui', 'uiSize', true);
+      sel('#th-light', 'light'); sel('#th-dark', 'dark'); sel('#th-page', 'page'); sel('#th-pstyle', 'pageStyle'); sel('#th-room', 'room'); sel('#th-ui', 'uiSize', true); sel('#th-pz', 'pageZoom', true);
     };
     const update = () => { applyLook(draft); const sc = body.closest('.m-body'); const top = sc ? sc.scrollTop : 0; render(); if (sc) sc.scrollTop = top; };
     render();
@@ -245,7 +272,7 @@ window.UnwipLook = (function () {
       const iv = setInterval(() => { if (++k > 5 || !g.isConnected) { clearInterval(iv); g.textContent = real; return; } g.textContent = CH[Math.floor(Math.random() * CH.length)]; }, 38);
       g.textContent = CH[Math.floor(Math.random() * CH.length)];
     }
-    g.style.cssText = `left:${rc.left / z}px; top:${rc.top / z}px; height:${rc.height / z}px; line-height:${rc.height / z}px; font:${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}; color:${cs.color}; letter-spacing:${cs.letterSpacing};`;
+    g.style.cssText = `left:${rc.left / z}px; top:${rc.top / z}px; height:${rc.height / z}px; line-height:${rc.height / z}px; font:${cs.fontStyle} ${cs.fontWeight} ${parseFloat(cs.fontSize) * (n.parentElement.closest('.page') ? Math.min(2, Math.max(0.8, (look.pageZoom || 100) / 100)) : 1)}px ${cs.fontFamily}; color:${cs.color}; letter-spacing:${cs.letterSpacing};`;
     layer.appendChild(g);
     hidden.add(r);
     const done = () => { hidden.delete(r); g.remove(); };
@@ -526,7 +553,7 @@ window.UnwipLook = (function () {
   }
   return {
     setTheme(id) { look = { ...look, theme: id }; save('unwip-look', look); applyLook(); }, THEMES,
-    attach, openThemes, openTyping, applyLook, setMessyFade, updateFocus,
+    attach, openThemes, openTyping, applyLook, pageZoom, setMessyFade, updateFocus,
     typewriterActive, caretRect, typewriterPosition: () => typing.twPos || 0.45, smoothScroll: () => typing.twSmooth,
     get typing() { return typing; }, get look() { return look; },
     // settings that arrived from another device (prefsync.js): read them again and show them

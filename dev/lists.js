@@ -73,6 +73,8 @@ window.UnwipLists = (function () {
       if (at >= m.len) carry = m.kind === 'b' ? BULLET : `${m.n + 1}${m.sep} `;
     } else if (e.key === 'Backspace' && !mod && at === m.len) {      // straight after the marker: take the marker away
       e.preventDefault(); U.S.programmatic = true; try { replaceAt(startRange(el, m.len), ''); } finally { U.S.programmatic = false; }
+      // a numbered item taken out of the list: the ones after it move up to close the gap (3. becomes 2.)
+      if (m.kind === 'n') { const nx = el.nextElementSibling; if (isNum(nx)) renumberRun(nx, m.n); }
       editor.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }, true);
@@ -86,6 +88,12 @@ window.UnwipLists = (function () {
       return;
     }
     carry = null;
+    // an item deleted (or two merged): the numbered list it was in counts up 1, 2, 3 again from its first number
+    if (/^delete/.test(e.inputType || '')) {
+      const sel = getSelection(); const el = sel.rangeCount && blockOf(sel.anchorNode);
+      if (el && isNum(el)) { let first = el; while (isNum(first.previousElementSibling)) first = first.previousElementSibling; renumberRun(first, marker(first).n); }
+      return;
+    }
     // "- " or "* " at the start of a paragraph becomes a bullet
     if (e.inputType === 'insertText' && (e.data === ' ' || e.data === '\u00a0')) {
       const sel = getSelection(); if (!sel.rangeCount) return;
@@ -94,6 +102,18 @@ window.UnwipLists = (function () {
       if (/^[-*][ \u00a0]/.test(t) && caretOffsetIn(el) === 2) { U.S.programmatic = true; try { replaceAt(startRange(el, 2), BULLET); } finally { U.S.programmatic = false; } }
     }
   });
+  const isNum = el => { const m = el && marker(el); return !!(m && m.kind === 'n'); };
+  // number a run of numbered items n, n+1, n+2… (only the ones that are wrong change; the cursor stays put)
+  function renumberRun(first, n) {
+    const sel = getSelection(), keep = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+    let el = first, guard = 0, changed = false;
+    U.S.programmatic = true;
+    try {
+      while (isNum(el) && guard++ < 500) { const m = marker(el); if (m.n !== n) { replaceAt(startRange(el, m.len), `${n}${m.sep} `); changed = true; } n++; el = el.nextElementSibling; }
+    } finally { U.S.programmatic = false; }
+    if (keep) { sel.removeAllRanges(); sel.addRange(keep); }
+    return changed;
+  }
   // numbers after an inserted item move up by one, while the list goes on
   function renumberFrom(el) {
     let m = marker(el); if (!m || m.kind !== 'n') return;

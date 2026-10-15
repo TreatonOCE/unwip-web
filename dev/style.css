@@ -3112,3 +3112,11 @@ html.m-kb-open .modal { max-height: calc(var(--vv-h, 100vh) - 16px) !important; 
 }
 .bs-stick > .bm-card + .bm-card { margin-top: 14px; }
 
+/* ---- page size (look.js pageZoom): the writing page alone gets bigger; the toolbars keep their size */
+#editor-wrap > .page, #pl-wrap > .page { zoom: var(--page-zoom, 1); }
+.st-zoomer { display: inline-flex; align-items: center; gap: 0; margin-right: 6px; }
+.st-zoomer .st-btn { padding: 2px 8px; min-width: 0; }
+#st-zoom.flash { animation: np-flash .6s ease-out; border-radius: 6px; }
+#st-zoom { font-variant-numeric: tabular-nums; min-width: 44px; }
+@media (max-width: 720px) { .st-zoomer { display: none; } }
+

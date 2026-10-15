@@ -1642,7 +1642,8 @@
     for (const b of blocks) {
       if (!b || b.tagName !== 'P') continue;
       const t = b.textContent;
-      const isScene = Clip.SCENE_BREAK.test(t) && t.trim().length > 0;
+      // an empty bullet item ("• " waiting for its text) looks like a "•" scene break, but isn't one: it stays on the left
+      const isScene = Clip.SCENE_BREAK.test(t) && t.trim().length > 0 && !/^[•◦▪‣·][ \u00a0]+$/.test(t);
       b.classList.toggle('scene', isScene);
       if (!b.classList.length) b.removeAttribute('class');
     }
