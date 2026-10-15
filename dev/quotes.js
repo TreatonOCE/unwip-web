@@ -155,7 +155,7 @@ window.UnwipQuotes = (function () {
     ['Worldbuilding is lovely because it feels exactly like writing and isn’t.', 'Mortimer Plotwell'],
     ['Readers remember the one weird detail, never the twelve-page treaty.', 'Mortimer Plotwell'],
     ['Imposter syndrome means you care. Annoying, but useful.', 'Ima Novelist'],
-    ['Every author you admire once wrote a sentence so bad the cat left the room.', 'Ima Novelist'],
+    ['Somewhere there’s a first draft by your favourite author that would make you feel a lot better.', 'Ima Novelist'],
     ['Writing a novel is building a boat when you’re already out at sea. Bail a bit, hammer a bit.', 'Ima Novelist'],
     ['Compare your chapter three to their chapter three, not to their finished book with the shiny cover.', 'Ima Novelist'],
     ['You don’t need permission to call yourself a writer. A pen and mild stubbornness will do.', 'Ima Novelist'],
