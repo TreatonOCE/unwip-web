@@ -13,7 +13,7 @@ window.UnwipStart = (function () {
     ['sync', 'Keep your books safe', 'Sync with Dropbox or OneDrive, or move your books to a backed-up folder. Settings › Where your books live.'],
     ['detailed', 'Try Detail', 'The corkboard, outline and timeline. Click Detail at the top of a book.'],
     ['snapshot', 'Take a snapshot', 'Saves a copy of a chapter before a big rewrite. Ctrl+Shift+S, or the clock button.'],
-    ['export', 'Export your book', 'A PDF, Word file or e-book, from the arrow next to Copy for Docs.']
+    ['export', 'Export your book', 'A PDF, Word file or e-book, from Export at the top of a book.']
   ];
   const flags = () => (S.settings && S.settings.started) || {};
 

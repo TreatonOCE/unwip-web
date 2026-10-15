@@ -188,17 +188,17 @@ window.UnwipPlay = (function () {
     $$('#lib-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     $('#write-home').classList.toggle('hidden', t !== 'write');
     $('#play-home').classList.toggle('hidden', t !== 'play');
-    const bh = $('#build-home'); if (bh) bh.classList.toggle('hidden', t !== 'build');
+    const bh = $('#build-home'); if (bh) bh.classList.toggle('hidden', t !== 'build' && t !== 'world');
     if (t === 'play' && !(keep && curView !== 'home')) renderHome('home');
-    if (t === 'build' && window.UnwipBuild) window.UnwipBuild.render();
+    if ((t === 'build' || t === 'world') && window.UnwipBuild) window.UnwipBuild.render(t);
   }
   $$('#lib-tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   // the library refreshes itself now and then (syncing, settings): don't throw someone out of a game or the dice
   U.on('library', () => setTab(tab, true));
-  // Play and Build unlock at the Detail level: at Focus the main screen is just your books
-  const unlocked = t => t === 'write' || !U.level || U.level() >= 1;
+  // the tabs unlock with the level: Focus is just Write; Detail adds Play and Build; Lore adds Open World
+  const unlocked = t => t === 'write' || !U.level || U.level() >= (t === 'world' ? 2 : 1);
   U.on('level', () => { if (!unlocked(tab)) setTab('write'); });
-  { let lv = 'focused'; try { lv = localStorage.getItem('folio-mode') || 'focused'; } catch {} if (tab !== 'write' && !['detailed', 'lore'].includes(lv)) tab = 'write'; }
+  { let lv = 'focused'; try { lv = localStorage.getItem('folio-mode') || 'focused'; } catch {} if (tab !== 'write' && !['detailed', 'lore'].includes(lv)) tab = 'write'; if (tab === 'world' && (lv !== 'lore' || matchMedia('(max-width: 720px)').matches)) tab = 'build'; }
 
   let promptOffset = 0;
   async function renderHome(view, arg) {

@@ -20,6 +20,10 @@ window.UnwipBuild = (function () {
   // new magic systems, rune alphabets, sigils and insignia are offered at the Lore level; ones you already made always show
   const LORE_KINDS = new Set(['magic', 'runes', 'sigil', 'insignia']);
   const NEW_ORDER = () => ORDER.filter(k => !LORE_KINDS.has(k) || !U.level || U.level() >= 2);
+  // the main screen's Build tab has maps, coats of arms and character sheets; at Lore, the Open World tab has the
+  // deep-end pieces (magic, runes, sigils, insignia). Below Lore, ones you already made still show in Build.
+  let scope = 'build';
+  const inScope = k => scope === 'world' ? LORE_KINDS.has(k) : (!LORE_KINDS.has(k) || !U.level || U.level() < 2);
   const editors = {};          // filled in by buildmagic.js, buildrunes.js and buildarms.js
   let items = [];
 
@@ -79,20 +83,22 @@ window.UnwipBuild = (function () {
   // ================================================================== THE BUILD PAGE
   const ago = t => { const d = (Date.now() - t) / 1000; if (d < 60) return 'just now'; if (d < 3600) return Math.floor(d / 60) + ' min ago'; if (d < 86400) return Math.floor(d / 3600) + ' h ago'; return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); };
   U.on('level', () => { const bh = document.getElementById('build-home'); if (bh && !bh.classList.contains('hidden')) render(); });
-  async function render() {
+  async function render(sc) {
+    if (sc === 'build' || sc === 'world') scope = sc;
     await loadFonts();
     const box = $('#build-home'); if (!box) return;
     await refresh();
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    const world = scope === 'world';
     box.innerHTML = `
-      <div class="pl-head"><div><h1>Build</h1><p>The pieces of your world: maps, magic, runes, sigils, coats of arms, insignia and character sheets. They belong to the world, not one book, so any book can use them.</p></div></div>
-      <div class="pl-tools bd-tools">${NEW_ORDER().map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}</div>
-      ${items.length ? ORDER.filter(k => by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
+      <div class="pl-head"><div><h1>${world ? 'Open World' : 'Build'}</h1><p>${world ? 'The deep end of your world: magic systems, rune alphabets, sigils and insignia. Like everything in Build, they belong to the world, not one book, so any book can use them.' : 'The pieces of your world: maps, coats of arms and character sheets. They belong to the world, not one book, so any book can use them.' + (U.level && U.level() >= 2 ? ' Magic, runes, sigils and insignia are in Open World.' : '')}</p></div></div>
+      <div class="pl-tools bd-tools">${NEW_ORDER().filter(inScope).map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}</div>
+      ${items.some(x => inScope(x.kind)) ? ORDER.filter(k => inScope(k) && by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
         <div class="bd-grid">${by(k).map(x => `<div class="bd-card" data-id="${x.id}" tabindex="0">
           <div class="bd-thumb ${x.thumb ? '' : 'empty'}">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : `<span>${KINDS[k].icon}</span>`}</div>
           <div class="bd-ct"><b>${esc(x.title || 'Untitled')}</b><span>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</span></div>
           <button class="icon-btn small bd-more" title="More">⋯</button></div>`).join('')}</div>`).join('')
-        : '<p class="lib-empty">Nothing built yet. Pick something above to start: a map is a good first piece.</p>'}`;
+        : `<p class="lib-empty">${world ? 'Nothing here yet. Pick something above to start.' : 'Nothing built yet. Pick something above to start: a map is a good first piece.'}</p>`}`;
     $$('[data-new]', box).forEach(b => b.onclick = () => create(b.dataset.new));
     $$('.bd-card', box).forEach(c => {
       const id = c.dataset.id;

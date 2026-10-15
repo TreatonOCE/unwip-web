@@ -989,7 +989,7 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 
 /* ================= Play ================= */
 .lib-tabs { display: flex; gap: 2px; background: var(--panel); border-radius: 9px; padding: 3px; margin-right: auto; margin-left: 28px; }
-.lib-tabs button { border: 0; background: none; padding: 5px 16px; border-radius: 7px; cursor: pointer; color: var(--muted); font-weight: 600; }
+.lib-tabs button { white-space: nowrap; border: 0; background: none; padding: 5px 16px; border-radius: 7px; cursor: pointer; color: var(--muted); font-weight: 600; }
 .lib-tabs button.on { background: var(--paper); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .pl-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
 .pl-head h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
@@ -3256,11 +3256,23 @@ body:not(.detailed) #btn-build-book { display: none; }
 .lib-mode { margin-left: 28px; margin-right: 10px; width: 210px; flex: 0 0 auto; }
 .lib-mode + .lib-tabs { margin-left: 0; }
 @media (max-width: 720px) { #mode-switch button[data-m="lore"], #lib-mode button[data-m="lore"] { display: none; } }
-body:not(.detailed) #lib-tabs { visibility: hidden; }
-html.m-phone body:not(.detailed) #lib-tabs { display: none; }
+body:not(.detailed) #lib-tabs button[data-tab="play"], body:not(.detailed) #lib-tabs button[data-tab="build"], body:not(.lore) #lib-tabs button[data-tab="world"] { display: none; }
 @media (max-width: 720px) { .lib-head .lib-mode { grid-column: 1 / -1; grid-row: 2; width: auto; margin: 0 0 6px; } .lib-head .lib-mode + .lib-tabs { grid-row: 3; } }
 .lib-head { gap: 12px; }
 .selbar .sb-lore { display: none; }
 body.lore .selbar .sb-lore { display: contents; }
 .cs-add label { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12.5px; color: var(--muted); }
 .cs-add input, .cs-add select { width: 100%; box-sizing: border-box; font: 14px var(--ui); padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); color: var(--text); min-height: 36px; }
+
+/* main header with four tabs (Lore): drop the slogan and the long word-count text first, then put the level switch
+   and the tabs on a second row so Record and Settings never fall off the right edge */
+.lib-total { white-space: nowrap; }
+@media (max-width: 1500px) { .lib-head .brand .brand-slogan { display: none; } .lib-head .lt-long { display: none; } }
+@media (min-width: 721px) and (max-width: 1320px) {
+  .lib-head { flex-wrap: wrap; row-gap: 12px; }
+  .lib-head .lib-head-right { margin-left: auto; }
+  .lib-head .lib-mode { order: 3; margin-left: 0; }
+  .lib-head .lib-tabs { order: 4; }
+  .lib-head::after { content: ''; order: 2; flex-basis: 100%; }
+}
+.lib-total .lt-long { color: var(--muted); font-weight: 400; font-variant-numeric: normal; }
