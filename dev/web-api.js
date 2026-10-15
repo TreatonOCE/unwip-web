@@ -262,6 +262,25 @@
 
   const noop = () => {};
   const LISTENERS = {};
+  // Saving over a version Unwip hasn't seen (Dropbox brought it in from another device a moment before, and the app
+  // hadn't caught up yet): that version is kept as a conflicted copy first, so neither device's writing is lost. The
+  // PC app does the same (main.js guardedWrite).
+  const seen = new Map();
+  async function guardedWrite(slug, p, data) {
+    try {
+      if (seen.has(p)) {
+        const now = await FS.text(p);
+        if (now != null && now !== seen.get(p) && now !== data) {
+          const m = /^(.*)(\.[^./]+)$/.exec(p), day = new Date().toLocaleDateString('en-CA');
+          let c = `${m[1]} (another device's conflicted copy ${day})${m[2]}`, n = 2;
+          while (await FS.exists(c)) c = `${m[1]} (another device's conflicted copy ${day} ${n++})${m[2]}`;
+          await FS.write(c, now);
+          setTimeout(() => (LISTENERS.external || []).forEach(cb => { try { cb({ slug, file: 'conflict', id: null }); } catch {} }), 300);
+        }
+      }
+    } catch {}
+    await FS.write(p, data); seen.set(p, data);
+  }
   const on = name => cb => { (LISTENERS[name] = LISTENERS[name] || []).push(cb); };
 
   // ---- the optional natural voice (Kokoro): downloaded on request into this browser's storage, then run
@@ -318,13 +337,13 @@
       await FS.write(`${pdir(slug)}/project.json`, JSON.stringify({ ...template, title, created: Date.now(), modified: Date.now() }, null, 2));
       return slug;
     },
-    async openProject(slug) { const p = await FS.json(`${pdir(slug)}/project.json`, null); if (!p) throw new Error('Could not open project'); return p; },
+    async openProject(slug) { const t = await FS.text(`${pdir(slug)}/project.json`); let p = null; try { p = JSON.parse(t); } catch {} if (!p) throw new Error('Could not open project'); seen.set(`${pdir(slug)}/project.json`, t); return p; },
     async saveProjectMeta(slug, project) {
       // never save over a project a newer Unwip stored in a way this one doesn't know (main.js does the same)
       const onDisk = await FS.json(`${pdir(slug)}/project.json`, null);
       if (onDisk && (onDisk.format || 1) > (project.format || 1)) throw new Error('NEWER_FORMAT:' + (onDisk.savedBy || 'a newer version'));
       project.modified = Date.now(); project.savedBy = window.UNWIP_VERSION || 'web';
-      await FS.write(`${pdir(slug)}/project.json`, JSON.stringify(project, null, 2)); return true;
+      await guardedWrite(slug, `${pdir(slug)}/project.json`, JSON.stringify(project, null, 2)); return true;
     },
     // deleting moves the book into Unwip's own Deleted books (a hidden “_Deleted” folder), to bring back later
     async deleteProject(slug) {
@@ -352,8 +371,8 @@
     },
     async purgeDeleted(id) { if (/[/\\]/.test(id)) throw new Error('Not found'); await FS.removeTree(`${LIB}/_Deleted/${id}`); return true; },
     revealProject: async () => '',
-    loadDoc: async (slug, id) => (await FS.text(`${pdir(slug)}/docs/${safeId(id)}.html`)) || '',
-    saveDoc: async (slug, id, html) => { await FS.write(`${pdir(slug)}/docs/${safeId(id)}.html`, html); return true; },
+    loadDoc: async (slug, id) => { const p = `${pdir(slug)}/docs/${safeId(id)}.html`, t = (await FS.text(p)) || ''; seen.set(p, t); return t; },
+    saveDoc: async (slug, id, html) => { await guardedWrite(slug, `${pdir(slug)}/docs/${safeId(id)}.html`, html); return true; },
     // automatic backups inside the browser (the last 20, plus one a day for two weeks)
     async backup(slug) {
       const dir = pdir(slug), b = `${dir}/backups`;

@@ -53,18 +53,33 @@ window.UnwipAbout = (function () {
   const URLP = /file:\/\/\/?[^\s'"()]+/g;
   const PATH = /(?:[A-Za-z]:[\\/]|\\\\|\/\/[^\s/]+\/|~[\\/]|\/(?:Users|home|private|var|tmp|Volumes|mnt|media|run|storage|sdcard|data|opt|root|srv|Library)\/)[^\n]*?(?=['"](?:[\s,;:)\]}]|$)|\s+->|$)/gm;
   const keepName = p => { const last = p.replace(/[\\/]+$/, '').split(/[\\/]/).pop(); return '…' + (SAFE_NAME.test(last) ? (p.includes('\\') ? '\\' : '/') + last : ''); };
+  // Dropbox paths start at the Dropbox folder (/Apps/Unwip/The Book/…), so they don't match the computer paths above
+  const DBXP = /(?:^|(?<=[\s'"(:]))\/(?:Apps|Unwip)\/[^\n]*?(?=['"](?:[\s,;:)\]}]|$)|\s+->|$)/gm;
   function scrub(t) {
     t = String(t == null ? '' : t);
     t = t.replace(URLP, keepName);
+    t = t.replace(DBXP, keepName);
     t = t.replace(/(?:%[0-9A-Fa-f]{2})+/g, m => { try { return decodeURIComponent(m); } catch { return m; } });
     t = t.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '[email]');
     t = t.replace(/"[^"]{0,60}"\.\.\.(?= is not valid JSON)/g, '"…"').replace(/(Unexpected token '?.'?, )"[^"]*"/g, '$1"…"');
     return t.replace(PATH, keepName);
   }
-  const hidePaths = scrub;
+  // and the names of your books, chapters and sheets (and the short names their folders use), wherever an error
+  // happened to mention one
+  function namesOf(projects) {
+    const out = new Set();
+    for (const p of projects) { if (p.title) out.add(p.title); if (p.slug) out.add(p.slug); }
+    if (S.project) { if (S.project.title) out.add(S.project.title); if (S.slug) out.add(S.slug); U.walkTree(S.project.binder || [], n => { if (n.title) out.add(n.title); }); }
+    return [...out].map(x => String(x).trim()).filter(x => x.length >= 3 && !/^(chapter|scene|notes?|draft|manuscript|characters|places|items|research|untitled|new)\s*\d*$/i.test(x)).sort((a, b) => b.length - a.length);
+  }
+  function hideNames(t, names) {
+    for (const n of names) { const re = new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); t = t.replace(re, '[name]'); }
+    return t;
+  }
   async function reportText(what) {
     let projects = [];
     try { projects = await api.listProjects(); } catch {}
+    const names = namesOf(projects), hidePaths = m => hideNames(scrub(m), names);
     const D = window.UnwipDropbox;
     const lines = [
       `Unwip ${await version()}`,
@@ -72,7 +87,7 @@ window.UnwipAbout = (function () {
       `When: ${new Date().toString().replace(/ GMT.*/, '')}`,
       `Projects: ${projects.length} (${projects.reduce((a, p) => a + (p.words || 0), 0).toLocaleString()} words in total)`,
       S.project ? `Open: a project with ${(S.project.binder || []).reduce((a, r) => a + (r.children || []).length, 0)} top-level items, ${S.mode || ''} mode, view ${S.view || 'write'}` : 'Open: main screen',
-      D ? `Dropbox: ${D.connected() ? 'connected' : 'not connected'}${D.lastError ? ` · last problem: ${scrub(D.lastError)}` : ''}` : '',
+      D ? `Dropbox: ${D.connected() ? 'connected' : 'not connected'}${D.lastError ? ` · last problem: ${hidePaths(D.lastError)}` : ''}` : '',
       '',
       'What happened:',
       what || '(not filled in)',

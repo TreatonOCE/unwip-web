@@ -183,7 +183,12 @@ window.UnwipSync = (function () {
     if (info.file === 'conflict') { checkConflicts(); return; }
     if (info.file === 'project.json') {
       const load = async () => { clearTimeout(S.metaTimer); S.metaTimer = null; try { U.reloadProjectMeta(await api.openProject(S.slug)); U.toast('Updated with changes from your other device.'); } catch {} };
-      if (S.metaTimer) U.toastAction('The binder was changed on another device.', 'Load those changes', load, 20000);
+      if (S.metaTimer) {
+        // this device has binder changes still to save: keep the other device's binder as a conflicted copy before
+        // that save goes ahead, so the compare window can offer both (the web version does this as it saves)
+        if (api.keepIncoming && await api.keepIncoming(S.slug)) { setTimeout(checkConflicts, 900); return; }
+        U.toastAction('The binder was changed on another device.', 'Load those changes', load, 20000);
+      }
       else load();
       return;
     }

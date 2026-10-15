@@ -44,7 +44,7 @@
   };
 
   // ------------------------------------------------------------------ state
-  const S = {
+  const S = { unsaved: {},
     slug: null, project: null, docId: null, selectedId: null,
     lastRange: null, sessionTyped: 0, lastDocWords: 0, programmatic: false,
     saveTimer: null, metaTimer: null, dirty: false, backupTimer: null, plainPaste: false,
@@ -340,6 +340,48 @@
   // (an older Unwip could drop things it doesn't understand), it asks you to update instead.
   const FORMAT = 1;
   const MIGRATIONS = { /* 2: project => { ... } */ };
+  // ---- one tab or window at a time per book (web and iPad). Two tabs on one book would each save their own copy of a
+  // chapter over the other's, so a second tab asks first. Uses the browser's locks where it has them (they let go by
+  // themselves if a tab is closed or crashes), and asks the other tabs over a channel where it doesn't.
+  const TABS = api.web && 'BroadcastChannel' in window ? new BroadcastChannel('unwip-tabs') : null;
+  let heldBook = null, letGo = null;
+  if (TABS) TABS.onmessage = async e => {
+    const m = e.data || {};
+    if (m.who && m.who === S.slug) TABS.postMessage({ mine: m.who });
+    if (m.close && m.close === S.slug) {
+      await flushSave().catch(() => {});
+      if (troubleRetry) { TABS.postMessage({ unsaved: m.close }); toast('Another tab asked to open this book, but some writing here isn’t saved yet, so it stays open here.', 'warn', 9000); return; }
+      await leaveProject(); await showLibrary(); toast('This book was opened in another tab or window, so it was closed here. Your writing was saved first.', '', 9000);
+    }
+  };
+  const askTabs = slug => new Promise(res => { if (!TABS) return res(false); let yes = false; const h = e => { if (e.data && e.data.mine === slug) yes = true; }; TABS.addEventListener('message', h); TABS.postMessage({ who: slug }); setTimeout(() => { TABS.removeEventListener('message', h); res(yes); }, 300); });
+  function tryHold(slug) {
+    if (heldBook === slug) return Promise.resolve(true);
+    if (!(navigator.locks && navigator.locks.request)) return askTabs(slug).then(busy => { if (!busy) heldBook = slug; return !busy; });
+    return new Promise(res => {
+      navigator.locks.request('unwip-book:' + slug, { ifAvailable: true }, lock => {
+        if (!lock) { res(false); return; }
+        heldBook = slug; res(true);
+        return new Promise(r => { letGo = r; });
+      }).catch(() => res(true));   // locks not usable here: don't stop anyone opening their book
+    });
+  }
+  function releaseBook() { if (letGo) letGo(); letGo = null; heldBook = null; }
+  async function holdBook(slug) {
+    if (!api.web) return true;
+    if (heldBook && heldBook !== slug) releaseBook();
+    if (await tryHold(slug)) return true;
+    const v = await modal({ title: 'Open in another tab', body: '<p>This book is already open in another Unwip tab or window. Writing in both at once would let one save over the other, so only one can have it open.</p>',
+      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Close it there and open here', value: true, kind: 'primary' }] });
+    if (!v) return false;
+    let refused = false; const h = e => { if (e.data && e.data.unsaved === slug) refused = true; };
+    if (TABS) { TABS.addEventListener('message', h); TABS.postMessage({ close: slug }); }
+    for (let i = 0; i < 20 && !refused; i++) { await new Promise(r => setTimeout(r, 250)); if (await tryHold(slug)) { if (TABS) TABS.removeEventListener('message', h); return true; } }
+    if (TABS) TABS.removeEventListener('message', h);
+    if (refused) { await modal({ title: 'Not yet', body: '<p>The other tab has writing it hasn’t been able to save yet, so it’s keeping the book open. Go to that tab: the bar at the top says what’s wrong.</p>', buttons: [{ label: 'OK', value: true, kind: 'primary' }] }); return false; }
+    await modal({ title: 'Still open in the other tab', body: '<p>The other tab didn’t let go of the book. Close that tab (or go back to its library), then try again.</p>', buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
+    return false;
+  }
   async function openProject(slug, opts = {}) {
     if (!opts.skipCheck && window.UnwipOpenGate && !(await window.UnwipOpenGate(slug))) return false;   // other devices' changes first (or a warning when offline)
     if (!opts.skipCheck && window.UnwipSync && !(await window.UnwipSync.beforeOpen(slug))) return false;
@@ -361,6 +403,7 @@
     project.stats = project.stats || { days: {} };
     // older versions counted pasted text as written words, so start progress tracking fresh
     if (project.statsVersion !== 2) { project.stats.days = {}; project.statsVersion = 2; }
+    if (!(await holdBook(slug))) return false;
     S.slug = slug; S.project = project;
     S.popped = new Set(api.popoutList ? await api.popoutList(slug).catch(() => []) : []);
     $('#library').classList.add('hidden');
@@ -432,6 +475,7 @@
     if (S.slug) await api.backup(S.slug).catch(() => {});
     clearInterval(S.backupTimer);
     emit('leave');
+    releaseBook();
     S.slug = null; S.project = null; S.docId = null;
     setWriter(false);
   }
@@ -1361,11 +1405,15 @@
     S.docId = id; S.selectedId = id; S.touchedDoc = null;
     S.project.lastDoc = id; scheduleMeta();
     let html = await api.loadDoc(S.slug, id);
-    if (f.node.series && window.UnwipSeries) { try { const fresh = await window.UnwipSeries.reconcile(f.node, html); if (fresh != null && S.docId === id) html = fresh; } catch (e) { console.warn('series', e); } }
+    // words that couldn't be saved yet: show those, not the older copy on disk (they're saved as soon as saving works)
+    const kept = S.unsaved[`${S.slug}:${id}`];
+    if (kept != null) html = kept;
+    if (kept == null && f.node.series && window.UnwipSeries) { try { const fresh = await window.UnwipSeries.reconcile(f.node, html); if (fresh != null && S.docId === id) html = fresh; } catch (e) { console.warn('series', e); } }
     if (S.docId !== id) return;
     showEmpty(false);
     editor.innerHTML = html || '<p><br></p>';
     S.loadedHTML = editor.innerHTML;
+    if (kept != null) S.dirty = true;
     resyncWords();
     $('#doc-title').value = f.node.title;
     synopsis.value = f.node.synopsis || ''; requestAnimationFrame(fitSynopsis);
@@ -1425,12 +1473,14 @@
     const f = findNode(id);
     if (f) { f.node.words = countWords(editorText()); f.node.mod = Date.now(); f.node.dev = S.device || ''; }
     if (S.loadedHTML && S.loadedHTML !== html) autoSnapshotIfNeeded(id, S.loadedHTML).catch(() => {});
-    const slug = S.slug;
-    try { await api.saveDoc(slug, id, html); }
+    const slug = S.slug, ukey = `${slug}:${id}`;
+    try { await api.saveDoc(slug, id, html); delete S.unsaved[ukey]; if (pending.delete(`doc:${slug}:${id}`) && !pending.size) { troubleRetry = null; saveTrouble(null); } }
     catch (e) {
-      // the words are kept (on screen, and in the retry) and tried again; nothing is thrown away
+      // the words are kept (on screen, in the retry, and in S.unsaved so going to another chapter and back brings
+      // them back instead of the older copy on disk) and tried again; nothing is thrown away
+      S.unsaved[ukey] = html;
       if (S.docId === id && editor.innerHTML === html) S.dirty = true;
-      saveTrouble(e, async () => { const now = S.slug === slug && S.docId === id ? editor.innerHTML : html; await api.saveDoc(slug, id, now); if (S.slug === slug && S.docId === id && editor.innerHTML === now) S.dirty = false; }, `doc:${slug}:${id}`);
+      saveTrouble(e, async () => { const now = S.slug === slug && S.docId === id ? editor.innerHTML : (S.unsaved[ukey] != null ? S.unsaved[ukey] : html); await api.saveDoc(slug, id, now); if (S.unsaved[ukey] === now || (S.slug === slug && S.docId === id)) delete S.unsaved[ukey]; if (S.slug === slug && S.docId === id && editor.innerHTML === now) S.dirty = false; }, `doc:${slug}:${id}`);
       return;
     }
     if (f && f.node.series && window.UnwipSeries) window.UnwipSeries.push(f.node, html).catch(e => console.warn('series', e));
@@ -1468,6 +1518,7 @@
     if (api.popoutClose && S.popped && S.popped.size) await api.popoutClose(slug).catch(() => {});
     clearInterval(S.backupTimer); setRevise(false);
     emit('leave');
+    releaseBook();
     S.slug = null; S.project = null; S.docId = null; S.bookGone = false;
     setWriter(false);
     await showLibrary();
@@ -1486,8 +1537,8 @@
     if (retry) pending.set(key || 'x' + Math.random(), retry);
     troubleRetry = pending.size ? true : null;
     if (api.setSaveTrouble) api.setSaveTrouble(!!troubleRetry);
-    const m = String(e && (e.code || e.message) || e);
-    const why = /ENOSPC|no space|quota|QuotaExceeded/i.test(m) ? 'Your disk is full, so Unwip can’t save. Free up some space (empty the Recycle Bin, or delete big downloads) and it will save by itself.'
+    const m = String(e && [e.name, e.code, e.message].filter(x => x != null && x !== '').join(' ') || e);
+    const why = /ENOSPC|no space|quota|QuotaExceeded|\b22\b/i.test(m) ? (api.web ? 'This device is out of room for Unwip’s storage, so it can’t save. Free up some space (delete photos, videos or apps you don’t need, or old snapshots), then it saves by itself. Your words are kept on screen until then.' : 'Your disk is full, so Unwip can’t save. Free up some space (empty the Recycle Bin, or delete big downloads) and it will save by itself.')
       : /EACCES|EPERM|not permitted|denied/i.test(m) ? 'Unwip isn’t allowed to save in this book’s folder. If it’s in OneDrive, Dropbox or a network folder, check that it’s available and not read-only.'
       : /EBUSY|locked|in use/i.test(m) ? 'The book’s file is in use by another program (often a sync app or antivirus). Unwip will keep trying.'
       : 'Unwip couldn’t save just now (' + esc(m.replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 120)) + ').';
@@ -4727,7 +4778,7 @@
       return;
     }
     spEd.contentEditable = 'true'; spEd.classList.remove('sp-map');
-    spEd.innerHTML = (await api.loadDoc(S.slug, id)) || '<p><br></p>';
+    { const disk = await api.loadDoc(S.slug, id), kept = S.unsaved[`${S.slug}:${id}`]; spEd.innerHTML = (kept != null ? kept : disk) || '<p><br></p>'; if (kept != null) S.splitDirty = true; }
     spEd.classList.toggle('sheet-like', rootOf(id).kind !== 'manuscript');
     spFoot();
   }
@@ -4736,8 +4787,14 @@
     clearTimeout(spTimer);
     if (!S.splitDirty || !S.splitId || !S.slug) return;
     S.splitDirty = false;
-    const html = spEd.innerHTML;
-    await api.saveDoc(S.slug, S.splitId, html);
+    const html = spEd.innerHTML, slug = S.slug, id = S.splitId, ukey = `${slug}:${id}`;
+    // a failed save keeps the words (and retries) the same way the main page does, instead of dropping them
+    try { await api.saveDoc(slug, id, html); delete S.unsaved[ukey]; }
+    catch (e) {
+      S.unsaved[ukey] = html;
+      saveTrouble(e, async () => { const now = S.splitId === id && S.slug === slug ? spEd.innerHTML : S.unsaved[ukey]; if (now == null) return; await api.saveDoc(slug, id, now); delete S.unsaved[ukey]; }, `split:${slug}:${id}`);
+      return;
+    }
     const f = findNode(S.splitId); if (f) f.node.words = countWords(spEd.innerText);
     if (f && ['characters', 'places', 'items'].includes(rootOf(S.splitId).kind)) scheduleNames();
     scheduleMeta();
@@ -4770,6 +4827,11 @@
     $('#sp-open').before(pb); pb.onclick = () => { if (S.splitId) popOut(S.splitId); };
     let wordsT = null;
     api.onPopout(async d => {
+      if (d.unsaved && d.html != null) {   // a chapter window closed while its save kept failing: keep those words and keep trying
+        const ukey = `${d.slug}:${d.id}`; S.unsaved[ukey] = d.html;
+        saveTrouble(new Error('A chapter window couldn’t save before it closed'), async () => { const now = S.slug === d.slug && S.docId === d.id ? editor.innerHTML : S.unsaved[ukey]; if (now == null) return; await api.saveDoc(d.slug, d.id, now); delete S.unsaved[ukey]; }, `pop:${ukey}`);
+        return;
+      }
       if (!S.slug || d.slug !== S.slug) return;
       S.popped = S.popped || new Set();
       if (d.open) S.popped.add(d.id); else S.popped.delete(d.id);
@@ -4792,6 +4854,14 @@
     window.addEventListener('blur', () => { if (S.popped && S.popped.size) { flushSave(); flushSplit(); } });
     window.addEventListener('focus', () => { if (S.popped && S.popped.size) for (const id of [S.docId, S.splitId]) if (id && S.popped.has(id)) takeInWindowChange(id); });
   }
+  // the chapter on the right changed on another device: take it in, or (if typing there) keep it in Snapshots
+  api.onExternalChange(async info => {
+    if (!S.slug || info.slug !== S.slug || !info.id || info.id !== S.splitId || info.id === S.docId) return;
+    const id = info.id, incoming = await api.loadDoc(S.slug, id);
+    if (S.splitId !== id || incoming === spEd.innerHTML) return;
+    if (S.splitDirty) { await api.snapSave(S.slug, id, incoming, 'Version from another device', false).catch(() => {}); toast('The chapter on the right was also changed on another device. Its version is in Snapshots.', '', 8000); }
+    else { const sc = spEd.scrollTop; spEd.innerHTML = incoming || '<p><br></p>'; spFoot(); spEd.scrollTop = sc; }
+  });
   $('#btn-split').onclick = () => S.splitId ? closeSplit() : openSplit(null);
 
   // ================================================================== QUOTES
@@ -4888,6 +4958,7 @@
   // test hooks (used by the automated checks, harmless otherwise)
   window.__folio = { S, openProject, openDoc, copyDocForDocs, compileManuscript, flushSave, addNode, setWriter, insertCleanHTML };
   window.__unwip = {
+    get saveFailing() { return !!troubleRetry; },
     S, api, I, $, $$, esc, fmt, makeRoom, countWords, today, editor, editorWrap, on, emit,
     modal, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
     findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave, refreshSnapCount,

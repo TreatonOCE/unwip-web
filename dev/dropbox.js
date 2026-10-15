@@ -362,7 +362,9 @@ window.UnwipDropbox = (function () {
     st.records[k] = { rev: res.rev, hash: res.content_hash || hash, ...shapeOf(k, bytes) };
   }
   // for a project file, remember how its binder looked when last in step with Dropbox
-  const shapeOf = (k, bytes) => /^[^/]+\/project\.json$/.test(k) ? { shape: binderShape(new TextDecoder().decode(bytes)) } : {};
+  const shapeOf = (k, bytes) => { if (!/^[^/]+\/project\.json$/.test(k)) return {}; const t = new TextDecoder().decode(bytes); return { shape: binderShape(t), extra: extrasOf(t) }; };
+  // the other things a person writes that live in the project file: the timeline, continuity notes and links
+  const extrasOf = json => { try { const p = JSON.parse(json); const t = p.timeline || {}; return JSON.stringify([t.events || null, t.calendar || null, (p.continuity && p.continuity.facts) || null, p.links || null]); } catch { return null; } };
   async function pull(k, R, touched, mine) {
     if (progress) progress.down++;
     const b = await download(R.lower);
@@ -397,7 +399,10 @@ window.UnwipDropbox = (function () {
     // like); only a real difference in the binder is worth asking about
     if (/^[^/]+\/project\.json$/.test(rel) && theirs) {
       const a = binderShape(new TextDecoder().decode(bytes)), b = binderShape(new TextDecoder().decode(theirs)), rec = st.records[rel.toLowerCase()];
-      if (a && (a === b || (rec && rec.shape && a === rec.shape))) return;   // the same binder, or this device didn't change it since the last sync
+      // the timeline, continuity notes and links changed here (since the last sync) and differently there: keep both
+      const xa = extrasOf(new TextDecoder().decode(bytes)), xb = extrasOf(new TextDecoder().decode(theirs));
+      const extrasClash = xa !== xb && !(rec && rec.extra && xa === rec.extra);
+      if (!extrasClash && a && (a === b || (rec && rec.shape && a === rec.shape))) return;   // the same binder, or this device didn't change it since the last sync
     }
     const ts = Date.now(), day = new Date(ts).toLocaleDateString('en-CA');
     const m = /^(.*\/)?([^/]+?)(\.[^./]+)$/.exec(rel);
@@ -566,6 +571,7 @@ window.UnwipDropbox = (function () {
     const j = await r.json();
     await load();
     Object.assign(st, { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in || 14400) * 1000, account: j.account_id, broken: false, records: {}, since: Date.now() });
+    if (st.auto === undefined) st.auto = true;   // a new connection syncs by itself (a choice someone made before is kept)
     await persist();
     try { const a = await (await rpc('/users/get_current_account', null)).json(); st.email = a.email; st.name = a.name && a.name.display_name; await persist(); } catch {}
     await firstSync();
@@ -730,7 +736,7 @@ window.UnwipDropbox = (function () {
       if (!(await F.listProjects()).length) return;
       if (document.getElementById('library').classList.contains('hidden')) return setTimeout(safariWarning, 60000);   // wait for the main screen, not over a chapter
       localStorage.setItem('unwip-safari-warned', String(Date.now()));
-      const U = window.__unwip, msg = `Safari can clear what a website has saved if it isn’t opened for 7 days, and your books are saved in Safari. To keep them safe, add Unwip to your Home Screen (the Share button, then “Add to Home Screen”)${KEY ? ' or connect Dropbox' : ''}.`;
+      const U = window.__unwip, msg = `Safari can clear what a website has saved if it isn’t opened for 7 days, and your books are saved in Safari. To keep them safe${KEY ? ', connect Dropbox' : ''}, and add Unwip to your Home Screen (the Share button, then “Add to Home Screen”). A book written in Safari stays in Safari: the Home Screen app starts empty, so bring books across with Dropbox or a backup file.`;
       if (KEY) U.toastAction(msg, 'Connect Dropbox', () => connect(), 12000); else U.toast(msg, 'warn', 12000);
     } catch {}
   }

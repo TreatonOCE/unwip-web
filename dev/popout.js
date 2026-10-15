@@ -35,6 +35,7 @@
     return saving;
   }
   window.__flush = async () => { await save(); await saving; return 1; };
+  window.__unsaved = () => dirty ? editor.innerHTML : null;
 
   window.addEventListener('blur', () => { if (dirty) save(); });
   editor.addEventListener('input', () => { dirty = true; $('#po-saved').textContent = ''; clearTimeout(timer); timer = setTimeout(save, 700); showCount(); });
@@ -49,7 +50,9 @@
   $('#po-back').onclick = async () => { await window.__flush(); api.popoutBack(slug, id); };
   // changed by another device (Dropbox) while open here: take it in if nothing's been typed since the last save
   api.onExternalChange(async info => {
-    if (info.id !== id || dirty) return;
+    if (info.id !== id) return;
+    // typing here too: this window's words win, and the other device's version goes to Snapshots so it isn't lost
+    if (dirty) { const theirs = await api.loadDoc(slug, id); if (theirs && theirs !== lastSaved && theirs !== editor.innerHTML) { await api.snapSave(slug, id, theirs, 'Version from another device', false).catch(() => {}); lastSaved = theirs; $('#po-saved').textContent = 'Another device changed this chapter: its version is in Snapshots'; } return; }
     const html = await api.loadDoc(slug, id);
     if (html && html !== lastSaved && html !== editor.innerHTML) { const top = $('.po-main').scrollTop; editor.innerHTML = html; lastSaved = html; showCount(); $('.po-main').scrollTop = top; $('#po-saved').textContent = 'Up to date'; }
   });

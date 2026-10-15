@@ -64,29 +64,43 @@ window.UnwipStart = (function () {
   const dbx = () => window.UnwipDropbox && window.UnwipDropbox.connected();
 
   async function safety() {
-    if (!touch() || !S.settings || !S.settings.onboarded) return;
-    try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+    if (!api.web || !S.settings || !S.settings.onboarded) return;
+    // ask the browser to keep Unwip's storage, and find out whether it said yes (the warning is stronger if not)
+    let kept = true; try { if (navigator.storage && navigator.storage.persisted) kept = (await navigator.storage.persisted()) || (await navigator.storage.persist()); } catch {}
     const needHome = ios() && !standalone(), needDbx = !dbx() && window.UnwipDropbox;
-    banner(needDbx);
+    banner(!dbx(), kept);
+    if (!touch()) return;   // the one-time setup question is for phones and iPads
     if (S.settings.safeAsked || (!needHome && !needDbx)) return;
     try { S.settings = await api.setSettings({ safeAsked: Date.now() }); } catch {}
     const body = document.createElement('div');
     body.innerHTML = `<p>Your books are saved on this ${/iPad/.test(navigator.userAgent) ? 'iPad' : 'device'}, inside the browser. ${needHome && needDbx ? 'Two quick things make' : 'One quick thing makes'} sure they stay safe:</p>
-      ${needHome ? `<div class="sf-step"><b>${needDbx ? '1. ' : ''}Add Unwip to your Home Screen</b><span>Tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>. It opens full screen, works offline, and Safari won’t clear its storage (it can clear a website’s storage after about a week without a visit). Do it before you write much: the Home Screen app keeps its own storage, so books written in a Safari tab don’t move across by themselves${needDbx ? ', but Dropbox carries them across' : ''}.</span></div>` : ''}
+      ${needHome ? `<div class="sf-step"><b>${needDbx ? '1. ' : ''}Add Unwip to your Home Screen</b><span>Tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>. It opens full screen, works offline, and Safari is much less likely to clear its storage (it can clear a website’s storage after about a week without a visit). Do it before you write much: the Home Screen app keeps its own storage, so books written in a Safari tab don’t move across by themselves${needDbx ? ', but Dropbox carries them across' : ''}.</span></div>` : ''}
       ${needDbx ? `<div class="sf-step"><b>${needHome ? '2. ' : ''}Connect Dropbox</b><span>A copy of every book goes to <b>your own</b> Dropbox, so nothing is lost if this device is, and your PC or Mac can open the same books.</span></div>` : ''}`;
     const v = await U.modal({ title: 'Keep your writing safe', body, buttons: [{ label: 'Not now', value: false, kind: 'ghost' }, ...(needDbx ? [{ label: 'Connect Dropbox', value: 'dbx', kind: 'primary' }] : [{ label: 'Got it', value: true, kind: 'primary' }])] });
     if (v === 'dbx') window.UnwipDropbox.connect();
   }
   // until Dropbox is connected, a small reminder on the main screen (hide it for two weeks with ×)
-  function banner(show) {
+  // (a browser that hasn't promised to keep the storage gets it back after 3 days instead of 14)
+  async function backupFiles() {
+    let list = []; try { list = (await api.listProjects()).filter(p => !p.deleted); } catch {}
+    if (!list.length) return U.toast('No books to back up yet.');
+    const body = document.createElement('div');
+    body.innerHTML = `<p>A backup file holds a whole book (chapters, sheets, images and snapshots). Keep it somewhere safe, like Files, iCloud Drive or email, and open it in Unwip to bring the book back.</p>
+      <div class="sy-list">${list.map(p => `<div class="sy-row"><div><b>${U.esc(p.title || p.slug)}</b><span>${(p.words || 0).toLocaleString()} words</span></div><button class="btn primary" type="button" data-s="${U.esc(p.slug)}">Save</button></div>`).join('')}</div>`;
+    body.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => { try { const f = await api.backupExport(b.dataset.s); if (f !== false) { b.textContent = 'Saved ✓'; try { localStorage.setItem('unwip-backupfile', String(Date.now())); } catch {} } } catch (e) { U.toast('Couldn’t save the backup file: ' + U.esc(String(e.message || e)), 'warn'); } });
+    await U.modal({ title: 'Save a backup file', body, buttons: [{ label: 'Done', value: true, kind: 'primary' }] });
+  }
+  function banner(show, kept = true) {
     const home = document.getElementById('write-home'); if (!home) return;
     let b = document.getElementById('sf-banner');
-    const quiet = S.settings && S.settings.safeQuiet && Date.now() - S.settings.safeQuiet < 14 * 864e5;
+    const quiet = S.settings && S.settings.safeQuiet && Date.now() - S.settings.safeQuiet < (kept ? 14 : 3) * 864e5;
     if (!show || quiet) { if (b) b.remove(); return; }
     if (b) return;
     b = document.createElement('div'); b.id = 'sf-banner'; b.className = 'sf-banner';
-    b.innerHTML = `<span>Your books are only on this device. Connect Dropbox to keep a copy safe.</span><button class="btn small primary" type="button" data-c>Connect Dropbox</button><button class="gs-x" type="button" aria-label="Hide for now" data-x>×</button>`;
-    b.querySelector('[data-c]').onclick = () => window.UnwipDropbox.connect();
+    const say = kept ? 'Your books are only on this device, inside the browser. Connect Dropbox, or save a backup file now and then, so there’s always a copy.' : 'This browser hasn’t agreed to keep Unwip’s storage, so it could clear your books to save space. Connect Dropbox, or save a backup file, so there’s always a copy.';
+    b.innerHTML = `<span>${say}</span>${window.UnwipDropbox ? '<button class="btn small primary" type="button" data-c>Connect Dropbox</button>' : ''}<button class="btn small" type="button" data-b>Save a backup file</button><button class="gs-x" type="button" aria-label="Hide for now" data-x>×</button>`;
+    const c = b.querySelector('[data-c]'); if (c) c.onclick = () => window.UnwipDropbox.connect();
+    b.querySelector('[data-b]').onclick = () => backupFiles();
     b.querySelector('[data-x]').onclick = async () => { b.remove(); try { S.settings = await api.setSettings({ safeQuiet: Date.now() }); } catch {} };
     home.prepend(b);
   }
