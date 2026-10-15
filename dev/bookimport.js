@@ -4,6 +4,7 @@
 // then shows a preview where every chapter break can be ticked or unticked before importing.
 window.UnwipBookImport = (function () {
   'use strict';
+  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
   const U = window.__unwip;
   const { $, $$, esc, S, api } = U;
   const Clip = window.FolioClip, FI = window.FolioImport;
@@ -642,7 +643,7 @@ window.UnwipBookImport = (function () {
   function menuItems(ctx = {}) {
     return [
       { label: 'Word, Google Docs, LibreOffice, text files… (one or several)', action: () => fromFiles(ctx) },
-      { label: 'A folder of chapter files…', action: () => fromFolder(ctx) },
+      { label: IOS ? 'Chapter files (pick several)…' : 'A folder of chapter files…', action: () => fromFolder(ctx) },
       { label: 'Paste a whole book (from Google Docs or anywhere)…', action: () => fromPaste(ctx) }
     ];
   }

@@ -4146,7 +4146,7 @@
             <span class="ol-no">${no}</span>
             <span class="ol-title" style="padding-left:${depth * 18}px">${n.icon ? iconHTML(n, '') : n.type === 'folder' ? I.folder : ''}<button class="ol-open" title="Open">${esc(n.title || 'Untitled')}</button>${n.label ? `<span class="lbl-chip" style="--lc:${esc(n.label.c)}" title="Label">${esc(n.label.n)}</span>` : ''}</span>
             <span><textarea class="ol-syn" rows="1" placeholder="${n.type === 'folder' ? 'What this part covers…' : 'What happens…'}">${esc(n.synopsis || '')}</textarea></span>
-            <span><input class="ol-pov" value="${esc(n.pov || '')}" placeholder="–" list="ol-pov-list"></span>
+            <span><input class="ol-pov" value="${esc(n.pov || '')}" placeholder="POV" title="POV (point of view): the character this chapter is told through" list="ol-pov-list"></span>
             <span>${n.type === 'doc' ? `<select class="ol-status" style="--st:${statusColor(n.status)}">${statusOptions().map(([v, l]) => `<option value="${v}" ${v === (n.status || '') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}</span>
             <span class="num">${fmt(folderWords(n))}</span>
           </div>`).join('')}

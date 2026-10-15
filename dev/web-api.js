@@ -548,7 +548,10 @@
     async importFolder() {
       // sub-folders come too (hidden ones like .obsidian and .trash don't); each file remembers its sub-folder
       const segs = f => (f.webkitRelativePath || f.name).split('/');
-      const fs = (await pickFiles({ multiple: true, directory: 'webkitdirectory' in document.createElement('input') }))
+      // iPhone and iPad can't hand a whole folder to a web app (the picker greys out every file), so there you pick
+      // the chapter files themselves: Select at the top of the picker, tap them all, then Open
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+      const fs = (await pickFiles({ multiple: true, directory: !ios && 'webkitdirectory' in document.createElement('input'), accept: ios ? '.docx,.odt,.rtf,.txt,.md,.markdown,.text,.htm,.html' : '' }))
         .filter(f => /\.(docx|odt|rtf|txt|md|markdown|text|htm|html)$/i.test(f.name) && !/\.excalidraw\.md$/i.test(f.name) && !segs(f).some(x => /^[~.]/.test(x)));
       if (!fs.length) return null;
       const folder = segs(fs[0]).length > 1 ? segs(fs[0])[0] : 'Chapters';

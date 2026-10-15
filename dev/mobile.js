@@ -182,6 +182,26 @@ window.UnwipMobile = (function () {
     root.style.setProperty('--m-kb', kb + 'px');
   }
   if (vv) { vv.addEventListener('resize', placeBar); vv.addEventListener('scroll', placeBar); }
+  // Dialogs and text boxes: the iPhone keyboard doesn't shrink the page, so a dialog centred on the whole screen ends
+  // up half behind the keyboard and its ^ v ✓ bar. Dialogs are fitted to the part you can still see, and the box
+  // you tap into is brought up into view.
+  function fitVisible() {
+    if (!vv) return;
+    root.style.setProperty('--vv-h', vv.height + 'px');
+    root.style.setProperty('--vv-top', vv.offsetTop + 'px');
+    root.classList.toggle('m-kb-open', window.innerHeight - vv.height > 120);
+  }
+  if (vv) { vv.addEventListener('resize', fitVisible); vv.addEventListener('scroll', fitVisible); fitVisible(); }
+  document.addEventListener('focusin', e => {
+    const t = e.target; if (!vv || t === editor || !t.matches || !t.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select')) return;
+    let n = 0;
+    (function check() {
+      fitVisible();
+      const r = t.getBoundingClientRect(), bottom = vv.offsetTop + vv.height - 12;
+      if (r.bottom > bottom || r.top < vv.offsetTop) t.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (++n < 6) setTimeout(check, 150);   // the keyboard (and its bar) arrive in steps
+    })();
+  });
   // the iPhone doesn't always tell us the keyboard's final height the first time it opens (its ^ v ✓ bar arrives late),
   // so keep re-measuring for a couple of seconds after the keyboard comes up
   let settleUntil = 0;

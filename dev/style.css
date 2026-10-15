@@ -1519,7 +1519,12 @@ html.web .statusbar { padding-bottom: env(safe-area-inset-bottom); height: calc(
   .m-fs-list button span { font-family: var(--ui); font-size: 15px; }
 
   /* side panels (Revise, comments) slide over the page */
-  .revise-panel:not(.pl-side) { position: fixed; z-index: 90; right: 0; top: 0; bottom: 0; width: min(92vw, 380px); padding-top: env(safe-area-inset-top); box-shadow: 0 0 40px rgba(0,0,0,.18); }
+  /* side panels (Revise, comments, snapshots) are a sheet over the bottom half, so the chapter and its highlights
+     stay in view above it. The page gets room at the bottom so every line can still be scrolled above the sheet. */
+  .revise-panel:not(.pl-side) { position: fixed; z-index: 90; left: 0; right: 0; top: auto; bottom: 0; width: auto !important; height: 46vh; height: 46dvh; padding-top: 0; padding-bottom: env(safe-area-inset-bottom); border-radius: 16px 16px 0 0; border-top: 1px solid var(--line); box-shadow: 0 -10px 40px rgba(0,0,0,.22); }
+  .revise-panel:not(.pl-side)::before { content: ''; display: block; width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 7px auto 0; flex: none; }
+  html.m-panel-open .m-shade { opacity: 0 !important; pointer-events: none !important; }
+  html.m-panel-open #editor-wrap { padding-bottom: 48vh; padding-bottom: 48dvh; }
   html.m-panel-open .writer-quote, body:not(.writer) .writer-quote { display: none; }
   .m-shade { display: block; position: fixed; inset: 0; z-index: 85; background: rgba(20, 16, 10, .32); opacity: 0; pointer-events: none; transition: opacity .2s; }
   html.m-panel-open .m-shade { opacity: 1; pointer-events: auto; }
@@ -1574,9 +1579,22 @@ html.web .statusbar { padding-bottom: env(safe-area-inset-bottom); height: calc(
   .new-pop { left: 8px !important; right: 8px; width: auto !important; }
   .new-pop .np-prev { display: none; }
   .tg-cols, .cs-cols { grid-template-columns: 1fr !important; }
-  .tg-prev { display: none; }
-  .help-nav { display: none; }
+  /* the list on top, and what the picked one looks like underneath (side by side doesn't fit a phone) */
+  .tg-cols { flex-direction: column; height: auto; gap: 10px; }
+  .tg-list { width: auto; max-height: 34vh; max-height: 34dvh; }
+  .tg-prev { flex: none; max-height: 38vh; max-height: 38dvh; justify-content: flex-start; padding: 10px; }
+  .tg-prev .sp-sheet { width: 100%; max-width: 280px; }
+  /* Help: the sections become a strip to swipe along under the search box */
+  .help-body { flex-direction: column; }
+  .help-nav { width: auto; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 10px; gap: 6px; flex: none; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .help-nav::-webkit-scrollbar { display: none; }
+  .help-nav a { white-space: nowrap; flex: none; background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; }
+  .help-nav .help-acts { display: none; }
+  .help-main { padding: 6px 16px 30px; }
+  .help-head input { min-width: 0; }
 }
+.help-main { min-width: 0; overflow-wrap: anywhere; }
+.help-main table { display: block; max-width: 100%; overflow-x: auto; }
 
 /* ================= CALMER TOP BAR (0.24) ================= */
 .tb-tucked, .tb-tucked[hidden] { display: none !important; }
@@ -2910,3 +2928,18 @@ body.litrpg .editor p.lit-sys, body.litrpg #editor p.lit-sys { margin: .5em auto
 .modal .m-body { min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .modal .m-body::after { content: ''; display: block; height: 16px; flex: none; }
 @media (pointer: coarse) { .tip-q { width: 22px; height: 22px; font-size: 12px; } }
+
+/* iPhone and iPad zoom the whole page in when you tap a box with text under 16px; that zoom pushed things off the
+   right edge and under the keyboard bar. Boxes you type in are 16px on touch screens. */
+@media (pointer: coarse) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea { font-size: max(16px, 1em) !important; }
+}
+/* while the iPhone keyboard is up, dialogs sit in the part of the screen you can see (set by mobile.js) */
+html.m-kb-open .modal-back { top: var(--vv-top, 0); bottom: auto; height: var(--vv-h, 100%); align-items: end; padding-bottom: 6px; }
+html.m-kb-open .modal { max-height: calc(var(--vv-h, 100vh) - 16px) !important; }
+@supports (height: 100dvh) {
+  .in-card, .bi-card { max-height: calc(100dvh - 48px); }
+  .ctx-menu { max-height: calc(100dvh - 16px); }
+  .ch-scroll { max-height: calc(100dvh - 230px); }
+}
+.in-card > *:last-child, .bi-card .bi-body { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
