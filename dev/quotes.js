@@ -1,4 +1,5 @@
-// Unwip - short quotes from writers, to keep going. Public-domain writers only (see below).
+// Unwip - short quotes from writers, to keep going. Public-domain writers only (see below), plus a few lines from
+// Unwip's own made-up writers at the end.
 window.UnwipQuotes = (function () {
   // Only writers whose words are out of copyright everywhere Unwip is sold: they died long enough ago (before 1956)
   // and the line comes from a book, play, letter or interview published before 1931. Translations are left out (the
@@ -119,7 +120,59 @@ window.UnwipQuotes = (function () {
     ['There are two ways of spreading light: to be the candle or the mirror that reflects it.', 'Edith Wharton'],
     ['Isn’t it nice to think that tomorrow is a new day with no mistakes in it yet?', 'L. M. Montgomery'],
     ['All children, except one, grow up.', 'J. M. Barrie'],
-    ['There is nothing — absolutely nothing — half so much worth doing as simply messing about in boats.', 'Kenneth Grahame']
+    ['There is nothing — absolutely nothing — half so much worth doing as simply messing about in boats.', 'Kenneth Grahame'],
+    // Unwip's own made-up writers (Penny Draft, Doug Deadline, Edith Lessmore, Mortimer Plotwell, Ima Novelist, Bea Layte):
+    // lines written for Unwip, not anyone real, so no one's words or name are borrowed
+    ['My first drafts read like a ransom note. That’s fine. Nobody’s paying the ransom yet.', 'Penny Draft'],
+    ['Write it badly today. Tomorrow you has opinions and a red pen.', 'Penny Draft'],
+    ['If the first draft came out good, the second draft would get bored.', 'Penny Draft'],
+    ['I wrote 300 words today and 290 of them were “suddenly”. Still counts.', 'Penny Draft'],
+    ['There’s no trick. Read heaps, write heaps, and eat something green now and then.', 'Penny Draft'],
+    ['Your first draft is a note to yourself about what the book might be. Messy handwriting allowed.', 'Penny Draft'],
+    ['Some days the words come out like toothpaste from a tube someone stood on. Squeeze anyway.', 'Penny Draft'],
+    ['A finished bad book beats a perfect chapter one you’ve rewritten nineteen times.', 'Penny Draft'],
+    ['I love deadlines. I’ve got a whole collection of them, mostly from last month.', 'Doug Deadline'],
+    ['My house has never been cleaner than the week my manuscript was due.', 'Doug Deadline'],
+    ['Fifteen minutes a day adds up. So does fifteen minutes of “research” about otters. Choose wisely.', 'Doug Deadline'],
+    ['Nobody ever finished a book by reorganising their pens.', 'Doug Deadline'],
+    ['Every writer has a nemesis. Mine is the fridge.', 'Doug Deadline'],
+    ['If you’re waiting for a free weekend to write, I’ve got bad news about weekends.', 'Doug Deadline'],
+    ['Write the scene you’re avoiding first. The dread is always bigger than the scene.', 'Doug Deadline'],
+    ['Adverbs are like glitter. One is festive. Ten and you’ll be finding them for weeks.', 'Edith Lessmore'],
+    ['If you love a sentence so much you can’t cut it, cut it, then have a little cry.', 'Edith Lessmore'],
+    ['“Very” is the word you reach for when you can’t be bothered finding the right one. I say this with love.', 'Edith Lessmore'],
+    ['Your favourite paragraph is a houseguest who won’t leave. Show it the door, gently.', 'Edith Lessmore'],
+    ['Read it out loud. If you run out of breath, so will your reader.', 'Edith Lessmore'],
+    ['Nobody has ever complained that a book was too clear.', 'Edith Lessmore'],
+    ['The delete key is a writing tool. Possibly the best one you own.', 'Edith Lessmore'],
+    ['Three adjectives in a row and the poor noun gets crushed underneath.', 'Edith Lessmore'],
+    ['I spent four months on the history of my dragon’s grandmother. She’s in one scene. She’s very well rounded.', 'Mortimer Plotwell'],
+    ['Put a map in the front and readers will forgive you almost anything.', 'Mortimer Plotwell'],
+    ['If magic can fix everything, nobody worries about anything. Give it a price tag.', 'Mortimer Plotwell'],
+    ['Know your ending. You can change it later, but at least you’ll know what you’re running from.', 'Mortimer Plotwell'],
+    ['When the plot stalls, set something on fire. Usually metaphorically.', 'Mortimer Plotwell'],
+    ['Every character wants something. If yours doesn’t, check they aren’t a lamp.', 'Mortimer Plotwell'],
+    ['Worldbuilding is lovely because it feels exactly like writing and isn’t.', 'Mortimer Plotwell'],
+    ['Readers remember the one weird detail, never the twelve-page treaty.', 'Mortimer Plotwell'],
+    ['Imposter syndrome means you care. Annoying, but useful.', 'Ima Novelist'],
+    ['Every author you admire once wrote a sentence so bad the cat left the room.', 'Ima Novelist'],
+    ['Writing a novel is building a boat when you’re already out at sea. Bail a bit, hammer a bit.', 'Ima Novelist'],
+    ['Compare your chapter three to their chapter three, not to their finished book with the shiny cover.', 'Ima Novelist'],
+    ['You don’t need permission to call yourself a writer. A pen and mild stubbornness will do.', 'Ima Novelist'],
+    ['Some days you write. Some days you stare at the shower wall thinking about writing. Both count.', 'Ima Novelist'],
+    ['The blank page has no opinions about you. It’s paper.', 'Ima Novelist'],
+    ['Nobody reads your first draft. That’s the whole point of a first draft.', 'Ima Novelist'],
+    ['If a scene bores you to write, it’ll bore them to read. Skip to the good bit and see what breaks.', 'Ima Novelist'],
+    ['I write best at 2am, which is a shame, because so does the neighbour’s dog.', 'Bea Layte'],
+    ['Inspiration is a cat. It turns up when you stop calling it, then sits on the keyboard.', 'Bea Layte'],
+    ['My routine is coffee, panic, more coffee, then about forty genuinely good minutes.', 'Bea Layte'],
+    ['If you only write when you feel like it, you’ll mostly write birthday cards.', 'Bea Layte'],
+    ['Back up your work. I learned this the hard way. Twice.', 'Bea Layte'],
+    ['Keep a notebook by the bed. The best ideas show up at 3am and leave by 7.', 'Bea Layte'],
+    ['Your word count lies on bad days and shows off on good ones. Ignore it either way.', 'Bea Layte'],
+    ['Stop editing chapter one. Chapter one is fine. Go and write chapter two.', 'Bea Layte'],
+    ['You’re allowed to write the ending first. The book won’t tell anyone.', 'Bea Layte'],
+    ['Finish the thing. You can make it good once it exists.', 'Bea Layte']
   ];
   // A shuffled deck: every quote comes up once before any repeats, and the deck is remembered between sessions.
   const KEY = 'unwip-quote-deck';
