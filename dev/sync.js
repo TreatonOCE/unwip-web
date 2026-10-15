@@ -320,15 +320,32 @@ window.UnwipSync = (function () {
           }
           // names (and synopses) that differ between the two: nobody can tell which is newer, so you choose
           const diffs = []; const theirs = new Map(); U.walkTree(other.binder || [], n => theirs.set(n.id, n));
-          U.walkTree(S.project.binder, n => { const t = theirs.get(n.id); if (!t || n.root) return; if ((t.title || '') !== (n.title || '')) diffs.push({ n, key: 'title', mine: n.title || 'Untitled', other: t.title || 'Untitled' }); if ((t.synopsis || '') !== (n.synopsis || '')) diffs.push({ n, key: 'synopsis', mine: n.synopsis || '(none)', other: t.synopsis || '(none)' }); });
+          U.walkTree(S.project.binder, n => { const t = theirs.get(n.id); if (!t || n.root) return; if ((t.title || '') !== (n.title || '')) diffs.push({ n, key: 'title', mine: n.title || 'Untitled', other: t.title || 'Untitled' }); if ((t.synopsis || '') !== (n.synopsis || '')) diffs.push({ n, key: 'synopsis', mine: n.synopsis || '(none)', other: t.synopsis || '(none)' });
+            // a character sheet slot changed at the same chapter on both devices: you choose which item it is
+            const ms = n.csheet && n.csheet.slots, ts = t.csheet && t.csheet.slots;
+            if (ms && ts) for (const [sid, list] of Object.entries(ts)) for (const te of list || []) { const me = (ms[sid] || []).find(x => x.ch === te.ch); if (me && (me.name || '') !== (te.name || '')) diffs.push({ n, key: 'gear', sid, me, te, mine: me.name || '(nothing)', other: te.name || '(nothing)' }); } });
           let changed = 0;
           if (diffs.length) {
             const box = document.createElement('div');
             box.innerHTML = `<p>These are different in the other device’s binder. Tick the ones to take from there; the rest stay as they are here.</p>
-              <div class="sy-diffs">${diffs.map((d, i) => `<label class="check"><input type="checkbox" data-d="${i}"><span>${d.key === 'title' ? 'Name' : `Synopsis of “${esc(d.n.title || '')}”`}: here “${esc(d.mine.slice(0, 120))}”, there <b>“${esc(d.other.slice(0, 120))}”</b></span></label>`).join('')}</div>`;
+              <div class="sy-diffs">${diffs.map((d, i) => `<label class="check"><input type="checkbox" data-d="${i}"><span>${d.key === 'title' ? 'Name' : d.key === 'gear' ? `Gear on “${esc(d.n.title || '')}” (${esc(d.sid)}, ${esc((U.findNode(d.me.ch) || { node: {} }).node.title || 'a chapter')})` : `Synopsis of “${esc(d.n.title || '')}”`}: here “${esc(d.mine.slice(0, 120))}”, there <b>“${esc(d.other.slice(0, 120))}”</b></span></label>`).join('')}</div>`;
             const ok = await U.modal({ title: 'Different on the other device', body: box, wide: true, buttons: [{ label: 'Keep mine', value: false, kind: 'ghost' }, { label: 'Use the ticked ones', value: true, kind: 'primary' }] });
-            if (ok) box.querySelectorAll('[data-d]:checked').forEach(cb => { const d = diffs[+cb.dataset.d]; d.n[d.key] = d.key === 'title' ? d.other : (d.other === '(none)' ? '' : d.other); changed++; });
+            if (ok) box.querySelectorAll('[data-d]:checked').forEach(cb => { const d = diffs[+cb.dataset.d]; if (d.key === 'gear') Object.assign(d.me, JSON.parse(JSON.stringify(d.te))); else d.n[d.key] = d.key === 'title' ? d.other : (d.other === '(none)' ? '' : d.other); changed++; });
           }
+          // character sheets: gear added on the other device comes in (a slot's change at the same chapter keeps this one's)
+          let sheetsIn = 0;
+          U.walkTree(S.project.binder, n => {
+            const t = theirs.get(n.id); if (!t || !t.csheet || !t.csheet.slots) return;
+            if (!n.csheet) { n.csheet = JSON.parse(JSON.stringify(t.csheet)); sheetsIn++; return; }
+            n.csheet.slots = n.csheet.slots || {};
+            for (const [sid, list] of Object.entries(t.csheet.slots)) {
+              const mine = n.csheet.slots[sid] || [], have = new Set(mine.map(x => x.ch));
+              const add = (list || []).filter(x => x && !have.has(x.ch));
+              if (add.length) { n.csheet.slots[sid] = mine.concat(JSON.parse(JSON.stringify(add))); sheetsIn += add.length; }
+            }
+            if (!n.csheet.img && t.csheet.img) { n.csheet.img = t.csheet.img; if (t.csheet.fig === 'own' && n.csheet.fig !== 'own') n.csheet.fig = 'own'; }
+          });
+          if (sheetsIn) changed += sheetsIn;
           const parts = []; if (missing.length) parts.push(`recovered ${missing.length} document${missing.length > 1 ? 's' : ''} into Notes › Recovered from ${esc(c.device)}`); if (changed) parts.push(`took ${changed} change${changed > 1 ? 's' : ''} from there`);
           U.toast(parts.length ? `Done: ${parts.join(', and ')}.` : (diffs.length ? 'Kept everything as it is here. The other version is in the backups folder.' : 'Nothing was missing. Your binder already has everything.'));
         }

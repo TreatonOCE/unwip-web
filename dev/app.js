@@ -186,7 +186,7 @@
   $('#sprint-bolt').innerHTML = I.bolt; $('#rp-refresh-ic').innerHTML = I.refresh;
   $('#btn-style').innerHTML = I.style;
   $('#btn-writer').innerHTML = I.writer;
-  $('#btn-cmdk').innerHTML = I.search; $('#btn-panel').innerHTML = I.panel; $('#btn-export-more').innerHTML = I.caretDown;
+  $('#btn-cmdk').innerHTML = I.goto + `<span class="cmdk-lbl">Go to or do</span><span class="cmdk-key">${/Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K'}</span>`; $('#btn-panel').innerHTML = I.panel; $('#ex-caret').innerHTML = I.caretDown; $('#ex-btn-ic').innerHTML = I.export || I.doc || '';
   $('#btn-cmdk').onclick = () => window.UnwipCommand && window.UnwipCommand.open();
   $$('[data-icon]').forEach(b => b.innerHTML = I[b.dataset.icon]);
   const writerExit = document.createElement('button');
@@ -734,7 +734,7 @@
       { const fn = findNode(n.id); const nx = fn.list[fn.index + 1];
         if (n.type === 'doc' && nx && nx.type === 'doc' && !nx.root) items.push({ label: `Merge with next (“${nx.title.length > 24 ? nx.title.slice(0, 24) + '…' : nx.title}”)…`, action: () => mergeWithNext(n.id) });
         if (n.type === 'folder') items.push({ label: 'Merge folder into one document…', action: () => mergeFolder(n.id) }); }
-      if (n.type === 'doc' && S.mode === 'detailed') items.push({ label: 'Status', disabled: true }, ...statusOptions().map(([v, l]) => ({ label: (n.status || '') === v ? `✓ ${l}` : `    ${l}`, action: () => { n.status = v; scheduleMeta(); renderBinder(); refreshPlanView(); } })), { label: '    Edit status labels…', action: editStatuses });
+      if (n.type === 'doc' && level() >= 1) items.push({ label: 'Status', disabled: true }, ...statusOptions().map(([v, l]) => ({ label: (n.status || '') === v ? `✓ ${l}` : `    ${l}`, action: () => { n.status = v; scheduleMeta(); renderBinder(); refreshPlanView(); } })), { label: '    Edit status labels…', action: editStatuses });
       items.push({ sep: true });
       items.push({ label: 'Move to…', action: () => moveToDialog(n.id) });
       items.push({ label: 'Move up', hint: 'Alt+↑', disabled: f.index === 0, action: () => moveBy(n.id, -1) });
@@ -1872,7 +1872,7 @@
     const order = new Map(items.map((el, i) => [el, i]));
     // first to be tucked away → last
     const PRIO = ['#btn-listen', '#btn-image', '#btn-footnote', '#btn-numbers', '#btn-bullets', '#btn-scene', '#btn-clear', '[data-cmd="strikeThrough"]', '[data-cmd="justifyFull"]', '[data-cmd="justifyRight"]',
-      '[data-cmd="justifyCenter"]', '[data-cmd="justifyLeft"]', '#sel-block', '[data-cmd="underline"]', '#sel-size', '#btn-comment', '#sel-font'];
+      '[data-cmd="justifyCenter"]', '[data-cmd="justifyLeft"]', '[data-cmd="underline"]', '#sel-size', '#btn-comment', '#sel-block', '#sel-font'];
     [more, pop].forEach(el => el.addEventListener('mousedown', e => { if (!e.target.closest('select')) e.preventDefault(); }));
     more.onclick = () => {
       if (!pop.classList.contains('hidden')) { pop.classList.add('hidden'); return; }
@@ -2799,32 +2799,50 @@
     await loadScope();
   }
   $('#btn-export').onclick = () => openPreview();
-  // the arrow beside Copy for Docs: every other way to get the book out
+  // Export: every way to get the book out, grouped. One line each; the explanation shows at the bottom for the item
+  // you point at (or reach with the arrow keys), so the menu stays short.
   $('#btn-export-more').onclick = e => {
     e.stopPropagation();
     const open = document.querySelector('.export-pop'); if (open) { open.remove(); return; }
-    const items = [
-      ['copy', 'Copy for Docs', 'This chapter, ready to paste into Google Docs or Word', 'Ctrl+Shift+C', () => copyDocForDocs()],
-      ['copy', 'Copy for Royal Road…', 'This chapter, with [system messages] as boxes Royal Road keeps', '', () => window.UnwipRR && window.UnwipRR.open()],
-      ['preview', 'Preview & page counts', 'See it as a paperback, Kindle or Word page', '', () => openPreview()],
-      null,
-      ['doc', 'Print-ready PDF', 'Paperback interior with page numbers and chapter openers', '', () => openPreview('paperback')],
-      ['book', 'EPUB e-book', 'For Kindle (KDP), Apple Books and Kobo', '', () => openPreview('ebook')],
-      ['doc', 'Word document (.docx)', 'For an editor, agent or beta reader', '', () => openPreview('docs')],
-      ['folder', 'A folder of chapter files…', 'One Word or Markdown file per chapter, for Scrivener or any app', '', () => window.UnwipExportFolder && window.UnwipExportFolder.open()],
-      ['book', 'One Word file for Vellum or Atticus…', 'Each chapter a Heading 1, scene breaks as *** (not yet beta tested)', '', () => window.UnwipExportFolder && window.UnwipExportFolder.oneWord()],
-      ['heart', 'No hard feelings…', 'Take your book to Scrivener or anywhere else', '', () => window.UnwipNoHardFeelings && window.UnwipNoHardFeelings.open()],
-      null,
-      ['person', 'Send to a beta reader…', 'A Word file they mark up with Track Changes and comments', '', () => window.UnwipReader && window.UnwipReader.send()],
-      ['importic', 'Bring in a reader’s feedback…', 'Their changes and comments land in the right chapters', '', () => window.UnwipReader && window.UnwipReader.receive()]
+    const groups = [
+      ['Copy and paste', [
+        ['copy', 'Copy for Docs', 'This chapter, ready to paste into Google Docs or Word.', 'Ctrl+Shift+C', () => copyDocForDocs()],
+        ['boxes', 'Copy for Royal Road…', 'This chapter, with [system messages] as boxes Royal Road keeps.', '', () => window.UnwipRR && window.UnwipRR.open()]]],
+      ['Check it', [
+        ['preview', 'Preview & page counts', 'See it as a paperback, Kindle or Word page. Choose the whole book or this chapter there.', '', () => openPreview()]]],
+      ['Publish', [
+        ['doc', 'Print-ready PDF', 'Paperback interior with page numbers and chapter openers.', '', () => openPreview('paperback')],
+        ['book', 'EPUB e-book', 'For Kindle (KDP), Apple Books and Kobo.', '', () => openPreview('ebook')],
+        ['book', 'One Word file for Vellum or Atticus…', 'Each chapter a Heading 1, scene breaks as *** (not yet beta tested).', '', () => window.UnwipExportFolder && window.UnwipExportFolder.oneWord()]]],
+      ['Share', [
+        ['doc', 'Word document (.docx)', 'For an editor or agent.', '', () => openPreview('docs')],
+        ['person', 'Send to a beta reader…', 'A Word file they mark up with Track Changes and comments.', '', () => window.UnwipReader && window.UnwipReader.send()],
+        ['importic', 'Bring in a reader’s feedback…', 'Their changes and comments land in the right chapters.', '', () => window.UnwipReader && window.UnwipReader.receive()]]],
+      ['Take it elsewhere', [
+        ['folder', 'A folder of chapter files…', 'One Word or Markdown file per chapter, for Scrivener or any app.', '', () => window.UnwipExportFolder && window.UnwipExportFolder.open()],
+        ['heart', 'No hard feelings…', 'Take your book to Scrivener or anywhere else. Nothing in Unwip is changed.', '', () => window.UnwipNoHardFeelings && window.UnwipNoHardFeelings.open()]]]
     ];
-    const pop = document.createElement('div'); pop.className = 'export-pop'; pop.setAttribute('role', 'menu');
-    pop.innerHTML = items.map((x, i) => x ? `<button class="ex-item" role="menuitem" data-i="${i}"><span class="ex-ic">${I[x[0]] || ''}</span><span class="ex-t"><b>${esc(x[1])}</b><small>${esc(x[2])}</small></span>${x[3] ? `<kbd>${x[3]}</kbd>` : ''}</button>` : '<hr>').join('') + '<p class="ex-note">Whole book or this chapter? Choose in Preview.</p>';
+    const items = []; groups.forEach(g => g[1].forEach(x => items.push(x)));
+    const NOTE = 'Point at an item to see what it does.';
+    const pop = document.createElement('div'); pop.className = 'export-pop ex-grouped'; pop.setAttribute('role', 'menu');
+    let k = 0;
+    pop.innerHTML = groups.map(g => `<div class="ex-grp">${esc(g[0])}</div>` + g[1].map(x => `<button class="ex-item" role="menuitem" data-i="${k++}"><span class="ex-ic">${I[x[0]] || ''}</span><span class="ex-t"><b>${esc(x[1])}</b></span>${x[3] ? `<kbd>${x[3]}</kbd>` : ''}</button>`).join('')).join('') + `<p class="ex-note" id="ex-note">${NOTE}</p>`;
     document.body.appendChild(pop);
+    const note = $('#ex-note', pop);
     const r = $('#export-split').getBoundingClientRect();
     pop.style.top = (r.bottom + 6) + 'px'; pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.right - pop.offsetWidth)) + 'px';
     pop.style.maxHeight = Math.max(200, innerHeight - r.bottom - 14) + 'px'; pop.style.overflowY = 'auto';   // a short window: it scrolls instead of running off the bottom
-    $$('.ex-item', pop).forEach(b => b.onclick = () => { pop.remove(); items[+b.dataset.i][4](); });
+    $$('.ex-item', pop).forEach(b => {
+      const show = () => { note.textContent = items[+b.dataset.i][2]; };
+      b.addEventListener('mouseenter', show); b.addEventListener('focus', show);
+      b.onclick = () => { pop.remove(); items[+b.dataset.i][4](); };
+    });
+    pop.addEventListener('mouseleave', () => { if (!pop.contains(document.activeElement)) note.textContent = NOTE; });
+    pop.addEventListener('keydown', ev => {
+      const bs = $$('.ex-item', pop), at = bs.indexOf(document.activeElement);
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); bs[(at + (ev.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus(); }
+      else if (ev.key === 'Escape') { pop.remove(); $('#btn-export-more').focus(); }
+    });
     setTimeout(() => document.addEventListener('mousedown', function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('mousedown', off); } }), 0);
   };
   function fontFaceCSS() { return ''; } // imported fonts embed in a later version
@@ -3094,8 +3112,8 @@
     try { return JSON.parse(localStorage.getItem('folio-revise') || '{}'); } catch { return {}; }
   }
   function saveRevisePrefs(p) { try { localStorage.setItem('folio-revise', JSON.stringify(p)); } catch {} }
-  // Focused shows the five big things; Detailed shows every check. Follows the binder's Focused/Detailed until changed here.
-  function reviseLevel() { if (document.documentElement.classList.contains('m-phone')) return 'focused'; const p = revisePrefs(); return p.level || (S.mode === 'detailed' ? 'detailed' : 'focused'); }
+  // Main checks: the five big things; All checks: every check. Follows the book's level (Focus, or Detail and up) until changed here.
+  function reviseLevel() { if (document.documentElement.classList.contains('m-phone')) return 'focused'; const p = revisePrefs(); return p.level || (level() >= 1 ? 'detailed' : 'focused'); }
   function catShown(id) { if (id === 'more' && !window.UnwipHarper) return false; return reviseLevel() === 'detailed' || !!Rev.CATS.find(c => c.id === id).focused; }
   function catOn(id) { if (!catShown(id)) return false; const p = revisePrefs(); return p[id] !== undefined ? p[id] : Rev.CATS.find(c => c.id === id).on; }
   $$('#rp-level button').forEach(b => b.onclick = () => { const p = revisePrefs(); p.level = b.dataset.l; saveRevisePrefs(p); runRevise(); });
@@ -4144,18 +4162,35 @@
     walkTree(S.project.binder, n => { if (n.status && !ids.has(n.status)) delete n.status; });
     scheduleMeta(); renderBinder(); refreshPlanView();
   }
+  // Levels: Focus (0, stored as 'focused'), Detail (1, 'detailed'), Lore (2, 'lore'). Each level shows everything the one
+  // before it does, plus more; switching only hides and shows, it never changes the book. Code that asks "is Detail on?"
+  // uses level() >= 1, never S.mode === 'detailed' (that would be false in Lore).
+  const LEVELS = ['focused', 'detailed', 'lore'];
+  const phoneMQ = window.matchMedia('(max-width: 720px)');
+  // phones stop at Detail: Lore's tools need a bigger screen. A device that's switched to Lore keeps it saved, so it comes
+  // back when the window is wide again; on a phone it simply counts as Detail.
+  function level(m = S.mode) { const l = Math.max(0, LEVELS.indexOf(m)); return phoneMQ.matches ? Math.min(l, 1) : l; }
+  function applyLevelClasses(m) {
+    document.body.classList.toggle('detailed', level(m) >= 1);
+    document.body.classList.toggle('lore', level(m) >= 2);
+    const shown = LEVELS[level(m)];
+    $$('#mode-switch button, #lib-mode button').forEach(b => b.classList.toggle('on', b.dataset.m === shown));
+  }
   function setMode(m) {
+    if (!LEVELS.includes(m)) m = 'focused';
+    const before = S.mode;
     S.mode = m;
-    if (m === 'detailed' && S.project) window.UnwipStart && window.UnwipStart.done('detailed');
+    if (level(m) >= 1 && S.project) window.UnwipStart && window.UnwipStart.done('detailed');
     try { localStorage.setItem('folio-mode', m); } catch {}
-    document.body.classList.toggle('detailed', m === 'detailed');
-    $$('#mode-switch button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    applyLevelClasses(m);
+    emit('level', m, before);
     if (!S.project) return;
-    if (S.revise && !revisePrefs().level) runRevise();      // Revise follows Focused/Detailed until set separately
-    if (m !== 'detailed' && S.view !== 'write') setView('write');
+    if (S.revise && !revisePrefs().level) runRevise();      // Revise follows the level until set separately
+    if (level(m) < 1 && S.view !== 'write') setView('write');
     renderBinder(); fitSynopsis();
   }
-  $$('#mode-switch button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+  $$('#mode-switch button, #lib-mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+  phoneMQ.addEventListener('change', () => { applyLevelClasses(S.mode); emit('level', S.mode, S.mode); });
   function setView(v) {
     S.view = v;
     setTimeout(() => emit('view', v), 0);
@@ -4217,7 +4252,7 @@
           </div>`).join('')}
       </div>
       <datalist id="ol-pov-list">${[...new Set(window.FolioNames.entries.filter(e => e.kind === 'Character' && !e.primary).map(e => e.text))].map(t => `<option value="${esc(t)}">`).join('')}</datalist>
-      <p class="ol-tip">Drag documents in the binder to reorder. Click a title to open it. Synopses also show under the title while you write in Detailed mode.</p>`;
+      <p class="ol-tip">Drag documents in the binder to reorder. Click a title to open it. Synopses also show under the title while you write at the Detail level.</p>`;
     $$('.ol-syn', ov).forEach(t => { const fit = () => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }; requestAnimationFrame(fit); t.oninput = () => { findNode(t.closest('.ol-row').dataset.id).node.synopsis = t.value; fit(); scheduleMeta(); }; });
     $$('.ol-pov', ov).forEach(t => t.oninput = () => { findNode(t.closest('.ol-row').dataset.id).node.pov = t.value; scheduleMeta(); });
     $$('.ol-status', ov).forEach(sel => sel.onchange = () => { findNode(sel.closest('.ol-row').dataset.id).node.status = sel.value; scheduleMeta(); renderBinder(); renderOutline(); });
@@ -5003,7 +5038,8 @@
     }
     S.view = 'write';
     let m = 'focused'; try { m = localStorage.getItem('folio-mode') || 'focused'; } catch {}
-    S.mode = m; document.body.classList.toggle('detailed', m === 'detailed'); $$('#mode-switch button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    if (!LEVELS.includes(m)) m = 'focused';
+    S.mode = m; applyLevelClasses(m);
     buildSizeSelect();
     try { await Fonts.loadImported(await api.importedFonts()); } catch {}
     buildFontSelect();
@@ -5031,6 +5067,6 @@
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,
     reloadProjectMeta, showLibrary, openProject, leaveProject: () => leaveProject(), importScrivener: () => importScrivener(), DEFAULT_STYLE, setMode, setView: v => setView(v), importWordProject: () => importWordProject(), newProjectTemplate: () => newProjectTemplate(), ROOTS,
     tidyBlankLines, sectionDialog, sheetFor, scheduleNames, fontOptionsHTML, applyStyle, markScenes, docBlocks, rejectChanges, acceptChanges, isTitlePage, compileManuscript, templateGallery, continueWriting, noteLastPlace, caretOffset,
-    openPreview, snapshotsDialog, openSettings, goalsDialog, writtenOn, dayKey, streaks, dial, manuscriptWords, openFind, openSearch, splitAtCursor, setMode, restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
+    openPreview, snapshotsDialog, openSettings, goalsDialog, writtenOn, dayKey, streaks, dial, manuscriptWords, openFind, openSearch, splitAtCursor, setMode, level: m => level(m), restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
   };
 })();

@@ -250,7 +250,7 @@ window.UnwipMobile = (function () {
     const f = U.findNode(row.dataset.id); if (!f) return;
     if (f.node.type === 'doc') { if (S.view !== 'write') U.setView('write'); setTimeout(showPage, 60); }
   });
-  // Detailed: Outline, Corkboard, Moodboard and Timeline open as a screen of their own
+  // Detail level: Outline, Corkboard, Moodboard and Timeline open as a screen of their own
   const VIEW_NAMES = { outline: 'Outline' };
   // Corkboard, Moodboard and Timeline (plus sprints, goals and split view) stay on the iPad and computer
   const PHONE_VIEWS = ['write', 'outline'];

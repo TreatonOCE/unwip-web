@@ -43,7 +43,7 @@ window.UnwipLedger = (function () {
             const kind = g[1].toLowerCase(), rest = g[2].toLowerCase(), name = nice(g[3].replace(/[.!]+$/, ''));
             if (!name || name.length > 60) continue;
             const k = kind + '|' + keyOf(name);
-            if (!got.has(k)) got.set(k, { kind, name, ch: ci, text: m, done: null });
+            if (!got.has(k)) got.set(k, { kind, name, ch: ci, text: m, done: null, who: who || main });   // who: for character sheets
             if (kind === 'quest' && /complet|finish|done/.test(rest + ' ' + m.toLowerCase())) got.get(k).done = ci;
             continue;
           }

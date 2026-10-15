@@ -17,6 +17,9 @@ window.UnwipBuild = (function () {
     insignia: { icon: '⬢', name: 'Insignia', plural: 'Insignia', blurb: 'Emblems for corporations, gangs and units: a hard frame, a line symbol, flat colours and a name.' }
   };
   const ORDER = ['map', 'magic', 'runes', 'sigil', 'arms', 'insignia', 'stats'];
+  // new magic systems, rune alphabets, sigils and insignia are offered at the Lore level; ones you already made always show
+  const LORE_KINDS = new Set(['magic', 'runes', 'sigil', 'insignia']);
+  const NEW_ORDER = () => ORDER.filter(k => !LORE_KINDS.has(k) || !U.level || U.level() >= 2);
   const editors = {};          // filled in by buildmagic.js, buildrunes.js and buildarms.js
   let items = [];
 
@@ -75,6 +78,7 @@ window.UnwipBuild = (function () {
 
   // ================================================================== THE BUILD PAGE
   const ago = t => { const d = (Date.now() - t) / 1000; if (d < 60) return 'just now'; if (d < 3600) return Math.floor(d / 60) + ' min ago'; if (d < 86400) return Math.floor(d / 3600) + ' h ago'; return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); };
+  U.on('level', () => { const bh = document.getElementById('build-home'); if (bh && !bh.classList.contains('hidden')) render(); });
   async function render() {
     await loadFonts();
     const box = $('#build-home'); if (!box) return;
@@ -82,7 +86,7 @@ window.UnwipBuild = (function () {
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     box.innerHTML = `
       <div class="pl-head"><div><h1>Build</h1><p>The pieces of your world: maps, magic, runes, sigils, coats of arms, insignia and character sheets. They belong to the world, not one book, so any book can use them.</p></div></div>
-      <div class="pl-tools bd-tools">${ORDER.map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}</div>
+      <div class="pl-tools bd-tools">${NEW_ORDER().map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}</div>
       ${items.length ? ORDER.filter(k => by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
         <div class="bd-grid">${by(k).map(x => `<div class="bd-card" data-id="${x.id}" tabindex="0">
           <div class="bd-thumb ${x.thumb ? '' : 'empty'}">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : `<span>${KINDS[k].icon}</span>`}</div>
@@ -252,7 +256,7 @@ window.UnwipBuild = (function () {
       ${items.length ? ORDER.filter(k => by(k).length).map(k => `<h4>${KINDS[k].plural}</h4><div class="bd-pick-list">${by(k).map(x => `<div class="bd-pick-row" data-id="${x.id}">
           <button type="button" class="bd-pick-open" data-open="${x.id}"><span class="bd-pick-th">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : KINDS[k].icon}</span><span><b>${esc(x.title || 'Untitled')}</b><small>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</small></span></button>
           ${canWin ? `<button type="button" class="icon-btn bd-pick-win" data-here="${x.id}" title="Open it in this window instead, over the chapter">↩</button>` : ''}</div>`).join('')}</div>`).join('') : '<p class="lib-empty">Nothing built yet.</p>'}
-      <h4>Start something new</h4><div class="bd-pick-new">${ORDER.map(k => `<button type="button" class="btn small" data-new="${k}">${KINDS[k].icon} ${esc(KINDS[k].name)}</button>`).join('')}</div>`;
+      <h4>Start something new</h4><div class="bd-pick-new">${NEW_ORDER().map(k => `<button type="button" class="btn small" data-new="${k}">${KINDS[k].icon} ${esc(KINDS[k].name)}</button>`).join('')}</div>`;
     let go = null, close2 = () => {};
     body.addEventListener('click', e => {
       const o = e.target.closest('[data-open]'), h = e.target.closest('[data-here]'), n = e.target.closest('[data-new]');

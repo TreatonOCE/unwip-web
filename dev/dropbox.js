@@ -364,8 +364,10 @@ window.UnwipDropbox = (function () {
   }
   // for a project file, remember how its binder looked when last in step with Dropbox
   const shapeOf = (k, bytes) => { if (!/^[^/]+\/project\.json$/.test(k)) return {}; const t = new TextDecoder().decode(bytes); return { shape: binderShape(t), extra: extrasOf(t) }; };
-  // the other things a person writes that live in the project file: the timeline, continuity notes and links
-  const extrasOf = json => { try { const p = JSON.parse(json); const t = p.timeline || {}; return JSON.stringify([t.events || null, t.calendar || null, (p.continuity && p.continuity.facts) || null, p.links || null]); } catch { return null; } };
+  // the other things a person writes that live in the project file: the timeline, continuity notes, links, and the
+  // character sheets kept on binder entries (gear by chapter)
+  const sheetsOf = p => { const out = []; const walk = l => (l || []).forEach(n => { if (n.csheet) out.push([n.id, n.csheet]); if (n.children) walk(n.children); }); walk(p.binder); return out.length ? out : null; };
+  const extrasOf = json => { try { const p = JSON.parse(json); const t = p.timeline || {}; return JSON.stringify([t.events || null, t.calendar || null, (p.continuity && p.continuity.facts) || null, p.links || null, sheetsOf(p)]); } catch { return null; } };
   async function pull(k, R, touched, mine) {
     if (progress) progress.down++;
     const b = await download(R.lower);

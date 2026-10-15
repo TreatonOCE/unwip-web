@@ -195,6 +195,10 @@ window.UnwipPlay = (function () {
   $$('#lib-tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   // the library refreshes itself now and then (syncing, settings): don't throw someone out of a game or the dice
   U.on('library', () => setTab(tab, true));
+  // Play and Build unlock at the Detail level: at Focus the main screen is just your books
+  const unlocked = t => t === 'write' || !U.level || U.level() >= 1;
+  U.on('level', () => { if (!unlocked(tab)) setTab('write'); });
+  { let lv = 'focused'; try { lv = localStorage.getItem('folio-mode') || 'focused'; } catch {} if (tab !== 'write' && !['detailed', 'lore'].includes(lv)) tab = 'write'; }
 
   let promptOffset = 0;
   async function renderHome(view, arg) {

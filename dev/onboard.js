@@ -12,7 +12,7 @@ window.UnwipIntro = (function () {
     scrivener: {
       name: 'Scrivener', icon: '📚', blurb: 'Binder, corkboard, compile',
       layout: 'desk', structure: 'scenes', font: 'Times New Roman', para: 'book',
-      map: [['Binder', 'Binder (left side)'], ['Corkboard & Outliner', 'Detailed mode › Corkboard and Outline'], ['Labels & Status', 'Status (right-click a document)'],
+      map: [['Binder', 'Binder (left side)'], ['Corkboard & Outliner', 'Detail level › Corkboard and Outline'], ['Labels & Status', 'Status (right-click a document)'],
         ['Compile', 'Export (PDF, e-book, Word)'], ['Snapshots', 'Snapshots (camera button)'], ['Composition mode', 'Writer mode'], ['Book targets', 'Goals & sprints']],
       tip: 'Your Scrivener projects can come straight across, with folders, synopses, labels, icons and pictures.'
     },
@@ -108,7 +108,7 @@ window.UnwipIntro = (function () {
       <p class="in-custom"><button class="link-btn" type="button" id="in-custom">${ans.custom ? 'Use the simple setup instead' : 'Change layout, font or colours…'}</button></p>`;
     else if (name === 'layout') h = `
       <h2>Which layout would you like?</h2>
-      <p class="in-lead">${f ? `We’ve picked the one closest to ${esc(f.name)}. ` : ''}Switch any time with the Focused / Detailed buttons at the top.</p>
+      <p class="in-lead">${f ? `We’ve picked the one closest to ${esc(f.name)}. ` : ''}Switch any time with the Focus / Detail / Lore buttons at the top.</p>
       <div class="in-grid three">${Object.entries(LAYOUTS).map(([id, l]) => `<button class="in-choice tall${ans.layout === id ? ' on' : ''}" data-layout="${id}">${layoutPreview(id)}<b>${l.name}</b><span class="in-like">${l.like}</span><span>${l.desc}</span></button>`).join('')}</div>`;
     else if (name === 'structure') h = `
       <h2>How do you like to organise a book?</h2>
@@ -247,7 +247,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
 <ul>
 <li>Open <b>${name}</b> in the Binder on the left and just type. It saves itself.</li>
 <li>Drag a scene in the Binder to reorder it.</li>
-<li>Click <b>Detailed</b> at the top for the corkboard, outline, statuses and the <b>Timeline</b>${ans.layout === 'desk' ? ' (you’re already in Detailed)' : ''}. The Timeline shows each entry on its date.</li>
+<li>Click <b>Detail</b> at the top for the corkboard, outline, statuses and the <b>Timeline</b>${ans.layout === 'desk' ? ' (you’re already in Detail)' : ''}. The Timeline shows each entry on its date.</li>
 <li>Open <b>Jonathan Harker</b> under Characters to see a character sheet.</li>
 <li>Select a word and add a comment, or put a footnote in.</li>
 <li>Try <b>Revise</b> on a scene to see repeated words and long sentences (Stoker has plenty).</li>
@@ -365,13 +365,13 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
       'In the example, every diary entry and letter in Dracula is its own scene.'],
     ['#editor', 'The page', 'Just write. Unwip saves every few seconds, keeps backups, and cleans up anything you paste in.',
       { docs: 'Pasting from Google Docs keeps italics and bold but drops the clutter.', word: 'Pasting from Word keeps italics and bold but drops the clutter.', obsidian: 'No Markdown symbols here: Ctrl+I and Ctrl+B (or the buttons above) give italics and bold you can see, and they export cleanly.' }],
-    ['#mode-switch', 'Focused or Detailed', 'Focused is a clean page. Detailed adds the corkboard, outline, status labels, moodboard and timeline.',
-      { scrivener: 'Detailed is where the Corkboard, Outliner and labels live.' },
-      'Try the Timeline in Detailed: each of Dracula’s dated entries sits on its day.'],
+    ['#mode-switch', 'Focus, Detail or Lore', 'Focus is a clean page. Detail adds the corkboard, outline, status labels, moodboard, timeline and Build. Lore adds character sheets.',
+      { scrivener: 'Detail is where the Corkboard, Outliner and labels live.' },
+      'Try the Timeline in Detail: each of Dracula’s dated entries sits on its day.'],
     ['#btn-writer', 'Writer mode', 'Full screen, nothing but the page. Typewriter scrolling keeps your line in the middle.',
       { hemingway: 'This is the distraction-free mode. Settings › Typewriter adds focus dimming and sounds.', scrivener: 'Like Composition mode.' }],
     ['#btn-new', 'New', 'Add a scene, chapter, folder or map, or a template section like Factions, Magic or Monsters where every entry starts from the same sheet.'],
-    ['#btn-cmdk', 'Find anything', 'Press Ctrl+K (or this magnifying glass) and type what you want: “snapshot”, “epub”, “timeline”, a chapter name. Every feature is in there.'],
+    ['#btn-cmdk', 'Go to or do', 'Press Ctrl+K (or this button) and type what you want: “snapshot”, “epub”, “timeline”, a chapter or a character. Every feature is in there, at every level. To find words in your book, use the magnifying glass at the bottom left.'],
     ['#btn-stuck', 'Spark and Sprints', 'Spark has six small tools for a blank page or a slow day. Sprint, next to it, is a timed burst of writing with a word target.'],
     ['#btn-build-book', 'Build', 'Maps, magic systems, rune alphabets, sigils, coats of arms, insignia and LitRPG character sheets, open beside your chapter. Anything you make can go straight into the book.',
       null, 'Try a map: paint the land yourself, or roll a random world, town or dungeon floor to start from.'],
@@ -380,13 +380,14 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     ['#btn-listen', 'Read aloud', 'Hear the chapter read out from where your cursor is. Clunky sentences are easier to hear than to see. F8 starts and stops it.'],
     ['#btn-snap', 'Snapshots', 'Save a copy of a chapter before a big rewrite, and compare or go back later.',
       { scrivener: 'Same as Scrivener’s Snapshots.', docs: 'Like Version history, but you choose the moments.' }],
-    ['#btn-copy-docs', 'Copy for Docs', 'Copies the chapter (or the whole book) ready to paste into Google Docs or Word with the formatting right. The arrow beside it exports a print-ready PDF, an e-book, Word, Markdown or Scrivener.'],
+    ['#btn-export-more', 'Export', 'Every way to get your book out: Copy for Docs (Ctrl+Shift+C) and Copy for Royal Road, page previews, a print-ready PDF, an e-book, Word, a file per chapter, and No hard feelings for moving to another app.'],
     ['#st-proof', 'Record', 'Proof of writing. Turn on Replay and Unwip notes how the words went in, so you can play your writing back or share a report showing it’s your own work. It stays on your device.'],
     ['#btn-help', 'Help', 'What every button does, and all the keyboard shortcuts. Press F1 any time.'],
     ['#btn-settings', 'Settings', 'Themes (from plain paper to Witch, Infernal and game-system looks), fonts, typing sounds, LitRPG tools, syncing, backups and updates. Help in here runs this tour again.'],
     ['#btn-library', 'All your books', 'Back to the main screen. That’s where the tour goes next.'],
     // on the main screen (the tour takes you there, and back again if you go Back)
-    ['#lib-tabs [data-tab="write"]', 'Your books', 'Every book, today’s words and your goal. Import… brings in a Scrivener project, a Word file or a folder of chapters.', null, null, { lib: 'write' }],
+    ['#lib-tabs [data-tab="write"]|#project-grid', 'Your books', 'Every book, today’s words and your goal. Import… brings in a Scrivener project, a Word file or a folder of chapters.', null, null, { lib: 'write' }],
+    ['#lib-mode', 'Levels', 'Focus is just your books. Detail unlocks Play and Build here, and planning tools inside a book. Lore adds character sheets and the deep-end Build pieces. Switching never changes your books.', null, null, { lib: 'write' }],
     ['#lib-tabs [data-tab="play"]', 'Play', 'Warm-ups, story dice, a style mimic, and exercises with rules Unwip checks as you write (no adverbs, only dialogue…). Nothing here touches your books.', null, null, { lib: 'play' }],
     ['#lib-tabs [data-tab="build"]', 'Build', 'Everything you build lives here, for all your books: maps, magic systems, runes, sigils, coats of arms, insignia and character sheets. Link any of them into any book.', null, null, { lib: 'build' }],
     ['#library .dbx-pill', 'Sync', 'Connect Dropbox to have the same books on your PC, Mac, iPhone and iPad. Changes go both ways, and nothing is saved over: if two devices change the same chapter, both versions are kept.', null, null, { lib: 'write' }]
@@ -484,7 +485,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     const [sel, title, text, alt, inExample] = TOUR[i];
     const isEx = /\(example\)$/.test((S.project && S.project.title) || '') || (isLib(TOUR[i]) && tourSlug);
     const extra = (inExample && isEx) ? inExample : alt && alt[S.settings.from];
-    const shown = bookShown.concat(TOUR.filter(x => isLib(x) && document.querySelector(x[0])));
+    const shown = bookShown.concat(TOUR.filter(x => isLib(x) && x[0].split('|').some(q => document.querySelector(q))));   // a step can name several places to point at, split by |
     const n = Math.max(1, shown.indexOf(TOUR[i]) + 1);
     tEls.card.innerHTML = `<div class="tour-n">${n} of ${shown.length}</div><h3>${esc(title)}</h3><p>${esc(text)}</p>${extra ? `<p class="tour-alt">${esc(extra)}</p>` : ''}
       <div class="tour-foot"><button class="btn ghost small" data-t="end">End tour</button><span></span>${n > 1 ? '<button class="btn small" data-t="back">Back</button>' : ''}<button class="btn primary small" data-t="next">${n === shown.length ? 'Finish' : 'Next'}</button></div>`;
