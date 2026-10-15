@@ -2792,3 +2792,43 @@ body.litrpg .editor p.lit-sys, body.litrpg #editor p.lit-sys { margin: .5em auto
 .lit-row { display: grid; grid-template-columns: 120px 1fr 28px; gap: 8px; }
 .lit-row input { min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
 .lit-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+/* LitRPG ledger */
+.rp-litrpg { display: none; } body.litrpg .rp-litrpg { display: inline-flex; }
+.lg-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.lg-body { max-height: 62vh; overflow: auto; }
+.lg-body h4 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.lg-list { display: flex; flex-direction: column; gap: 6px; }
+.lg-flag { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--text); cursor: pointer; font: inherit; }
+.lg-flag:hover { border-color: var(--accent); }
+.lg-flag > span:first-child { flex: none; width: 20px; text-align: center; font-weight: 700; }
+.lg-flag.down > span:first-child { color: #c23b2c; } .lg-flag.jump > span:first-child { color: #b07a12; }
+.lg-flag small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.lg-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.lg-table th { text-align: left; font-weight: 600; padding: 6px 10px 6px 0; width: 30%; vertical-align: middle; }
+.lg-table td { padding: 6px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.lg-table tr:last-child td { border-bottom: 0; }
+.lg-spark { color: var(--accent); display: block; }
+.lg-vals { font-size: 13px; }
+.lg-ok { color: #2f7d4a; }
+.lg-done { color: #2f7d4a; font-size: 12px; font-weight: 500; } .lg-open { color: var(--muted); font-size: 12px; font-weight: 500; }
+.lg-warn { color: #b07a12; font-size: 12px; margin-left: 6px; }
+/* Build › Character sheet */
+.bs-page { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; max-width: 1240px; margin: 0 auto; padding: 18px; }
+@media (max-width: 900px) { .bs-page { grid-template-columns: 1fr; } }
+.bs-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+.bs-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); flex: 1 1 140px; }
+.bs-grid input { font-size: 14px; }
+.bs-row { display: grid; grid-template-columns: 1fr 96px 96px 28px; gap: 8px; margin-bottom: 6px; align-items: center; }
+.bs-row input { min-width: 0; }
+.bs-th { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.bs-levels { max-height: 280px; overflow: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.bs-levels table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.bs-levels th { position: sticky; top: 0; background: var(--paper); text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); font-weight: 600; }
+.bs-levels td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.bs-levels th:first-child, .bs-levels td:first-child { text-align: left; }
+.bs-levels tr { cursor: pointer; } .bs-levels tr.on td { background: var(--accent-soft); font-weight: 600; }
+.bs-stick { position: sticky; top: 12px; }
+.bs-lv { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.bs-lv input { flex: 1; } .bs-lv b { min-width: 2.5em; color: var(--text); }
+.bs-shot img { width: 100%; height: auto; display: block; border-radius: 10px; margin-bottom: 10px; }
+.bs-lines { white-space: pre-wrap; font-size: 12.5px; background: var(--panel-2, var(--bg)); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 6px 0 8px; }

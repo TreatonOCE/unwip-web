@@ -45,6 +45,7 @@ window.UnwipCommand = (function () {
     ['Find in this chapter', 'search text', 'Ctrl+F', () => U.openFind(), needDoc],
     ['Search the whole project', 'find replace everywhere', 'Ctrl+Shift+F', () => U.openSearch('search'), inProject],
     ['Find and replace', 'replace all rename', '', () => U.openSearch('replace'), inProject],
+    ['LitRPG ledger: stats, skills and items', 'litrpg gamelit stats stat sheet level skills items quests titles system messages drift check', '', () => window.UnwipLedger && window.UnwipLedger.open(), inProject],
     ['Continuity pass', 'continuity consistency scaling level stats changed rename retcon go through each check every place', '', () => window.UnwipContinuity && window.UnwipContinuity.open(), inProject],
     ['Split this chapter at the cursor', 'divide break', 'Ctrl+Shift+K', () => U.splitAtCursor(), needDoc],
     ['Remove empty lines in this chapter', 'blank lines spacing tidy clean', '', () => U.tidyBlankLines(S.docId), needDoc],

@@ -2658,7 +2658,7 @@
         if (!S.project.epubId) { S.project.epubId = 'urn:uuid:' + crypto.randomUUID(); scheduleMeta(); }
         const bk = S.project.book || {};
         const typeset = TS ? { t: TS.resolved(bookDesign()), d: bookDesign(), book: bk } : null;
-        const { bytes, chapters } = window.FolioEPUB.build({ blocks: PV.blocks, style: S.project.style, title: PV.scope === 'doc' ? name : (bk.title || name), author: bk.author || settings.author || '', lang, id: S.project.epubId, typeset: PV.scope === 'doc' ? null : typeset });
+        const { bytes, chapters } = window.FolioEPUB.build({ blocks: PV.blocks, style: S.project.style, title: PV.scope === 'doc' ? name : (bk.title || name), author: bk.author || settings.author || '', lang, id: S.project.epubId, typeset: PV.scope === 'doc' ? null : typeset, systemBoxes: !!(S.settings.litrpg && S.settings.litrpg.on && S.settings.litrpg.ebook) });
         const p = await api.exportBinary(bytes, name, 'epub', 'EPUB e-book');
         if (p) window.UnwipStart && window.UnwipStart.done('export');
         if (p) toast(`EPUB saved with ${chapters} chapter${chapters === 1 ? '' : 's'}.${settings.author ? '' : ' Tip: add your author name in Settings.'}`, '', 6000);

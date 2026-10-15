@@ -129,10 +129,13 @@ window.UnwipLitRPG = (function () {
         <div class="lit-sub ${c.on ? '' : 'hidden'}">
           <label class="check full"><input type="checkbox" data-lit="pair" ${c.pair ? 'checked' : ''}> Brackets close themselves: type <b>[</b> and get <b>[ ]</b> (also { })</label>
           <label class="check full"><input type="checkbox" data-lit="look" ${c.look ? 'checked' : ''}> Show [system messages] as boxes while I write (the book keeps plain brackets)</label>
+          <label class="check full"><input type="checkbox" data-lit="ebook" ${c.ebook ? 'checked' : ''}> Make [system messages] boxes in e-books too (EPUB and Kindle; Word and print keep plain brackets)</label>
+          <div class="field"><label>Stats, skills and items in the book</label><button class="btn" type="button" id="lit-ledger">LitRPG ledger…</button></div>
         </div>
         <div class="field"><label>Shortcuts like ;lvl → [Level Up! …]</label><button class="btn" type="button" id="lit-sn">Text shortcuts… (${snippets().length})</button></div>`;
       $$('[data-lit]', f).forEach(i => i.onchange = async () => { const patch = { [i.dataset.lit]: i.checked }; if (i.dataset.lit === 'on' && i.checked && !(S.settings && Array.isArray(S.settings.snippets))) S.settings = await U.api.setSettings({ snippets: STARTER }); await setCfg(patch); draw(); });
       $('#lit-sn', f).onclick = async () => { await shortcutsDialog(); draw(); };
+      const lg = $('#lit-ledger', f); if (lg) lg.onclick = () => { const m = f.closest('.modal-back'); if (m) m.querySelector('.m-foot .btn').click(); window.UnwipLedger && window.UnwipLedger.open(); };
     };
     draw();
   }

@@ -98,6 +98,9 @@ window.FolioEPUB = (function () {
     if (!num && !title) return '';
     return `<div class="opener">${num ? `<p class="num">${x(num)}</p>` : ''}${t.orn ? `<p class="orn">${x(t.orn)}</p>` : ''}<h1${!title ? ' class="hidden-title"' : ''}>${x(title || num)}</h1></div>\n`;
   }
+  // LitRPG [system messages]: a paragraph that's all [bracketed] can go out as a box (Settings › LitRPG tools)
+  const SYSMSG = /^\s*\[[^\[\]]*(\][^\[\]]*\[[^\[\]]*)*\]\s*$/;
+  let sysBoxes = false;
   function chapterXHTML(ch, lang, T) {
     let body = T ? openerXHTML(ch, T) : '', afterBreak = true, firstPara = !!T;
     const notes = [];
@@ -107,6 +110,7 @@ window.FolioEPUB = (function () {
       if (!text.trim() && !hasImg) continue;         // blank lines: e-readers handle spacing themselves
       if (hasImg) { body += `<div class="pic" style="text-align:${b.align === 'left' ? 'left' : b.align === 'right' ? 'right' : 'center'}">${runsXHTML(b.runs, notes)}</div>\n`; afterBreak = true; continue; }
       if (/^h[1-3]$/.test(b.tag)) { body += `<${b.tag}>${runsXHTML(b.runs, notes)}</${b.tag}>\n`; afterBreak = true; continue; }
+      if (sysBoxes && SYSMSG.test(text)) { body += `<p class="sys">${runsXHTML(b.runs, notes)}</p>\n`; afterBreak = true; firstPara = false; continue; }
       if (SCENE.test(text)) { body += `<p class="scene">${x(T ? (T.t.scene === 'blank line' ? ' ' : T.t.scene) : text.trim())}</p>\n`; afterBreak = true; continue; }
       if (firstPara) {   // the opening paragraph of a chapter: drop cap and small capitals, as in the print book
         firstPara = false;
@@ -163,7 +167,9 @@ h2 { font-size: 1.25em; margin: 1.5em 0 .6em; } h3 { font-size: 1.1em; margin: 1
 div.pic { margin: 1em 0; text-indent: 0; } div.pic img { max-width: 100%; height: auto; }
 a.noteref { text-decoration: none; } a.noteref sup { font-size: .7em; line-height: 0; }
 .notes hr { width: 30%; margin: 2em 0 1em; border: 0; border-top: 1px solid #999; text-align: left; } p.note { text-indent: 0; font-size: .85em; margin: 0 0 .4em; }
-.title-page { text-align: center; margin-top: 30%; } .title-page h1 { page-break-before: auto; margin: 0 0 1em; } .title-page p { text-indent: 0; text-align: center; }` + extra;
+.title-page { text-align: center; margin-top: 30%; } .title-page h1 { page-break-before: auto; margin: 0 0 1em; } .title-page p { text-indent: 0; text-align: center; }
+p.sys { text-indent: 0; text-align: left; margin: .7em 1.2em; padding: .35em .7em; border: 1px solid #5d84c9; border-left: 4px solid #5d84c9; background-color: #eef3fb; color: #1d2a44; font-family: monospace; font-size: .88em; page-break-inside: avoid; }
+p.sys + p.sys { margin-top: -.45em; border-top: 0; }` + extra;
   }
 
   function uuid() {
@@ -172,7 +178,8 @@ a.noteref { text-decoration: none; } a.noteref sup { font-size: .7em; line-heigh
     return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
   }
 
-  function build({ blocks, style, title, author, lang, id, typeset }) {
+  function build({ blocks, style, title, author, lang, id, typeset, systemBoxes }) {
+    sysBoxes = !!systemBoxes;
     lang = (lang || 'en').split('-')[0];
     IMAGES = [];
     const T = typeset && window.UnwipTypeset ? typeset : null;
