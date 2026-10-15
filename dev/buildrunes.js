@@ -289,7 +289,17 @@
 
   // ================================================================== SIGILS
   const sigilBlank = () => ({ n: 6, mirror: true, rings: 2, width: 3, color: '#2b2118', bg: 'paper', strokes: [], ring: { alpha: '', text: '' }, guides: true });
-  const BG = { paper: '#f4ecd8', white: '#ffffff', night: '#141a26', none: '' };
+  const BG = { paper: '#f4ecd8', white: '#ffffff', night: '#141a26', blood: '#140808', witch: '#1b1424', none: '' };
+  // on a dark background the default brown ink becomes a colour that shows: pale on night, red on blood, candle gold for witch
+  const DARK_INK = { night: '#e9dcb8', blood: '#d8402f', witch: '#d6a95b' };
+  // a star drawn through the circle: pentagram {5/2}, hexagram (two triangles), heptagram {7/3}, octagram {8/3}
+  function starPath(n, r) {
+    const pt = i => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [r * Math.cos(a), r * Math.sin(a)]; };
+    const poly = idx => 'M' + idx.map(i => pt(i).map(v => v.toFixed(2)).join(' ')).join('L') + 'Z';
+    if (n === 6) return poly([0, 2, 4]) + poly([1, 3, 5]);
+    const k = n === 5 ? 2 : 3, idx = []; for (let i = 0; i < n; i++) idx.push((i * k) % n);
+    return poly(idx);
+  }
   const pts2d = p => p.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('');
   function smooth(p) {
     if (p.length < 3) return pts2d(p);
@@ -312,6 +322,7 @@
       if (D.mirror) g += `<g transform="rotate(${360 * k / D.n}) scale(-1 1)">${paths}</g>`;
     }
     let rings = '';
+    if (+D.star) rings += `<path d="${starPath(+D.star, (alpha && (D.ring.text || '').trim()) ? 77 : D.rings ? 96 - 8 * (D.rings - 1) : 88)}"/>`; // points touch the innermost ring
     const ringText = alpha && (D.ring.text || '').trim();
     const outer = [96, 88, 80].slice(0, D.rings || 0);
     if (ringText) rings += `<circle r="97" /><circle r="77" />`; else rings += outer.map(r => `<circle r="${r}"/>`).join('');
@@ -326,7 +337,7 @@
   function sigilSVG(D, alpha, size, opts = {}) {
     const bg = opts.bg !== undefined ? opts.bg : BG[D.bg];
     const guides = opts.guides ? `<g class="sg-guides" stroke="#888" stroke-width=".5" stroke-dasharray="2 3" fill="none">${[...Array(D.n)].map((_, k) => `<line x1="0" y1="0" x2="0" y2="-100" transform="rotate(${360 * k / D.n})"/>`).join('')}${D.mirror ? [...Array(D.n)].map((_, k) => `<line x1="0" y1="0" x2="0" y2="-100" transform="rotate(${360 * (k + 0.5) / D.n})" opacity=".45"/>`).join('') : ''}<circle r="50"/></g>` : '';
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-104 -104 208 208" width="${size}" height="${size}">${bg ? `<rect x="-104" y="-104" width="208" height="208" fill="${bg}"/>` : ''}${guides}${sigilG(D, alpha, opts.color || (D.bg === 'night' && D.color === '#2b2118' ? '#e9dcb8' : D.color))}${opts.overlay || ''}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-104 -104 208 208" width="${size}" height="${size}">${bg ? `<rect x="-104" y="-104" width="208" height="208" fill="${bg}"/>` : ''}${guides}${sigilG(D, alpha, opts.color || (DARK_INK[D.bg] && D.color === '#2b2118' ? DARK_INK[D.bg] : D.color))}${opts.overlay || ''}</svg>`;
   }
   function randomSigil(D) {
     const out = [], R = [28, 52, 76], slice = (Math.PI * 2) / D.n, at = (r, f) => { const a = -Math.PI / 2 + slice * f * (D.mirror ? 0.5 : 1); return [r * Math.cos(a), r * Math.sin(a)]; };
@@ -360,13 +371,16 @@
         <div class="field"><label>Outer rings</label><select id="sg-rings">${[0, 1, 2, 3].map(n => `<option value="${n}" ${sg.rings === n ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></div>
         <div class="field"><label>Line</label><input type="range" id="sg-w" min="1" max="8" step="0.5" value="${sg.width}"></div>
         <div class="field"><label>Colour</label><input type="color" id="sg-col" value="${sg.color}"></div>
-        <div class="field"><label>Background</label><select id="sg-bg">${[['paper', 'Parchment'], ['white', 'White'], ['night', 'Night'], ['none', 'None (see-through)']].map(([v, l]) => `<option value="${v}" ${sg.bg === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="field"><label>Background</label><select id="sg-bg">${[['paper', 'Parchment'], ['white', 'White'], ['night', 'Night'], ['blood', 'Blood (black and red)'], ['witch', 'Witch (plum and candlelight)'], ['none', 'None (see-through)']].map(([v, l]) => `<option value="${v}" ${sg.bg === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="field"><label>Star</label><select id="sg-star">${[['', 'None'], ['5', 'Pentagram (5 points)'], ['6', 'Hexagram (6 points)'], ['7', 'Heptagram (7 points)'], ['8', 'Octagram (8 points)']].map(([v, l]) => `<option value="${v}" ${String(sg.star || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <h3>Ring of runes</h3>
         ${alphas.length ? `<div class="field"><label>Alphabet</label><select id="sg-alpha"><option value="">— none —</option>${alphas.map(a => `<option value="${a.id}" ${sg.ring.alpha === a.id ? 'selected' : ''}>${esc(a.title)}</option>`).join('')}</select></div>
           <div class="field"><label>Words around the edge</label><input id="sg-text" value="${esc(sg.ring.text)}" placeholder="e.g. what is bound stays bound"></div>`
           : '<p class="bm-help">Make a rune alphabet in Build to write a ring of runes around the edge.</p>'}
       </aside></div>`;
-    const re = () => { drawSigil(); ctx.changed(); };
+    const ink = () => (DARK_INK[sg.bg] && sg.color === '#2b2118') ? DARK_INK[sg.bg] : sg.color;
+    const re = () => { drawSigil(); ctx.changed(); const c = $('#sg-col', box); if (c && document.activeElement !== c) c.value = ink(); };
+    $('#sg-col', box).value = ink();
     $('#sg-n', box).oninput = e => { sg.n = +e.target.value; $('#sg-n-v', box).textContent = sg.n; re(); };
     $('#sg-mirror', box).onchange = e => { sg.mirror = e.target.checked; re(); };
     $('#sg-guides', box).onchange = e => { sg.guides = e.target.checked; re(); };
@@ -374,6 +388,7 @@
     $('#sg-w', box).oninput = e => { sg.width = +e.target.value; re(); };
     $('#sg-col', box).oninput = e => { sg.color = e.target.value; re(); };
     $('#sg-bg', box).onchange = e => { sg.bg = e.target.value; re(); };
+    $('#sg-star', box).onchange = e => { sg.star = e.target.value; if (sg.star && [5, 6, 7, 8].includes(+sg.star) && sg.n % +sg.star && !sg.strokes.length) { sg.n = +sg.star; $('#sg-n', box).value = sg.n; $('#sg-n-v', box).textContent = sg.n; } re(); };
     if ($('#sg-alpha', box)) { $('#sg-alpha', box).onchange = e => { sg.ring.alpha = e.target.value; sgAlpha = alphas.find(a => a.id === sg.ring.alpha) || null; re(); }; $('#sg-text', box).oninput = e => { sg.ring.text = e.target.value; re(); }; }
     $$('#sg-tool .chip', box).forEach(b => b.onclick = () => { sgTool = b.dataset.v; $$('#sg-tool .chip', box).forEach(x => x.classList.toggle('on', x === b)); });
     const keep = () => { sgUndo.push(JSON.stringify(sg.strokes)); if (sgUndo.length > 60) sgUndo.shift(); };

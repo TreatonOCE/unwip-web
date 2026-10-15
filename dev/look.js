@@ -35,6 +35,11 @@ window.UnwipLook = (function () {
       v: { bg: '#120f1a', panel: '#161220', 'panel-2': '#1f1a2c', paper: '#1a1624', text: '#efe6f7', muted: '#a597b8', faint: '#6d6182', line: '#2c2340', accent: '#ff5fa2', sel: '#4a2346' } },
     status:   { name: 'Status',    base: 'light', sw: ['#eef2f7', '#fbfcfe', '#2f6fd0'],
       v: { bg: '#eef2f7', panel: '#e6ebf2', 'panel-2': '#dbe2ec', paper: '#fbfcfe', text: '#1a2433', muted: '#5f6d82', faint: '#93a0b3', line: '#d3dbe6', accent: '#2f6fd0', sel: '#cfdcf2' } },
+    // occult looks, for witches, demons and dark fantasy
+    witch:    { name: 'Witch',     base: 'dark',  sw: ['#17131c', '#1d1724', '#d6a95b'],
+      v: { bg: '#17131c', panel: '#1b1622', 'panel-2': '#241d2d', paper: '#1d1724', text: '#ece3d6', muted: '#a99bab', faint: '#6e6175', line: '#2e2538', accent: '#d6a95b', sel: '#3e2f4a' } },
+    infernal: { name: 'Infernal',  base: 'dark',  sw: ['#120a0a', '#190e0e', '#e0452f'],
+      v: { bg: '#120a0a', panel: '#160c0c', 'panel-2': '#201111', paper: '#190e0e', text: '#f1dfd6', muted: '#b08d84', faint: '#74554e', line: '#2d1716', accent: '#e0452f', sel: '#4a1a16' } },
     contrast: { name: 'High contrast', base: 'light', sw: ['#ffffff', '#ffffff', '#0033cc'],
       v: { bg: '#ffffff', panel: '#f2f2f2', 'panel-2': '#e6e6e6', paper: '#ffffff', text: '#000000', muted: '#333333', faint: '#555555', line: '#8a8a8a', accent: '#0033cc', sel: '#b3c6ff' } }
   };
