@@ -3092,20 +3092,21 @@ html.m-kb-open .modal { max-height: calc(var(--vv-h, 100vh) - 16px) !important; 
   .bd-main .bs-pin { order: -1; box-shadow: 0 8px 10px -10px rgba(0,0,0,.4); }
   .bd-main .br-edit, .bd-main .sg-edit { display: contents; }
   .bd-main .br-pinbox { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 10px -10px rgba(0,0,0,.4); }
-  .bd-main .br-edit > .br-hint, .bd-main .sg-edit > .br-hint { margin: 0 4px; }
   .bd-main .in-shot img { max-height: 34vh; width: auto; max-width: 100%; }
   .bd-main .bs-shot img { max-height: 30vh; width: auto; max-width: 100%; margin: 0 auto 6px; }
   .bd-main .sg-stage svg { width: min(100%, 42vh); }
   .bd-main .br-svg { max-height: 34vh; }
-  /* scrolled down: smaller */
+  /* rune alphabets: the list of runes goes under the rune you're drawing */
+  .bd-main .br-wrap > .br-edit .br-pinbox { order: 1; }
+  .bd-main .br-wrap > .br-list { order: 2; }
+  .bd-main .br-wrap > .br-edit .br-fields { order: 3; }
+  .bd-main .br-wrap > .br-side { order: 4; }
+  /* scrolled down: smaller (coats of arms and character sheets only; sigils, insignia and runes stay the same size) */
   .bd-main.pin-small:not(.pin-open) .ar-shield { height: 20vh; }
-  .bd-main.pin-small:not(.pin-open) .ar-blazon, .bd-main.pin-small:not(.pin-open) .ar-warn, .bd-main.pin-small:not(.pin-open) .in-left .bm-help { display: none; }
+  .bd-main.pin-small:not(.pin-open) .ar-blazon, .bd-main.pin-small:not(.pin-open) .ar-warn { display: none; }
   .bd-main.pin-small:not(.pin-open) .ar-show { padding: 8px; }
-  .bd-main.pin-small:not(.pin-open) .in-shot img { max-height: 18vh; }
   .bd-main.pin-small:not(.pin-open) .bs-shot img { max-height: 17vh; }
   .bd-main.pin-small:not(.pin-open) .bs-pin h2 { display: none; }
-  .bd-main.pin-small:not(.pin-open) .sg-stage svg { width: min(100%, 26vh); }
-  .bd-main.pin-small:not(.pin-open) .br-svg { max-height: 24vh; }
   /* typing: not pinned, so the keyboard can't hide the field under the picture */
   .bd-main.pin-hide .ar-show, .bd-main.pin-hide .in-left, .bd-main.pin-hide .bs-pin, .bd-main.pin-hide .br-pinbox { position: static; }
 }

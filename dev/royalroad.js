@@ -85,8 +85,8 @@ window.UnwipRR = (function () {
   }
 
   async function copyCode(code, ta) {
-    try { await navigator.clipboard.writeText(code); return true; } catch {}
-    if (ta) { ta.focus(); ta.select(); try { if (document.execCommand('copy')) return true; } catch {} }
+    if (await U.copyText(code)) return true;
+    if (ta) { ta.focus(); ta.select(); }   // couldn't copy: leave the code selected, ready for Ctrl+C
     return false;
   }
   function picBytes(dataURL) {

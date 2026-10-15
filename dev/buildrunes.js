@@ -146,7 +146,6 @@
         <div class="br-pinbox"><div class="br-tools"><div class="chip-row" id="br-mode">${[['line', 'Line'], ['curve', 'Curve'], ['rub', 'Rub out']].map(([v, l]) => `<button type="button" class="chip ${mode === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
           <span class="mp-sp"></span><button class="btn small ghost" id="br-undo" title="Undo">↶</button><button class="btn small ghost" id="br-clear">Clear</button><button class="btn small" id="br-rand" title="Roll a random rune to start from, made by dice-style rules, not AI">🎲 Random</button></div>
         <div class="br-stage"><svg id="br-svg" class="br-svg"></svg></div></div>
-        <p class="br-hint">Drag from dot to dot to draw a stroke. Tap a dot for a single mark. In Curve, tap a stroke to bend it the other way (with System ends, Curve gives a trace a 45° bend). In Rub out, tap a stroke to remove it.</p>
         <div class="br-fields"><div class="field"><label>Letter or sound</label><input id="br-key" maxlength="4" placeholder="a, th, sh…"></div>
           <div class="field"><label>Name</label><input id="br-name" placeholder="e.g. Ansuz"></div>
           <div class="field br-wide"><label>Meaning</label><input id="br-mean" placeholder="e.g. a god, a mouth, a message"></div>
@@ -262,8 +261,13 @@
     const stage = svg.closest('.br-stage') || svg;
     for (const el of new Set([stage, svg])) { el.addEventListener('touchstart', e => { if (e.touches.length === 1) e.preventDefault(); }, { passive: false }); el.addEventListener('touchmove', e => { if (e.touches.length === 1) e.preventDefault(); }, { passive: false }); }
     const near = ([x, y]) => { let best = -1, bd = CELL * reach; for (let i = 0; i < A.cols * A.rows; i++) { const [dx, dy] = dotXY(A, i), d = Math.hypot(dx - x, dy - y); if (d < bd) { bd = d; best = i; } } return best; };
+    // one finger at a time: a second finger cancels the stroke in progress, and nothing draws until all fingers lift
+    const downs = new Set(); let multi = false;
     svg.onpointerdown = e => {
       e.preventDefault();
+      downs.add(e.pointerId);
+      if (downs.size > 1) { multi = true; if (drag) { drag = null; drawEdit(); } return; }
+      if (multi) return;
       const hit = e.target.closest && e.target.closest('.br-hit');
       if (hit && mode !== 'line') {
         const i = +hit.dataset.i; push();
@@ -271,11 +275,14 @@
         drawEdit(); tiles(); preview(); ctx.changed(); return;
       }
       const d = near(pt(e)); if (d < 0) return;
-      drag = { a: d, to: null, moved: false }; svg.setPointerCapture(e.pointerId);
+      drag = { a: d, to: null, moved: false, id: e.pointerId }; (() => { try { svg.setPointerCapture(e.pointerId); } catch {} })();
     };
-    svg.onpointermove = e => { if (!drag) return; drag.to = pt(e); drag.moved = true; drawEdit(); };
+    let raf = 0;
+    svg.onpointermove = e => { if (!drag || e.pointerId !== drag.id) return; drag.to = pt(e); drag.moved = true; if (!raf) raf = requestAnimationFrame(() => { raf = 0; drawEdit(); }); };
+    const lift = e => { downs.delete(e.pointerId); if (!downs.size) multi = false; };
     svg.onpointerup = e => {
-      if (!drag) return; const d = drag; drag = null;
+      lift(e);
+      if (!drag || e.pointerId !== drag.id) return; const d = drag; drag = null;
       const b = d.to ? near(d.to) : d.a;
       if (b < 0) return drawEdit();
       if (b === d.a && mode === 'rub') return drawEdit();
@@ -283,7 +290,7 @@
       push(); curG.strokes.push({ a: d.a, b, c: mode === 'curve' && b !== d.a ? 1 : 0 });
       drawEdit(); tiles(); preview(); ctx.changed();
     };
-    svg.onpointercancel = () => { drag = null; drawEdit(); };
+    svg.onpointercancel = e => { lift(e); drag = null; drawEdit(); };
   }
   async function runesPicture(item) {
     const a = Object.assign(runesBlank(), item.data || {});
@@ -443,7 +450,6 @@
         <div class="br-pinbox"><div class="br-tools"><div class="chip-row" id="sg-tool">${[['pen', 'Pen'], ['line', 'Line'], ['circle', 'Circle'], ['dot', 'Dot'], ['move', 'Move'], ['rub', 'Rub out']].map(([v, l]) => `<button type="button" class="chip ${sgTool === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
           <span class="mp-sp"></span><button class="btn small ghost" id="sg-undo" title="Undo">↶</button><button class="btn small ghost" id="sg-clear">Clear</button>${window.UnwipSymbols ? '<button class="btn small" id="sg-addsym" title="Add an animal, object or numeral">+ Symbol</button>' : ''}<button class="btn small" id="sg-rand" title="Roll a random sigil to start from (dice-style rules, not AI)">🎲 Random</button></div>
         <div class="sg-stage" id="sg-stage"></div></div>
-        <p class="br-hint">Draw anywhere: it repeats around the circle. The faint marks show where each copy will land. A dot goes down when you let go, so you can slide it into place first. Move drags symbols. In Rub out, tap a line or symbol to remove it.</p>
       </section>
       <aside class="br-side">
         <h3>Symmetry</h3>
@@ -515,8 +521,21 @@
     let hover = null;
     const ghost = p => p ? `<g class="sg-ghost" pointer-events="none">${copiesOf(sg, p).map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${sgTool === 'dot' ? Math.max(2.2, sg.width * 0.9) : 2.2}" fill="${sgTool === 'dot' ? '#e0663c' : 'none'}" stroke="#e0663c" stroke-width="${i ? .7 : 1.2}" opacity="${i ? .45 : .95}"/>`).join('')}</g>` : '';
     const paint = () => { const st = $('#sg-stage', box); if (st) st.innerHTML = sigilSVG(sg, sgAlpha && sgAlpha.data, '100%', { guides: sg.guides, overlay: ghost(hover) }); };
+    // one finger at a time: a second finger cancels the line in progress (it used to start a second, runaway line), and
+    // nothing draws again until every finger has lifted
+    const downs = new Set(); let multi = false, active = null, raf = 0;
+    const paintSoon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
+    const drop = () => {
+      if (sgDraw) { if (sgDraw.t !== 'dot') { const i = sg.strokes.indexOf(sgDraw); if (i >= 0) sg.strokes.splice(i, 1); } sgDraw = null; sgUndo.pop(); }
+      if (sgMove) { const last = sgUndo.pop(); if (last) { const o = JSON.parse(last); sg.strokes = o.strokes; sg.syms = o.syms; } sgMove = null; }
+      hover = null; drawSigil();
+    };
     stage.onpointerdown = e => {
       if (!$('svg', stage)) return; e.preventDefault();
+      downs.add(e.pointerId);
+      if (downs.size > 1) { multi = true; drop(); return; }
+      if (multi) return;
+      active = e.pointerId;
       const raw = pt(e);
       if (sgTool === 'move') {
         // the nearest symbol (or one of its copies around the circle); dragging a copy moves the original to match
@@ -526,7 +545,7 @@
           for (const t of tries) { const a = 2 * Math.PI * t.k / sg.n, px = y.x * t.m, cx = px * Math.cos(a) - y.y * Math.sin(a), cy = px * Math.sin(a) + y.y * Math.cos(a), dd = Math.hypot(raw[0] - cx, raw[1] - cy); if (dd < Math.max(10, 44 * y.s) && dd < bd) { bd = dd; best = { i, ...t, ox: cx - raw[0], oy: cy - raw[1] }; } }
         });
         if (!best) return;
-        keep(); sgMove = best; stage.setPointerCapture(e.pointerId); return;
+        keep(); sgMove = best; (() => { try { stage.setPointerCapture(e.pointerId); } catch {} })(); return;
       }
       if (sgTool === 'rub') {
         // the nearest line, measured in the slice it was drawn in (or any of its copies)
@@ -540,22 +559,22 @@
         return;
       }
       const p = sgTool === 'pen' ? raw : snapOn(raw);
-      keep(); stage.setPointerCapture(e.pointerId);
+      keep(); (() => { try { stage.setPointerCapture(e.pointerId); } catch {} })();
       if (sgTool === 'dot') { sgDraw = { t: 'dot', pts: [p] }; hover = p; paint(); return; }   // goes down on release
       sgDraw = { t: sgTool, pts: [p, p], tip: p };
       sg.strokes.push(sgDraw); hover = null; paint();
     };
     stage.onpointermove = e => {
-      if (!$('svg', stage)) return;
+      if (!$('svg', stage) || multi || (active !== null && e.pointerId !== active)) return;
       const raw = pt(e);
       if (sgMove) {
         // where the grabbed copy is now, turned back into the original's place
         const M = sgMove, y = sg.syms[M.i]; if (!y) return;
         const qx = raw[0] + M.ox, qy = raw[1] + M.oy, a = -2 * Math.PI * M.k / sg.n, bx = qx * Math.cos(a) - qy * Math.sin(a), by = qx * Math.sin(a) + qy * Math.cos(a);
-        y.x = Math.round(bx * M.m * 10) / 10; y.y = Math.round(by * 10) / 10; drawSigil(); return;
+        y.x = Math.round(bx * M.m * 10) / 10; y.y = Math.round(by * 10) / 10; if (!raf) raf = requestAnimationFrame(() => { raf = 0; drawSigil(); }); return;
       }
-      if (!sgDraw) { if (e.pointerType === 'touch' || sgTool === 'rub' || sgTool === 'move') return; hover = sgTool === 'pen' ? raw : snapOn(raw); paint(); return; }
-      if (sgDraw.t === 'dot') { sgDraw.pts[0] = snapOn(raw); hover = sgDraw.pts[0]; paint(); return; }
+      if (!sgDraw) { if (e.pointerType === 'touch' || sgTool === 'rub' || sgTool === 'move') return; hover = sgTool === 'pen' ? raw : snapOn(raw); paintSoon(); return; }
+      if (sgDraw.t === 'dot') { sgDraw.pts[0] = snapOn(raw); hover = sgDraw.pts[0]; paintSoon(); return; }
       if (sgDraw.t === 'pen') {
         // the tip only moves once the pointer pulls the string tight
         const L = (sg.smooth || 0) * 1.3, tip = sgDraw.tip, d = Math.hypot(raw[0] - tip[0], raw[1] - tip[1]);
@@ -563,10 +582,14 @@
         const l = sgDraw.pts[sgDraw.pts.length - 1], q = sgDraw.tip;
         if (Math.hypot(q[0] - l[0], q[1] - l[1]) > 1) sgDraw.pts.push([Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]);
       } else sgDraw.pts[1] = snapOn(raw);
-      paint();
+      paintSoon();
     };
     stage.onpointerleave = () => { if (!sgDraw && hover) { hover = null; paint(); } };
-    const finish = () => {
+    const finish = e => {
+      downs.delete(e.pointerId);
+      if (multi) { if (!downs.size) { multi = false; active = null; } return; }
+      if (e.pointerId !== active) return;
+      active = null; cancelAnimationFrame(raf); raf = 0;
       if (sgMove) { sgMove = null; re(); return; }
       if (!sgDraw) return; const s = sgDraw; sgDraw = null; delete s.tip;
       if (s.t === 'dot') { sg.strokes.push(s); hover = null; re(); return; }

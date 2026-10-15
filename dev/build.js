@@ -135,7 +135,7 @@ window.UnwipBuild = (function () {
   let ret = null;
   const screen = $('#build-screen'), top = $('#bd-top'), main = $('#bd-main');
   // Phones: the picture (or the drawing area) stays pinned at the top while the options scroll under it (style.css,
-  // "Build on a phone"). It gets smaller once you scroll down (tap the picture to see it full size again) and stops
+  // "Build on a phone"). Coats of arms and character sheets get smaller once you scroll down (tap a character sheet's picture to see it full size again) and stops
   // being pinned while you type, so the keyboard can't push the field you're typing in underneath it.
   let pinSmall = false, openAt = null;
   const pinReset = () => { pinSmall = false; openAt = null; main.classList.remove('pin-small', 'pin-open', 'pin-hide'); };
@@ -147,7 +147,7 @@ window.UnwipBuild = (function () {
   const typing = el => el && el.matches && el.matches('input:not([type]), input[type=text], input[type=search], input[type=number], textarea, [contenteditable="true"]');
   main.addEventListener('focusin', e => { if (typing(e.target)) main.classList.add('pin-hide'); });
   main.addEventListener('focusout', e => { if (typing(e.target)) main.classList.remove('pin-hide'); });
-  main.addEventListener('click', e => { if (pinSmall && e.target.closest('.in-shot, .bs-shot')) { openAt = main.scrollTop; main.classList.add('pin-open'); } });
+  main.addEventListener('click', e => { if (pinSmall && e.target.closest('.bs-shot')) { openAt = main.scrollTop; main.classList.add('pin-open'); } });
   function show(on) {
     if (ret === 'book') $('#workspace').classList.toggle('hidden', on);
     else if (ret === 'window') { $('#library').classList.add('hidden'); $('#workspace').classList.add('hidden'); }
@@ -170,7 +170,7 @@ window.UnwipBuild = (function () {
     const c = cur && window.UnwipSymbols && window.UnwipSymbols.credit(symbolsIn(cur));
     bar.classList.toggle('hidden', !c); if (!c) { bar.innerHTML = ''; return; }
     bar.innerHTML = `<span>Uses symbols by ${esc(c.by.join(', '))} from game-icons.net (free to use, even commercially). If you publish this picture, add the credit: <b>${esc(c.line)}</b></span><button class="btn small ghost" type="button" id="bd-credit-copy">Copy credit</button>`;
-    $('#bd-credit-copy').onclick = async () => { try { await navigator.clipboard.writeText(c.line); U.toast('Credit copied. Put it with the picture, or on your book’s copyright page.'); } catch { U.toast(esc(c.line), '', 8000); } };
+    $('#bd-credit-copy').onclick = () => U.copyText(c.line).then(ok => ok ? U.toast('Credit copied. Put it with the picture, or on your book’s copyright page.') : U.toast(esc(c.line), '', 8000));
   }
   async function saveNow() { clearTimeout(saveT); saveT = null; if (!cur) return; await put(cur); saved('Saved'); }
   async function open(id, from) {

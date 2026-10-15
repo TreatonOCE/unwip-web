@@ -116,6 +116,21 @@
   function hideMenu() { $('#menu').classList.add('hidden'); }
   document.addEventListener('mousedown', e => { if (!e.target.closest('#menu') && !(S.longPress && Date.now() - S.longPress < 900)) hideMenu(); });
 
+  // Copy plain text. Call it straight from a click or tap: Safari (and iPhone/iPad) only allow copying during one. The
+  // old-style copy goes first because it happens at once, inside the click; the newer clipboard call is the fallback.
+  function copyText(text) {
+    text = String(text == null ? '' : text);
+    let ok = false;
+    try {
+      const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;font-size:16px';
+      const had = document.activeElement; document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+      ok = document.execCommand('copy'); ta.remove(); if (had && had.focus) try { had.focus({ preventScroll: true }); } catch {}
+    } catch {}
+    if (ok) return Promise.resolve(true);
+    try { if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(() => true, () => false); } catch {}
+    return Promise.resolve(false);
+  }
   function modal({ title, body, buttons, wide, onOpen }) {
     return new Promise(resolve => {
       const back = document.createElement('div');
@@ -129,7 +144,8 @@
         const btn = document.createElement('button');
         btn.className = 'btn ' + (b.kind || '');
         btn.textContent = b.label;
-        btn.onclick = () => close(b.value === undefined ? b.label : b.value);
+        // onClick runs inside the click itself (copying needs that in Safari) and keeps the dialog open
+        btn.onclick = () => { if (b.onClick) { b.onClick(); return; } close(b.value === undefined ? b.label : b.value); };
         foot.appendChild(btn);
       }
       const onKey = e => {
@@ -4972,7 +4988,7 @@
   window.__unwip = {
     get saveFailing() { return !!troubleRetry; }, pasteContent,
     S, api, I, $, $$, esc, fmt, makeRoom, countWords, today, editor, editorWrap, on, emit,
-    modal, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
+    modal, copyText, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
     findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave, refreshSnapCount,
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,

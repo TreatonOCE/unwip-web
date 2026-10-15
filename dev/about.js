@@ -109,10 +109,10 @@ window.UnwipAbout = (function () {
     what.addEventListener('input', () => { clearTimeout(what._t); what._t = setTimeout(refresh, 300); });
     await refresh();
     const v = await U.modal({ title: 'Report a problem', body, wide: true, onOpen: () => setTimeout(() => what.focus(), 50),
-      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Copy report', value: 'copy', kind: 'ghost' }, { label: 'Email it…', value: 'mail', kind: 'primary' }] });
+      buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Copy report', kind: 'ghost', onClick: () => U.copyText(pre.textContent).then(ok => U.toast(ok ? 'Report copied. Paste it into an email or message.' : 'Couldn’t copy. Select the text under “See exactly what will be sent” and copy it.', ok ? '' : 'warn')) }, { label: 'Email it…', value: 'mail', kind: 'primary' }] });
     if (!v) return;
     const text = await reportText(what.value.trim());
-    if (v === 'copy') { try { await navigator.clipboard.writeText(text); U.toast('Report copied. Paste it into an email or message.'); } catch { U.toast('Couldn’t copy. Select the text under “See exactly what will be sent” and copy it.', 'warn'); } return; }
+    // (Copy report copies straight from its button, inside the click, and leaves this window open)
     const subj = `Unwip problem: ${(what.value.trim().split('\n')[0] || 'report').slice(0, 60)}`;
     // which email to send it with: Gmail or Outlook in the browser, or the email app on this device. Remembered.
     let via = ''; try { via = localStorage.getItem('unwip-report-via') || ''; } catch {}
@@ -134,7 +134,7 @@ window.UnwipAbout = (function () {
       : via === 'outlook' ? `https://outlook.live.com/mail/0/deeplink/compose?to=${q(to)}&subject=${q(subj)}&body=${q(bodyText)}`
       : `mailto:${q(to)}?subject=${q(subj)}&body=${q(bodyText)}`;
     if (via === 'app' && api.web) location.href = url; else window.open(url, '_blank');   // the PC hands links to your browser or email app
-    if (text.length > 1800) { try { await navigator.clipboard.writeText(text); U.toast('The full report was also copied, in case the email cuts it short.'); } catch {} }
+    if (text.length > 1800) { if (await U.copyText(text)) U.toast('The full report was also copied, in case the email cuts it short.'); }
   }
 
   // ---------------------------------------------------------------- About

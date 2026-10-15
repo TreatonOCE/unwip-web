@@ -202,8 +202,7 @@
   function draw() {
     const d = it.data, C = colours(d);
     box.innerHTML = `<div class="in-page">
-      <div class="in-left"><div class="in-shot" id="in-shot"></div>
-        <p class="bm-help">Flat colours and plain lines, the way real logos and unit patches are made. Every symbol is a simple drawing you can swap; Copy picture and Save PNG are at the top (under ⋯ on a phone).</p></div>
+      <div class="in-left"><div class="in-shot" id="in-shot"></div></div>
       <div class="in-right">
         <section class="bm-card"><h2>Name</h2>
           <div class="bs-grid"><label>Name<input data-d="name" value="${esc(d.name)}" placeholder="e.g. Halvorsen Dynamics"></label><label>Designation<input data-d="desig" value="${esc(d.desig)}" placeholder="e.g. Security Division"></label><label>Code<input data-d="code" value="${esc(d.code)}" placeholder="e.g. HD-07"></label></div></section>

@@ -334,9 +334,9 @@
   async function spellWindow(s) {
     const d = it.data, body = document.createElement('div'); body.className = 'bm-big';
     body.innerHTML = `<img alt="${esc(s.name || 'Spell')}" src="${B.svgURL(spellSVG(d, s, 1280))}"><p class="bm-help">Copy text gives the [bracketed] lines LitRPG books use: paste them into a chapter and, with LitRPG tools on, they show as system boxes.</p>`;
-    const v = await U.modal({ title: s.name || 'Spell', body, wide: true, buttons: [{ label: 'Copy text', value: 'text', kind: 'ghost' }, { label: 'Copy picture', value: 'copy', kind: 'ghost' }, { label: 'Save PNG…', value: 'png', kind: 'ghost' }, { label: 'Close', value: null, kind: 'primary' }] });
-    if (v === 'text') { try { await navigator.clipboard.writeText(spellText(d, s).join('\n')); U.toast('Copied. Paste it into a chapter.'); } catch { U.toast('Couldn’t copy here.', 'warn'); } }
-    else if (v) { const svg = spellSVG(d, s, 1280), m = /height="(\d+)"/.exec(svg.slice(svg.indexOf('width="1280"'))); const c = await B.svgCanvas(svg, 1280, m ? +m[1] : 600); if (v === 'copy') B.copyCanvas(c); else B.savePNG(c, s.name || 'Spell'); }
+    const copy = () => U.copyText(spellText(d, s).join('\n')).then(ok => U.toast(ok ? 'Copied. Paste it into a chapter.' : 'Couldn’t copy here. Select the lines in a chapter’s system message instead.', ok ? '' : 'warn'));
+    const v = await U.modal({ title: s.name || 'Spell', body, wide: true, buttons: [{ label: 'Copy text', kind: 'ghost', onClick: copy }, { label: 'Copy picture', value: 'copy', kind: 'ghost' }, { label: 'Save PNG…', value: 'png', kind: 'ghost' }, { label: 'Close', value: null, kind: 'primary' }] });
+    if (v) { const svg = spellSVG(d, s, 1280), m = /height="(\d+)"/.exec(svg.slice(svg.indexOf('width="1280"'))); const c = await B.svgCanvas(svg, 1280, m ? +m[1] : 600); if (v === 'copy') B.copyCanvas(c); else B.savePNG(c, s.name || 'Spell'); }
   }
   // a picture: a card with the name, the one-line summary, the costs and the kinds of magic
   function cardSVG(item, w = 800, h = 500) {

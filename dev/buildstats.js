@@ -122,7 +122,7 @@
       else if (t.dataset.curve) { d.xp.curve = t.dataset.curve; save(); draw(); }
       else if (t.dataset.look) { d.look = t.dataset.look; $$('[data-look]', box).forEach(x => x.classList.toggle('on', x === t)); save(); shot(); }
       else if (t.id === 'bs-names') { window.UnwipNames && window.UnwipNames.open({ onUse: n => { d.name = n.name; if (!it.title || it.title === 'Untitled') { it.title = n.name; const ti = document.getElementById('bd-title'); if (ti) ti.value = n.name; } save(); draw(); } }); }
-      else if (t.id === 'bs-copy') { const txt = bracketLines(it, d, Math.max(1, +d.show || 1)).join('\n'); try { await navigator.clipboard.writeText(txt); U.toast('Copied. Paste them into a chapter.'); } catch { U.toast('Couldn’t copy here. Select the lines and copy them.', 'warn'); } }
+      else if (t.id === 'bs-copy') { const txt = bracketLines(it, d, Math.max(1, +d.show || 1)).join('\n'); U.copyText(txt).then(ok => U.toast(ok ? 'Copied. Paste them into a chapter.' : 'Couldn’t copy here. Select the lines and copy them.', ok ? '' : 'warn')); }
     };
   }
   const openWired = (item, el, c) => { open(item, el, c); wire(); };

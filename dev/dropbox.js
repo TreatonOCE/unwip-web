@@ -449,13 +449,21 @@ window.UnwipDropbox = (function () {
   }
   const mine = `.open-on-${DEVICE.replace(/[^\w-]/g, '')}.json`;
   const origPresence = F.presence, origOthers = F.othersOpen, origReq = F.requestTakeover, origCheck = F.checkTakeover;
-  F.presence = async (slug, on) => {
+  // One at a time, in order: a "still here" upload that was already on its way when the book was closed used to land
+  // after the removal and bring the note back, so other devices thought the book was still open for two minutes.
+  // `want` is what was asked for last; a queued upload for a book that has since been closed is skipped.
+  let presQ = Promise.resolve();
+  const want = {};
+  F.presence = (slug, on) => {
     if (!connected()) return origPresence(slug, on);
-    try {
-      if (on) { if (Date.now() - presT < 60000) return true; presT = Date.now(); await upload(`${slug}/${mine}`, asBytes(JSON.stringify({ device: DEVICE, at: Date.now() })), null); }
-      else { presT = 0; await remove(`${slug}/${mine}`); }
-    } catch {}
-    return true;
+    want[slug] = !!on;
+    presQ = presQ.then(async () => {
+      try {
+        if (on) { if (!want[slug] || Date.now() - presT < 60000) return; presT = Date.now(); await upload(`${slug}/${mine}`, asBytes(JSON.stringify({ device: DEVICE, at: Date.now() })), null); }
+        else { presT = 0; await remove(`${slug}/${mine}`); }
+      } catch {}
+    });
+    return presQ.then(() => true);
   };
   F.othersOpen = async slug => {
     if (!connected()) return origOthers(slug);

@@ -103,7 +103,7 @@ window.UnwipNames = (function () {
       $$('[data-pick]', body).forEach(b => b.onclick = () => { pick[b.closest('[data-part]').dataset.part] = b.dataset.pick; draw(); });
       $$('[data-own]', body).forEach(i => i.oninput = () => { pick[i.dataset.own] = i.value.trim(); const f = $('.ng-full', body); if (f) f.textContent = full() || '…'; $$(`[data-part="${i.dataset.own}"] .ng-name`, body).forEach(x => x.classList.remove('on')); });
       $('#ng-all', body).onclick = () => { for (const k of Object.keys(pick)) pick[k] = ''; rollAll(); draw(); };
-      $('#ng-copy', body).onclick = async () => { try { await navigator.clipboard.writeText(full() + (st.handle && pick.handle ? ` (${pick.handle})` : '')); U.toast('Copied.'); } catch { U.toast('Couldn’t copy here.', 'warn'); } };
+      $('#ng-copy', body).onclick = () => U.copyText(full() + (st.handle && pick.handle ? ` (${pick.handle})` : '')).then(ok => U.toast(ok ? 'Copied.' : 'Couldn’t copy here.', ok ? '' : 'warn'));
     };
     const save = () => { try { localStorage.setItem('unwip-namegen', JSON.stringify(st)); } catch {} };
     rollAll(); draw();

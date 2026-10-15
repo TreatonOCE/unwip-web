@@ -75,7 +75,15 @@ window.UnwipSync = (function () {
     changedElsewhere();
   });
   const markSeen = () => { if (S.slug) try { localStorage.setItem('unwip-seen-' + S.slug, String(Date.now())); } catch {} };
-  U.on('leave', () => { markSeen(); if (current) { api.presence(current, false); api.watchProject(null); } clearInterval(beat); current = null; });
+  U.on('leave', () => {
+    markSeen(); clearInterval(beat);
+    if (current) {
+      const left = current; api.presence(left, false); api.watchProject(null);
+      // once more a little later, in case a sync was mid-way (the note must not linger, or the other device waits)
+      setTimeout(() => { if (S.slug !== left) api.presence(left, false); }, 8000);
+    }
+    current = null;
+  });
   window.addEventListener('beforeunload', () => { markSeen(); if (current) api.presence(current, false); });
 
   // ================================================================== WHAT CHANGED ELSEWHERE
