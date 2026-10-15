@@ -215,13 +215,29 @@ window.UnwipStuck = (function () {
     U.scheduleMeta(); U.renderBinder();
     return node;
   }
+  // Interview my character: a note of questions to answer in their voice. The questions are yours to change
+  // (settings.interviewQs, shared between devices); these are the ones it starts with.
+  const INTERVIEW_QS = ['What do you want right now, more than anything?', 'What are you afraid will happen next?', 'What are you not telling anyone?', 'What would you never do? What would make you do it?', 'What do you think of the other people in this scene?', 'What happens if you get what you want?'];
+  const interviewQs = () => { const q = S.settings && S.settings.interviewQs; return Array.isArray(q) && q.length ? q : INTERVIEW_QS; };
   async function interview() {
+    if (!S.project) { U.toast('Open a book first.'); return; }
     const f = S.docId && U.findNode(S.docId);
     const who = (f && f.node.pov) || 'my character';
-    const qs = ['What do you want right now, more than anything?', 'What are you afraid will happen next?', 'What are you not telling anyone?', 'What would you never do? What would make you do it?', 'What do you think of the other people in this scene?', 'What happens if you get what you want?'];
-    const node = await makeDoc(sectionId('notes'), `Interview: ${who}`, `<p><i>Answer in your character’s voice. No one else will read this.</i></p>` + qs.map(q => `<h2>${esc(q)}</h2><p><br></p>`).join(''));
-    U.openSplit(node.id);
-    U.toast('Opened beside your chapter. Answer as them, quickly, without thinking too hard.', '', 6000);
+    const node = await makeDoc(sectionId('notes'), `Interview: ${who}`, `<p><i>Answer in your character’s voice. No one else will read this.</i></p>` + interviewQs().map(q => `<h2>${esc(q)}</h2><p><br></p>`).join(''));
+    if (S.docId) U.openSplit(node.id); else await U.openDoc(node.id);
+    U.toastAction('Opened beside your chapter, in Notes. Answer as them, quickly, without thinking too hard.', 'Change the questions', editInterview, 8000);
+  }
+  async function editInterview() {
+    const body = document.createElement('div');
+    body.innerHTML = `<p>One question per line. New interviews use these; ones you’ve already made stay as they are. They follow you to your other devices.</p>
+      <textarea id="iv-qs" rows="10" style="width:100%;font:inherit;line-height:1.5" spellcheck="true"></textarea>
+      <p class="hint">Tip: “this scene” questions work best when you start the interview from a chapter.</p>`;
+    body.querySelector('#iv-qs').value = interviewQs().join('\n');
+    const v = await U.modal({ title: 'Character interview questions', body, buttons: [{ label: 'Use the usual questions', value: 'reset', kind: 'ghost' }, { label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
+    if (!v) return;
+    const list = v === 'reset' ? null : body.querySelector('#iv-qs').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 60);
+    try { S.settings = await U.api.setSettings({ interviewQs: list && list.length ? list : null }); } catch {}
+    U.toast(v === 'reset' || !list.length ? 'Back to the usual questions.' : `Saved ${list.length} question${list.length === 1 ? '' : 's'}.`);
   }
   async function excitedScene() {
     if (!S.docId || U.rootOf(S.docId).kind !== 'manuscript') { U.toast('Open a chapter first.'); return; }
@@ -413,5 +429,5 @@ window.UnwipStuck = (function () {
 
   const btn = $('#btn-stuck');
   if (btn) { btn.innerHTML = `<span class="stuck-ic">${I.flame}</span><span class="tb-label">Spark</span>`; btn.onclick = () => openStuck(); }
-  return { open: openStuck, startMessy, stopMessy, isMessy: () => !!messy, renderSteps };
+  return { open: openStuck, interview, editInterview, startMessy, stopMessy, isMessy: () => !!messy, renderSteps };
 })();

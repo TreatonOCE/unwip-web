@@ -1,5 +1,6 @@
-// Unwip - the small bar that appears above selected text: strikethrough, alignment, clear formatting,
-// comment and footnote. The main toolbar stays calm; these show up only when there's text to apply them to.
+// Unwip - the small bar that appears above selected text: bold, italic, underline, strikethrough, alignment, clear
+// formatting, comment and footnote. In writer mode it's the only formatting on screen, so it shows there too, without
+// alignment and footnotes. The main toolbar stays calm; these show up only when there's text to apply them to.
 window.UnwipSelBar = (function () {
   'use strict';
   const U = window.__unwip; if (!U) return;
@@ -8,15 +9,16 @@ window.UnwipSelBar = (function () {
   bar.className = 'selbar hidden'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'Formatting for the selected text');
   const btn = (sel, label, inner, wide) => `<button class="sb-btn${wide ? ' wide' : ''}" data-sel="${sel}" aria-label="${label}" data-tip="${label}">${inner}</button>`;
   bar.innerHTML = [
+    btn("[data-cmd='bold']", 'Bold (Ctrl+B)', '<b>B</b>'), btn("[data-cmd='italic']", 'Italic (Ctrl+I)', '<i>I</i>'), btn("[data-cmd='underline']", 'Underline (Ctrl+U)', '<u>U</u>'),
     btn("[data-cmd='strikeThrough']", 'Strikethrough', '<s>S</s>'),
-    '<span class="sb-sep"></span>',
-    btn("[data-cmd='justifyLeft']", 'Align left', I.alignLeft), btn("[data-cmd='justifyCenter']", 'Centre', I.alignCenter),
-    btn("[data-cmd='justifyRight']", 'Align right', I.alignRight), btn("[data-cmd='justifyFull']", 'Justify', I.alignJustify),
+    '<span class="sb-sep sb-full"></span>',
+    '<span class="sb-full sb-group">' + btn("[data-cmd='justifyLeft']", 'Align left', I.alignLeft) + btn("[data-cmd='justifyCenter']", 'Centre', I.alignCenter) +
+    btn("[data-cmd='justifyRight']", 'Align right', I.alignRight) + btn("[data-cmd='justifyFull']", 'Justify', I.alignJustify) + '</span>',
     '<span class="sb-sep"></span>',
     btn('#btn-clear', 'Clear formatting', 'Clear formatting', true),
     '<span class="sb-sep"></span>',
     btn('#btn-comment', 'Comment (Ctrl+Alt+M)', I.comment + '<span>Comment</span>', true),
-    btn('#btn-footnote', 'Footnote (Ctrl+Alt+F)', 'Footnote', true)
+    '<span class="sb-full sb-group">' + btn('#btn-footnote', 'Footnote (Ctrl+Alt+F)', 'Footnote', true) + '</span>'
   ].join('');
   document.body.appendChild(bar);
   // clicking the bar must not lose the selection
@@ -43,7 +45,7 @@ window.UnwipSelBar = (function () {
   document.addEventListener('focusin', e => { if (!bar.classList.contains('hidden') && !editor.contains(e.target) && !bar.contains(e.target)) hide(); });
   function place() {
     if (covered()) { hide(); return; }
-    if (document.documentElement.classList.contains('m-phone') || document.body.classList.contains('writer')) { hide(); return; }
+    if (document.documentElement.classList.contains('m-phone')) { hide(); return; }   // (in writer mode it shows, smaller: style.css)
     const sel = getSelection();
     if (!sel.rangeCount || sel.isCollapsed || !editor.contains(sel.anchorNode) || !editor.contains(sel.focusNode)) { hide(); return; }
     if (!sel.toString().trim()) { hide(); return; }

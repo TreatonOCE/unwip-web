@@ -436,6 +436,10 @@ body.sprinting.writer .statusbar { opacity: .8; }
 @keyframes pulse { 50% { opacity: .45; } }
 .sprint-float { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: var(--sprint); color: #2a1f00; font-variant-numeric: tabular-nums; box-shadow: var(--shadow); opacity: .85; }
 .sprint-float svg { width: 14px; height: 14px; }
+.sprint-float.goal { background: #4caf6e; color: #06210f; }
+.sprint-float.done { background: #4caf6e; color: #06210f; cursor: pointer; opacity: 1; pointer-events: auto; }
+.sprint-float.done:hover { filter: brightness(1.06); }
+#btn-sprint.goal { color: #2f8a4f; }
 .sprint-float b { font-size: 15px; }
 
 /* ---------- revision re-check ---------- */
@@ -1741,6 +1745,8 @@ body.detailed span.tb-detailed { display: inline-block; }
 .selbar { position: fixed; z-index: 640; display: flex; align-items: center; gap: 2px; padding: 4px; background: #25231f; color: #e7e4dd; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.28); animation: fade .12s ease-out; }
 :root[data-theme="dark"] .selbar { background: #3a3b41; }
 .selbar.hidden { display: none; }
+.selbar .sb-group { display: contents; }
+body.writer .selbar .sb-full { display: none; }
 .sb-btn { min-width: 32px; height: 32px; padding: 0 7px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: 15px Georgia, serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
 .sb-btn.wide { font: 13px var(--ui); padding: 0 9px; }
 .sb-btn svg { width: 17px; height: 17px; }
@@ -3120,3 +3126,12 @@ html.m-kb-open .modal { max-height: calc(var(--vv-h, 100vh) - 16px) !important; 
 #st-zoom { font-variant-numeric: tabular-nums; min-width: 44px; }
 @media (max-width: 720px) { .st-zoomer { display: none; } }
 
+
+/* Writer mode strip: the status bar rises when the mouse nears the bottom edge, with page size, typewriter, fade, Exit */
+.st-writer { display: inline-flex; align-items: center; gap: 12px; margin-right: 8px; }
+body:not(.writer) .st-writer { display: none; }
+.st-writer .st-btn.on { color: var(--accent); }
+.st-writer .st-wexit { border: 1px solid var(--line); margin: 0; padding: 2px 10px; }
+body.writer .statusbar.peek { opacity: 1; }
+body.writer .statusbar { z-index: 7; }
+@media (max-width: 720px) { .st-writer { display: none !important; } }

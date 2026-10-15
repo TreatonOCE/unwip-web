@@ -482,6 +482,7 @@
   async function leaveProject() {
     if (S.lastPlace && S.lastPlace.slug === S.slug) { clearTimeout(S.lastPlaceT); try { S.settings = await api.setSettings({ lastPlace: S.lastPlace }); } catch {} }
     if (S.sprint) await endSprint(false);
+    S.sprintDone = null;   // its result is already saved with the book
     if (S.brk && S.brk.then) stopBreak();   // rounds belong to the book; a break timer on its own keeps going
     await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null;
     setRevise(false);
@@ -1797,7 +1798,17 @@
   editor.addEventListener('keydown', e => {
     emit('keydown', e); if (e.defaultPrevented) return;
     if (e.key === 'Tab') { e.preventDefault(); return; } // first-line indents are automatic
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'V' || e.key === 'v')) { S.plainPaste = true; setTimeout(() => S.plainPaste = false, 400); }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.key === 'V' || e.key === 'v')) {
+      // On the web on a Mac, iPad or iPhone, the browser doesn't paste at all for Cmd+Shift+V (only Windows does), so
+      // read the clipboard's text ourselves, like Google Docs. The Mac app gets it from its Edit menu instead.
+      if (e.metaKey && document.documentElement.classList.contains('web') && navigator.clipboard && navigator.clipboard.readText) {
+        e.preventDefault();
+        navigator.clipboard.readText().then(t => { if (!t) return; S.plainPaste = true; restoreRange(); return pasteContent({ text: t }); })
+          .catch(() => toast('Your browser didn’t let Unwip read the clipboard. Paste normally, then use Clear formatting on the pasted text, or allow clipboard access for this site in your browser settings.', '', 7000));
+        return;
+      }
+      S.plainPaste = true; setTimeout(() => S.plainPaste = false, 400);
+    }
   });
 
   // ---- selection tracking + toolbar state
@@ -2115,7 +2126,12 @@
     }
     offerTitleFromPaste(text || '');
   }
-  api.onPastePlain(() => { S.plainPaste = true; restoreRange(); api.paste(); });
+  // from the right-click menu, or Cmd+Shift+V on a Mac (Edit menu): outside the chapter (a search box, a note) it's a normal paste
+  api.onPastePlain(() => {
+    const a = document.activeElement;
+    if (a && a !== document.body && !editor.contains(a)) { api.paste(); return; }
+    S.plainPaste = true; restoreRange(); api.paste();
+  });
   api.onSplit(() => { restoreRange(); splitAtCursor(); });
 
   // If a pasted chapter starts with its own title ("Chapter 3: ...") and this document has no
@@ -3003,6 +3019,7 @@
     if (on === was) return;
     document.body.classList.toggle('writer', on);
     renderSprint();
+    if (!on && S.sprintDone) setTimeout(showPendingSprint, 250);   // a sprint finished while writing: its result now
     await api.fullscreen(on);
     if (on) { editor.focus(); typewriterScroll(true); writerQuote(); }
     emit('writer', on);
@@ -3393,6 +3410,17 @@
   // ================================================================== SPRINTS
   function renderSprint() {
     const b = $('#btn-sprint'), lbl = $('#sprint-label'), bar = $('#sprint-progress'), fl = $('#sprint-float');
+    fl.classList.remove('goal', 'done'); b.classList.remove('goal');
+    // a sprint that ended in writer mode: the pill says so and waits; tap it for the result (writing carries on)
+    if (!S.sprint && !S.brk && S.sprintDone) {
+      const d = S.sprintDone;
+      lbl.textContent = `Sprint done · ${fmt(d.rec.words)} words`; b.classList.remove('running'); bar.style.width = '0';
+      b.title = 'Sprint finished. Click to see how it went.';
+      document.body.classList.remove('sprinting');
+      fl.innerHTML = `<span>✓ Sprint done</span><b>${fmt(d.rec.words)}</b><span>words · see how it went</span>`;
+      fl.classList.add('done'); fl.classList.toggle('hidden', !document.body.classList.contains('writer'));
+      return;
+    }
     if (!S.sprint && S.brk) {      // a break between rounds (or a break timer on its own)
       const left = Math.max(0, S.brk.end - Date.now()), time = `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`;
       const plan = S.sprintPlan, nextUp = plan && S.brk.then ? ` · round ${plan.round} of ${plan.rounds} next` : '';
@@ -3415,7 +3443,9 @@
     bar.style.width = (100 - left / (S.sprint.minutes * 60000) * 100) + '%';
     b.classList.add('running'); b.title = 'Sprint running. Click to stop early.';
     document.body.classList.add('sprinting');
-    fl.innerHTML = `${I.bolt}<span>${time}</span><b>${fmt(words)}</b>${S.sprint.goal ? `<span>/ ${fmt(S.sprint.goal)}</span>` : '<span>words</span>'}`;
+    const hit = !!(S.sprint.goal && words >= S.sprint.goal);   // goal reached: the pill (and the Sprint button) go green
+    fl.innerHTML = `${hit ? '✓' : I.bolt}<span>${time}</span><b>${fmt(words)}</b>${S.sprint.goal ? `<span>/ ${fmt(S.sprint.goal)}</span>` : '<span>words</span>'}`;
+    fl.classList.toggle('goal', hit); b.classList.toggle('goal', hit);
     fl.classList.toggle('hidden', !document.body.classList.contains('writer'));
   }
   async function startSprintDialog() {
@@ -3497,6 +3527,7 @@
   // opts: { writer, mini (gentle: cheer at the goal and keep going), message }
   function beginSprint(minutes, goal, opts = {}) {
     if (S.sprint) return;
+    S.sprintDone = null;
     S.sprint = { start: Date.now(), end: Date.now() + minutes * 60000, minutes, goal, startTyped: S.sessionTyped, mini: !!opts.mini };
     S.sprint.timer = setInterval(() => {
       const sp = S.sprint; if (!sp) return;
@@ -3531,8 +3562,14 @@
       return;
     }
     S.sprintPlan = null;
+    // in writer mode, don't pull them out mid-word: a chime, the pill says it's done, the result waits for a tap
+    // (or for leaving writer mode)
+    if (document.body.classList.contains('writer')) { S.sprintDone = { rec, plan, prevBest }; sprintChime(); renderSprint(); return; }
     return showSprintResult(rec, plan, false, prevBest);
   }
+  function showPendingSprint() { const d = S.sprintDone; if (!d) return; S.sprintDone = null; renderSprint(); showSprintResult(d.rec, d.plan, false, d.prevBest); }
+  $('#sprint-float').addEventListener('mousedown', e => e.preventDefault());   // tapping the pill keeps the cursor where it is
+  $('#sprint-float').addEventListener('click', () => { if (S.sprintDone) showPendingSprint(); });
   // the result, and "how did it go?" (saved with the sprint, and shown in All sprints)
   const SPRINT_WORK = ['Planning', 'Outlining', 'Drafting from an outline', 'Discovery writing', 'Revising', 'Editing'];
   const SPRINT_FEEL = ['Feeling good', 'In the zone', 'Tired', 'Distracted', 'Sad', 'Burnt out'];
@@ -3540,7 +3577,6 @@
     const sp = { goal: rec.goal }, words = rec.words, wpm = rec.wpm;
     if (prevBest == null) prevBest = S.project.stats.sprints.filter(x => x !== rec).reduce((a, x) => Math.max(a, x.wpm || 0), 0);
     const recs = plan && plan.recs.length > 1 ? plan.recs : [rec];
-    if (document.body.classList.contains('writer')) await setWriter(false);
     const goalLine = sp.goal && recs.length === 1 ? (words >= sp.goal ? `Goal of ${fmt(sp.goal)} words reached!` : `${fmt(sp.goal - words)} words short of your ${fmt(sp.goal)} goal.`) : '';
     const best = wpm > prevBest && S.project.stats.sprints.length > 1 ? 'New personal best speed!' : `Best so far: ${prevBest || wpm} wpm`;
     const tw = recs.reduce((a, r) => a + r.words, 0), tm = Math.round(recs.reduce((a, r) => a + r.minutes, 0) * 10) / 10, twpm = tm ? Math.round(tw / tm * 10) / 10 : 0;
@@ -3565,7 +3601,7 @@
     if (v === 'all') window.UnwipSprints.open();
     editor.focus();
   }
-  $('#btn-sprint').onclick = startSprintDialog;
+  $('#btn-sprint').onclick = () => S.sprintDone ? showPendingSprint() : startSprintDialog();
   $('#btn-sprint').addEventListener('mousedown', e => e.preventDefault());
 
   // ================================================================== GOALS, DIALS & HISTORY

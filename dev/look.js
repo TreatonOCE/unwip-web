@@ -122,7 +122,33 @@ window.UnwipLook = (function () {
       z.innerHTML = '<button class="st-btn" type="button" id="st-zoom-out" title="Smaller page (Ctrl+Alt+−)" aria-label="Smaller page">−</button><button class="st-btn" type="button" id="st-zoom" title="Page size: only the writing page, not the toolbars. Click for 100%">100%</button><button class="st-btn" type="button" id="st-zoom-in" title="Bigger page (Ctrl+Alt+=)" aria-label="Bigger page">+</button>';
       sp.after(z);
       z.querySelector('#st-zoom-out').onclick = () => pageZoom(-1); z.querySelector('#st-zoom-in').onclick = () => pageZoom(1); z.querySelector('#st-zoom').onclick = () => pageZoom(0);
+      // Writer mode strip (like Scrivener's composition controls): the status bar slides up when the mouse nears the
+      // bottom edge, with page size, typewriter, fade and Exit. These buttons never take the cursor out of the page.
+      const w = document.createElement('span'); w.className = 'st-writer';
+      w.innerHTML = '<button class="st-btn" type="button" id="st-tw" title="Typewriter scrolling: keep the line you’re typing on still"></button><button class="st-btn" type="button" id="st-fade" title="Fade everything except the paragraph or sentence you’re in. Click to change"></button><button class="st-btn st-wexit" type="button" id="st-wexit" title="Back to the full layout (Esc)">Exit writer mode</button>';
+      z.after(w);
+      sb.addEventListener('mousedown', e => { if (inWriter() && e.target.closest('.st-zoomer, .st-writer')) e.preventDefault(); });
+      w.querySelector('#st-tw').onclick = () => { setTyping({ tw: typewriterActive() ? 'off' : 'writer' }); if (typewriterActive()) try { U.typewriterScroll(true); } catch {} };
+      w.querySelector('#st-fade').onclick = () => { const n = { off: 'paragraph', paragraph: 'sentence', sentence: 'off' }[typing.focus] || 'off'; setTyping({ focus: n, focusWhere: typing.focusWhere === 'always' ? 'always' : 'writer' }); };
+      w.querySelector('#st-wexit').onclick = () => U.setWriter(false);
+      let peek = 0;
+      document.addEventListener('mousemove', e => {
+        if (!inWriter()) return;
+        const near = e.clientY > innerHeight - 56;
+        if (near) { clearTimeout(peek); sb.classList.add('peek'); }
+        else if (sb.classList.contains('peek') && !sb.matches(':hover')) { clearTimeout(peek); peek = setTimeout(() => sb.classList.remove('peek'), 600); }
+      }, { passive: true });
+      document.addEventListener('keydown', () => { if (sb.classList.contains('peek') && !sb.contains(document.activeElement)) sb.classList.remove('peek'); }, true);
+      U.on && U.on('writer', on => { sb.classList.remove('peek'); if (on) stripLabels(); });
     } }
+  function stripLabels() {
+    const a = document.getElementById('st-tw'), b = document.getElementById('st-fade'); if (!a || !b) return;
+    const tw = typing.tw === 'always' || typing.tw === 'writer';
+    a.textContent = 'Typewriter: ' + (tw ? 'on' : 'off'); a.classList.toggle('on', tw);
+    const f = typing.focus || 'off'; b.textContent = 'Fade: ' + (f === 'off' ? 'off' : f); b.classList.toggle('on', f !== 'off');
+  }
+  // a change from the writer strip: saved like the Typewriter & animations window would save it
+  function setTyping(patch) { typing = { ...typing, ...patch }; save('unwip-typing', typing); try { placeCaret(); updateFocus(); } catch {} stripLabels(); }
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyLook());
   applyLook();
 
@@ -543,7 +569,7 @@ window.UnwipLook = (function () {
     document.removeEventListener('selectionchange', selWatch);
     const tc = document.querySelector('.ty-caret'); if (tc) tc.remove();
     typing = ok === 'reset' ? { ...DEF_TYPE } : ok ? d : before;
-    save('unwip-typing', typing); placeCaret(); updateFocus();
+    save('unwip-typing', typing); placeCaret(); updateFocus(); stripLabels();
   }
 
   // other writing areas (e.g. Play) get the same sounds and letter effects
@@ -557,6 +583,6 @@ window.UnwipLook = (function () {
     typewriterActive, caretRect, typewriterPosition: () => typing.twPos || 0.45, smoothScroll: () => typing.twSmooth,
     get typing() { return typing; }, get look() { return look; },
     // settings that arrived from another device (prefsync.js): read them again and show them
-    reload() { look = load('unwip-look', DEF_LOOK); typing = load('unwip-typing', DEF_TYPE); applyLook(); try { placeCaret(); updateFocus(); } catch {} }
+    reload() { look = load('unwip-look', DEF_LOOK); typing = load('unwip-typing', DEF_TYPE); applyLook(); try { placeCaret(); updateFocus(); stripLabels(); } catch {} }
   };
 })();
