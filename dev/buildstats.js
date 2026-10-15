@@ -1,4 +1,4 @@
-// Unwip - Build › Character sheet (LitRPG status screen). A character's class, stats and how they grow each level, an
+// Unwip - Build › Stat system (LitRPG status screen). A character's class, stats and how they grow each level, an
 // XP curve (how much experience each level takes), and a status screen at any level, as a picture or as
 // [bracketed] lines for the book, which the LitRPG ledger then follows chapter by chapter.
 (function () {

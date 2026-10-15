@@ -13,14 +13,14 @@ window.UnwipBuild = (function () {
     runes: { icon: 'ᚱ', name: 'Rune alphabet', plural: 'Rune alphabets', blurb: 'Draw runes on a dot grid, then write words, names and inscriptions in them.' },
     sigil: { icon: '✴️', name: 'Sigil', plural: 'Sigils', blurb: 'Draw in one slice and it repeats around the circle. Add a ring of runes.' },
     arms: { icon: '🛡️', name: 'Coat of arms', plural: 'Coats of arms', blurb: 'Shield, colours, symbols and a motto, with the herald’s description written for you.' },
-    stats: { icon: '📊', name: 'Character sheet', plural: 'Character sheets', blurb: 'LitRPG stats and how they grow each level, an XP curve, and a status screen at any level.' },
+    stats: { icon: '📊', name: 'Stat system', plural: 'Stat systems', blurb: 'LitRPG stats and how they grow each level, an XP curve, and a status screen at any level.' },
     insignia: { icon: '⬢', name: 'Insignia', plural: 'Insignia', blurb: 'Emblems for corporations, gangs and units: a hard frame, a line symbol, flat colours and a name.' }
   };
   const ORDER = ['map', 'magic', 'runes', 'sigil', 'arms', 'insignia', 'stats'];
   // new magic systems, rune alphabets, sigils and insignia are offered at the Lore level; ones you already made always show
   const LORE_KINDS = new Set(['magic', 'runes', 'sigil', 'insignia']);
   const NEW_ORDER = () => ORDER.filter(k => !LORE_KINDS.has(k) || !U.level || U.level() >= 2);
-  // the main screen's Build tab has maps, coats of arms and character sheets; at Lore, the Open World tab has the
+  // the main screen's Build tab has maps, coats of arms and stat systems; at Lore, the Open World tab has the
   // deep-end pieces (magic, runes, sigils, insignia). Below Lore, ones you already made still show in Build.
   let scope = 'build';
   const inScope = k => scope === 'world' ? LORE_KINDS.has(k) : (!LORE_KINDS.has(k) || !U.level || U.level() < 2);
@@ -91,7 +91,7 @@ window.UnwipBuild = (function () {
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const world = scope === 'world';
     box.innerHTML = `
-      <div class="pl-head"><div><h1>${world ? 'Open World' : 'Build'}</h1><p>${world ? 'The deep end of your world: magic systems, rune alphabets, sigils and insignia. Like everything in Build, they belong to the world, not one book, so any book can use them.' : 'The pieces of your world: maps, coats of arms and character sheets. They belong to the world, not one book, so any book can use them.' + (U.level && U.level() >= 2 ? ' Magic, runes, sigils and insignia are in Open World.' : '')}</p></div></div>
+      <div class="pl-head"><div><h1>${world ? 'Open World' : 'Build'}</h1><p>${world ? 'The deep end of your world: magic systems, rune alphabets, sigils and insignia. Like everything in Build, they belong to the world, not one book, so any book can use them.' : 'The pieces of your world: maps, coats of arms and stat systems. They belong to the world, not one book, so any book can use them.' + (U.level && U.level() >= 2 ? ' Magic, runes, sigils and insignia are in Open World.' : '')}</p></div></div>
       <div class="pl-tools bd-tools">${NEW_ORDER().filter(inScope).map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}</div>
       ${items.some(x => inScope(x.kind)) ? ORDER.filter(k => inScope(k) && by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
         <div class="bd-grid">${by(k).map(x => `<div class="bd-card" data-id="${x.id}" tabindex="0">
@@ -145,7 +145,7 @@ window.UnwipBuild = (function () {
   let ret = null;
   const screen = $('#build-screen'), top = $('#bd-top'), main = $('#bd-main');
   // Phones: the picture (or the drawing area) stays pinned at the top while the options scroll under it (style.css,
-  // "Build on a phone"). Coats of arms and character sheets get smaller once you scroll down (tap a character sheet's picture to see it full size again) and stops
+  // "Build on a phone"). Coats of arms and stat systems get smaller once you scroll down (tap a stat system's picture to see it full size again) and stops
   // being pinned while you type, so the keyboard can't push the field you're typing in underneath it.
   let pinSmall = false, openAt = null;
   const pinReset = () => { pinSmall = false; openAt = null; main.classList.remove('pin-small', 'pin-open', 'pin-hide'); };
@@ -258,7 +258,7 @@ window.UnwipBuild = (function () {
     const canWin = !!api.buildWindow;
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const body = document.createElement('div'); body.className = 'bd-pick';
-    body.innerHTML = `<p class="hint">Your world’s maps, magic, runes, sigils, coats of arms, insignia and character sheets. ${canWin ? 'Each opens in its own window, so you can keep it beside your chapter. (↩ opens it in this window instead.)' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
+    body.innerHTML = `<p class="hint">Your world’s maps, magic, runes, sigils, coats of arms, insignia and stat systems. ${canWin ? 'Each opens in its own window, so you can keep it beside your chapter. (↩ opens it in this window instead.)' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
       ${items.length ? ORDER.filter(k => by(k).length).map(k => `<h4>${KINDS[k].plural}</h4><div class="bd-pick-list">${by(k).map(x => `<div class="bd-pick-row" data-id="${x.id}">
           <button type="button" class="bd-pick-open" data-open="${x.id}"><span class="bd-pick-th">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : KINDS[k].icon}</span><span><b>${esc(x.title || 'Untitled')}</b><small>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</small></span></button>
           ${canWin ? `<button type="button" class="icon-btn bd-pick-win" data-here="${x.id}" title="Open it in this window instead, over the chapter">↩</button>` : ''}</div>`).join('')}</div>`).join('') : '<p class="lib-empty">Nothing built yet.</p>'}

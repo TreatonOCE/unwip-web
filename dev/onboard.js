@@ -373,7 +373,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     ['#btn-new', 'New', 'Add a scene, chapter, folder or map, or a template section like Factions, Magic or Monsters where every entry starts from the same sheet.'],
     ['#btn-cmdk', 'Go to or do', 'Press Ctrl+K (or this button) and type what you want: “snapshot”, “epub”, “timeline”, a chapter or a character. Every feature is in there, at every level. To find words in your book, use the magnifying glass at the bottom left.'],
     ['#btn-stuck', 'Spark and Sprints', 'Spark has six small tools for a blank page or a slow day. Sprint, next to it, is a timed burst of writing with a word target.'],
-    ['#btn-build-book', 'Build', 'Maps, magic systems, rune alphabets, sigils, coats of arms, insignia and LitRPG character sheets, open beside your chapter. Anything you make can go straight into the book.',
+    ['#btn-build-book', 'Build', 'Maps, magic systems, rune alphabets, sigils, coats of arms, insignia and LitRPG stat systems, open beside your chapter. Anything you make can go straight into the book.',
       null, 'Try a map: paint the land yourself, or roll a random world, town or dungeon floor to start from.'],
     ['#btn-revise', 'Revise', 'Highlights repeated words, adverbs, long sentences and filler for you to look at, without AI. It never changes anything by itself.',
       { hemingway: 'This is the readability checker, without any AI.' }],
@@ -389,7 +389,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     ['#lib-tabs [data-tab="write"]|#project-grid', 'Your books', 'Every book, today’s words and your goal. Import… brings in a Scrivener project, a Word file or a folder of chapters.', null, null, { lib: 'write' }],
     ['#lib-mode', 'Levels', 'Focus is just your books. Detail unlocks Play and Build here, and planning tools inside a book. Lore adds character sheets and the Open World tab. Switching never changes your books.', null, null, { lib: 'write' }],
     ['#lib-tabs [data-tab="play"]', 'Play', 'Warm-ups, story dice, a style mimic, and exercises with rules Unwip checks as you write (no adverbs, only dialogue…). Nothing here touches your books.', null, null, { lib: 'play' }],
-    ['#lib-tabs [data-tab="build"]', 'Build', 'Everything you build lives here, for all your books: maps, coats of arms and character sheets. Link any of them into any book.', null, null, { lib: 'build' }],
+    ['#lib-tabs [data-tab="build"]', 'Build', 'Everything you build lives here, for all your books: maps, coats of arms and stat systems. Link any of them into any book.', null, null, { lib: 'build' }],
     ['#lib-tabs [data-tab="world"]', 'Open World', 'The deep end, at the Lore level: magic systems, rune alphabets, sigils and insignia, for all your books.', null, null, { lib: 'world' }],
     ['#library .dbx-pill', 'Sync', 'Connect Dropbox to have the same books on your PC, Mac, iPhone and iPad. Changes go both ways, and nothing is saved over: if two devices change the same chapter, both versions are kept.', null, null, { lib: 'write' }]
   ];
