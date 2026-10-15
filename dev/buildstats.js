@@ -86,13 +86,13 @@
           <div class="bs-levels"><table><thead><tr><th>Level</th><th>XP to next</th><th>Total XP</th>${[...d.res, ...d.stats].slice(0, 6).map(s => `<th>${esc(s.name)}</th>`).join('')}</tr></thead><tbody>${levels.map(l => `<tr class="${l === L ? 'on' : ''}" data-level="${l}"><td>${l}</td><td>${fmt(xpFor(d, l))}</td><td>${fmt(totalTo(d, l))}</td>${[...d.res, ...d.stats].slice(0, 6).map(s => `<td>${fmt(at(s, l))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
         <section class="bm-card"><h2>Notes</h2><textarea data-d="notes" rows="3" placeholder="Where they’re at in the story, stat caps, what each stat does…">${esc(d.notes || '')}</textarea></section>
       </div>
-      <div class="bs-right"><section class="bm-card bs-stick"><h2>Status screen</h2>
+      <div class="bs-right"><div class="bs-stick"><section class="bm-card bs-pin"><h2>Status screen</h2>
         <label class="bs-lv">Show at level <input type="range" data-d="show" min="1" max="${d.maxLevel}" value="${L}"><b>${L}</b></label>
-        <div class="bs-shot" id="bs-shot"></div>
-        <div class="chip-row">${Object.entries(LOOKS).map(([k, v]) => `<button type="button" class="chip ${d.look === k ? 'on' : ''}" data-look="${k}">${v.name}</button>`).join('')}</div>
-        <p class="bm-help" style="margin-top:12px">For the book, as system messages (the LitRPG ledger follows these):</p>
+        <div class="bs-shot" id="bs-shot"></div></section>
+        <section class="bm-card bs-more">        <div class="chip-row">${Object.entries(LOOKS).map(([k, v]) => `<button type="button" class="chip ${d.look === k ? 'on' : ''}" data-look="${k}">${v.name}</button>`).join('')}</div>
+        <p class="bm-help">For the book, as system messages (the LitRPG ledger follows these):</p>
         <pre class="bs-lines" id="bs-lines"></pre>
-        <div class="bs-acts"><button class="btn small" id="bs-copy">Copy these lines</button></div></section></div>
+        <div class="bs-acts"><button class="btn small" id="bs-copy">Copy these lines</button></div></section></div></div>
     </div>`;
     shot();
   }

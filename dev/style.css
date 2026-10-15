@@ -3082,3 +3082,32 @@ html.m-kb-open .modal { max-height: calc(var(--vv-h, 100vh) - 16px) !important; 
   .mp-top .mp-sp { display: none; }
   .mp-top #mp-done { position: sticky; right: 0; box-shadow: -10px 0 10px var(--bg); }   /* always in reach while the row scrolls */
 }
+
+/* ---- Build on a phone: the picture stays pinned at the top while the options scroll (build.js: pin-small when
+   scrolled down, pin-open after tapping a small picture, pin-hide while typing). Desktop layouts are untouched. */
+@media (max-width: 720px) {
+  .bd-main .ar-show, .bd-main .in-left, .bd-main .bs-pin, .bd-main .br-pinbox { position: sticky; top: 0; z-index: 4; }
+  .bd-main .in-left { background: var(--bg); padding: 4px 0 8px; box-shadow: 0 8px 10px -10px rgba(0,0,0,.4); }
+  .bd-main .bs-right, .bd-main .bs-stick { display: contents; }
+  .bd-main .bs-pin { order: -1; box-shadow: 0 8px 10px -10px rgba(0,0,0,.4); }
+  .bd-main .br-edit, .bd-main .sg-edit { display: contents; }
+  .bd-main .br-pinbox { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 10px -10px rgba(0,0,0,.4); }
+  .bd-main .br-edit > .br-hint, .bd-main .sg-edit > .br-hint { margin: 0 4px; }
+  .bd-main .in-shot img { max-height: 34vh; width: auto; max-width: 100%; }
+  .bd-main .bs-shot img { max-height: 30vh; width: auto; max-width: 100%; margin: 0 auto 6px; }
+  .bd-main .sg-stage svg { width: min(100%, 42vh); }
+  .bd-main .br-svg { max-height: 34vh; }
+  /* scrolled down: smaller */
+  .bd-main.pin-small:not(.pin-open) .ar-shield { height: 20vh; }
+  .bd-main.pin-small:not(.pin-open) .ar-blazon, .bd-main.pin-small:not(.pin-open) .ar-warn, .bd-main.pin-small:not(.pin-open) .in-left .bm-help { display: none; }
+  .bd-main.pin-small:not(.pin-open) .ar-show { padding: 8px; }
+  .bd-main.pin-small:not(.pin-open) .in-shot img { max-height: 18vh; }
+  .bd-main.pin-small:not(.pin-open) .bs-shot img { max-height: 17vh; }
+  .bd-main.pin-small:not(.pin-open) .bs-pin h2 { display: none; }
+  .bd-main.pin-small:not(.pin-open) .sg-stage svg { width: min(100%, 26vh); }
+  .bd-main.pin-small:not(.pin-open) .br-svg { max-height: 24vh; }
+  /* typing: not pinned, so the keyboard can't hide the field under the picture */
+  .bd-main.pin-hide .ar-show, .bd-main.pin-hide .in-left, .bd-main.pin-hide .bs-pin, .bd-main.pin-hide .br-pinbox { position: static; }
+}
+.bs-stick > .bm-card + .bm-card { margin-top: 14px; }
+

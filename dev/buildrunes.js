@@ -143,9 +143,9 @@
       <aside class="br-list"><div class="br-tiles" id="br-tiles"></div>
         <div class="br-list-acts"><button class="btn small" id="br-add">+ Rune</button><button class="btn small ghost" id="br-az" title="Make a rune for every letter A to Z that doesn’t have one yet">Fill A–Z</button></div></aside>
       <section class="br-edit">
-        <div class="br-tools"><div class="chip-row" id="br-mode">${[['line', 'Line'], ['curve', 'Curve'], ['rub', 'Rub out']].map(([v, l]) => `<button type="button" class="chip ${mode === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
+        <div class="br-pinbox"><div class="br-tools"><div class="chip-row" id="br-mode">${[['line', 'Line'], ['curve', 'Curve'], ['rub', 'Rub out']].map(([v, l]) => `<button type="button" class="chip ${mode === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
           <span class="mp-sp"></span><button class="btn small ghost" id="br-undo" title="Undo">↶</button><button class="btn small ghost" id="br-clear">Clear</button><button class="btn small" id="br-rand" title="Roll a random rune to start from, made by dice-style rules, not AI">🎲 Random</button></div>
-        <div class="br-stage"><svg id="br-svg" class="br-svg"></svg></div>
+        <div class="br-stage"><svg id="br-svg" class="br-svg"></svg></div></div>
         <p class="br-hint">Drag from dot to dot to draw a stroke. Tap a dot for a single mark. In Curve, tap a stroke to bend it the other way (with System ends, Curve gives a trace a 45° bend). In Rub out, tap a stroke to remove it.</p>
         <div class="br-fields"><div class="field"><label>Letter or sound</label><input id="br-key" maxlength="4" placeholder="a, th, sh…"></div>
           <div class="field"><label>Name</label><input id="br-name" placeholder="e.g. Ansuz"></div>
@@ -440,9 +440,9 @@
     sgAlpha = alphas.find(a => a.id === sg.ring.alpha) || null;
     box.innerHTML = `<div class="sg-wrap">
       <section class="sg-edit">
-        <div class="br-tools"><div class="chip-row" id="sg-tool">${[['pen', 'Pen'], ['line', 'Line'], ['circle', 'Circle'], ['dot', 'Dot'], ['move', 'Move'], ['rub', 'Rub out']].map(([v, l]) => `<button type="button" class="chip ${sgTool === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
+        <div class="br-pinbox"><div class="br-tools"><div class="chip-row" id="sg-tool">${[['pen', 'Pen'], ['line', 'Line'], ['circle', 'Circle'], ['dot', 'Dot'], ['move', 'Move'], ['rub', 'Rub out']].map(([v, l]) => `<button type="button" class="chip ${sgTool === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
           <span class="mp-sp"></span><button class="btn small ghost" id="sg-undo" title="Undo">↶</button><button class="btn small ghost" id="sg-clear">Clear</button>${window.UnwipSymbols ? '<button class="btn small" id="sg-addsym" title="Add an animal, object or numeral">+ Symbol</button>' : ''}<button class="btn small" id="sg-rand" title="Roll a random sigil to start from (dice-style rules, not AI)">🎲 Random</button></div>
-        <div class="sg-stage" id="sg-stage"></div>
+        <div class="sg-stage" id="sg-stage"></div></div>
         <p class="br-hint">Draw anywhere: it repeats around the circle. The faint marks show where each copy will land. A dot goes down when you let go, so you can slide it into place first. Move drags symbols. In Rub out, tap a line or symbol to remove it.</p>
       </section>
       <aside class="br-side">

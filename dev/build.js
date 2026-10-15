@@ -134,6 +134,20 @@ window.UnwipBuild = (function () {
   // 'window' (its own window on the PC/Mac, next to the book: Done closes the window)
   let ret = null;
   const screen = $('#build-screen'), top = $('#bd-top'), main = $('#bd-main');
+  // Phones: the picture (or the drawing area) stays pinned at the top while the options scroll under it (style.css,
+  // "Build on a phone"). It gets smaller once you scroll down (tap the picture to see it full size again) and stops
+  // being pinned while you type, so the keyboard can't push the field you're typing in underneath it.
+  let pinSmall = false, openAt = null;
+  const pinReset = () => { pinSmall = false; openAt = null; main.classList.remove('pin-small', 'pin-open', 'pin-hide'); };
+  main.addEventListener('scroll', () => {
+    const y = main.scrollTop, s = pinSmall ? y > 40 : y > 160;   // two thresholds, so it can't flicker at the edge
+    if (s !== pinSmall) { pinSmall = s; main.classList.toggle('pin-small', s); }
+    if (openAt !== null && Math.abs(y - openAt) > 80) { openAt = null; main.classList.remove('pin-open'); }
+  }, { passive: true });
+  const typing = el => el && el.matches && el.matches('input:not([type]), input[type=text], input[type=search], input[type=number], textarea, [contenteditable="true"]');
+  main.addEventListener('focusin', e => { if (typing(e.target)) main.classList.add('pin-hide'); });
+  main.addEventListener('focusout', e => { if (typing(e.target)) main.classList.remove('pin-hide'); });
+  main.addEventListener('click', e => { if (pinSmall && e.target.closest('.in-shot, .bs-shot')) { openAt = main.scrollTop; main.classList.add('pin-open'); } });
   function show(on) {
     if (ret === 'book') $('#workspace').classList.toggle('hidden', on);
     else if (ret === 'window') { $('#library').classList.add('hidden'); $('#workspace').classList.add('hidden'); }
@@ -161,6 +175,7 @@ window.UnwipBuild = (function () {
   async function saveNow() { clearTimeout(saveT); saveT = null; if (!cur) return; await put(cur); saved('Saved'); }
   async function open(id, from) {
     await loadFonts();
+    pinReset();
     const it = await get(id); if (!it) { U.toast('Couldn’t open that.', 'warn'); if (!ret && !from) render(); return; }
     await close(true);
     if (from !== undefined) ret = from || null;
