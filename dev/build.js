@@ -253,16 +253,19 @@ window.UnwipBuild = (function () {
   // ================================================================== FROM INSIDE A BOOK
   // Build without leaving the chapter: pick a piece (or start a new one) and it opens over the book; "Back to the book"
   // returns to the same place. On a PC or Mac it can open in its own window instead, to keep beside the chapter.
-  async function fromBook() {
+  async function fromBook(sc) {
     await refresh();
-    const canWin = !!api.buildWindow;
-    const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    const canWin = !!api.buildWindow, world = sc === 'world' && U.level && U.level() >= 2;
+    // same split as the main screen: at Lore, magic, runes, sigils and insignia are under Open World, not Build
+    const want = k => world ? LORE_KINDS.has(k) : (!LORE_KINDS.has(k) || !U.level || U.level() < 2);
+    const by = k => items.filter(x => x.kind === k && want(k)).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    const any = ORDER.some(k => by(k).length);
     const body = document.createElement('div'); body.className = 'bd-pick';
-    body.innerHTML = `<p class="hint">Your world’s maps, magic, runes, sigils, coats of arms, insignia and stat systems. ${canWin ? 'Each opens in its own window, so you can keep it beside your chapter. (↩ opens it in this window instead.)' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
-      ${items.length ? ORDER.filter(k => by(k).length).map(k => `<h4>${KINDS[k].plural}</h4><div class="bd-pick-list">${by(k).map(x => `<div class="bd-pick-row" data-id="${x.id}">
+    body.innerHTML = `<p class="hint">${world ? 'Your world’s magic systems, rune alphabets, sigils and insignia.' : (U.level && U.level() >= 2 ? 'Your world’s maps, coats of arms and stat systems.' : 'Your world’s maps, magic, runes, sigils, coats of arms, insignia and stat systems.')} ${canWin ? 'Each opens in its own window, so you can keep it beside your chapter. (↩ opens it in this window instead.)' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
+      ${any ? ORDER.filter(k => by(k).length).map(k => `<h4>${KINDS[k].plural}</h4><div class="bd-pick-list">${by(k).map(x => `<div class="bd-pick-row" data-id="${x.id}">
           <button type="button" class="bd-pick-open" data-open="${x.id}"><span class="bd-pick-th">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : KINDS[k].icon}</span><span><b>${esc(x.title || 'Untitled')}</b><small>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</small></span></button>
           ${canWin ? `<button type="button" class="icon-btn bd-pick-win" data-here="${x.id}" title="Open it in this window instead, over the chapter">↩</button>` : ''}</div>`).join('')}</div>`).join('') : '<p class="lib-empty">Nothing built yet.</p>'}
-      <h4>Start something new</h4><div class="bd-pick-new">${NEW_ORDER().map(k => `<button type="button" class="btn small" data-new="${k}">${KINDS[k].icon} ${esc(KINDS[k].name)}</button>`).join('')}</div>`;
+      <h4>Start something new</h4><div class="bd-pick-new">${NEW_ORDER().filter(want).map(k => `<button type="button" class="btn small" data-new="${k}">${KINDS[k].icon} ${esc(KINDS[k].name)}</button>`).join('')}</div>`;
     let go = null, close2 = () => {};
     body.addEventListener('click', e => {
       const o = e.target.closest('[data-open]'), h = e.target.closest('[data-here]'), n = e.target.closest('[data-new]');
@@ -273,7 +276,7 @@ window.UnwipBuild = (function () {
       else return;
       close2();
     });
-    await U.modal({ title: 'Build', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }], onOpen: back => { close2 = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });
+    await U.modal({ title: world ? 'Open World' : 'Build', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }], onOpen: back => { close2 = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });
     if (go) await go();
   }
   async function createFrom(kind) {

@@ -11,6 +11,8 @@ window.UnwipCommand = (function () {
   const side = tab => () => window.UnwipSide && window.UnwipSide.open(tab);
   // on a phone some bigger tools stay on the iPad and computer (like Scrivener's iPhone app)
   const desk = avail => () => !document.documentElement.classList.contains('m-phone') && avail();
+  // Lore needs a bigger screen: phones go up to Detail (app.js level() caps there too)
+  const roomy = avail => () => !window.matchMedia('(max-width: 720px)').matches && avail();
 
   // [label, extra words people might type, shortcut, run, available?]
   const ACTIONS = () => [
@@ -49,7 +51,7 @@ window.UnwipCommand = (function () {
     ['LitRPG ledger: stats, skills and items', 'litrpg gamelit stats stat sheet level skills items quests titles system messages drift check', '', () => window.UnwipLedger && window.UnwipLedger.open(), inProject],
     ['Interview a character', 'character interview questions voice spark stuck notes villain love interest backstory', '', () => window.UnwipStuck && window.UnwipStuck.open('interview'), inProject],
     ['My interview questions (write your own)', 'interview questions customise customize edit my own character villain love interest', '', () => window.UnwipStuck && window.UnwipStuck.editInterview(), () => true],
-    ['Character sheet', 'character sheet gear equipment slots inventory stats skills lore litrpg rpg', '', () => { const U2 = window.__unwip; if (U2.level() < 2) U2.setMode('lore'); window.UnwipCharSheet && window.UnwipCharSheet.open(U2.S.docId); }, () => !!(S.project && S.docId && window.UnwipCharSheet && window.UnwipCharSheet.isChar(S.docId))],
+    ['Character sheet', 'character sheet gear equipment slots inventory stats skills lore litrpg rpg', '', () => { const U2 = window.__unwip; if (U2.level() < 2) U2.setMode('lore'); window.UnwipCharSheet && window.UnwipCharSheet.open(U2.S.docId); }, roomy(() => !!(S.project && S.docId && window.UnwipCharSheet && window.UnwipCharSheet.isChar(S.docId)))],
     ['Name ideas (name generator)', 'name generator names random character first middle last surname handle no ai', '', () => window.UnwipNames && window.UnwipNames.open(window.__unwip.S.docId ? { onUse: n => window.UnwipNames.useOnSheet(n), useLabel: 'Use on this sheet' } : {}), () => true],
     ['Continuity pass', 'continuity consistency scaling level stats changed rename retcon go through each check every place', '', () => window.UnwipContinuity && window.UnwipContinuity.open(), inProject],
     ['Split this chapter at the cursor', 'divide break', 'Ctrl+Shift+K', () => U.splitAtCursor(), needDoc],
@@ -62,7 +64,9 @@ window.UnwipCommand = (function () {
     ['Bring in chapters', 'import word docx google docs files', '', () => { const b = $('#btn-new'); if (b) b.click(); }, inProject],
     ['Focus level', 'focused mode simple calm less just write', '', () => U.setMode('focused'), inProject],
     ['Detail level', 'detailed mode more planning outline corkboard build', '', () => U.setMode('detailed'), inProject],
-    ['Lore level', 'lore unhinged deep end character sheets niche everything', '', () => U.setMode('lore'), inProject],
+    ['Character sheets (every character)', 'character sheets all characters gear lore list', '', () => { if (U.level() < 2) U.setMode('lore'); window.UnwipCharSheet && window.UnwipCharSheet.browse(); }, roomy(inProject)],
+    ['Open World: magic, runes, sigils and insignia', 'open world magic system rune runes sigil insignia emblem lore deep end', '', () => { if (U.level() < 2) U.setMode('lore'); window.UnwipBuild && window.UnwipBuild.fromBook('world'); }, roomy(inProject)],
+    ['Lore level', 'lore unhinged deep end character sheets niche everything', '', () => U.setMode('lore'), roomy(inProject)],
     ['Outline', 'plan synopsis list', '', detailed(() => U.setView('outline')), inProject],
     ['Corkboard', 'cards index plan', '', detailed(() => U.setView('cork')), desk(inProject)],
     ['Moodboard', 'images inspiration pictures', '', detailed(() => U.setView('mood')), desk(inProject)],

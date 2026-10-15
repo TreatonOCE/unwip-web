@@ -527,6 +527,10 @@ body.sprinting.writer .statusbar { opacity: .8; }
 .mode-switch button.on { background: var(--paper); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .plan-nav { display: none; padding: 6px 8px 4px; gap: 2px; flex-direction: column; border-bottom: 1px solid var(--line); }
 body.detailed .plan-nav { display: flex; }
+body.detailed .plan-lore { display: none; }
+body.lore .plan-lore { display: flex; }
+.plan-lore .pn-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--faint); font-weight: 600; padding: 4px 8px 2px; }
+html.m-phone .plan-lore { display: none !important; }
 .plan-nav button { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer; text-align: left; color: var(--text); }
 .plan-nav button span[data-icon] { display: inline-grid; color: var(--muted); }
 .plan-nav button svg { width: 16px; height: 16px; }
@@ -3276,3 +3280,12 @@ body.lore .selbar .sb-lore { display: contents; }
   .lib-head::after { content: ''; order: 2; flex-basis: 100%; }
 }
 .lib-total .lt-long { color: var(--muted); font-weight: 400; font-variant-numeric: normal; }
+
+/* Lore › Character sheets: every character in the book, one row each */
+.cs-browse { display: flex; flex-direction: column; gap: 6px; min-width: min(420px, 80vw); }
+.cs-br-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--text); cursor: pointer; text-align: left; font: inherit; }
+.cs-br-row:hover { border-color: var(--accent); }
+.cs-br-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-br-row small { color: var(--muted); }
+.cs-br-ic { display: inline-grid; color: var(--muted); }
+.cs-br-ic svg { width: 18px; height: 18px; }

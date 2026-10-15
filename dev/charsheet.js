@@ -65,7 +65,10 @@ window.UnwipCharSheet = (function () {
   }
 
   // ---- the sheet
+  // Lore stops at bigger screens: phones go up to Detail, so no way in (search, a link, Add to sheet) opens a sheet there
+  const tooSmall = () => { if (!window.matchMedia('(max-width: 720px)').matches) return false; U.toast('Character sheets are part of Lore, which needs an iPad or computer.'); return true; };
   async function open(id) {
+    if (tooSmall()) return;
     const f = id && U.findNode(id); if (!f || !isChar(id)) { U.toast('Open a character in the Characters folder first.'); return; }
     const node = f.node;
     await U.flushSave();
@@ -214,8 +217,21 @@ window.UnwipCharSheet = (function () {
     if (root) U.walkTree(root.children || [], n => { if (n.type === 'doc' && !n.map) out.push(n); });
     return out;
   }
+  // Lore › Character sheets in the left list: every character, with how much gear they carry, one click to their sheet
+  async function browse() {
+    if (!S.project || tooSmall()) return;
+    const chars = characters();
+    if (!chars.length) { U.toast('Add a character to your Characters folder first, then their sheet can hold gear.'); return; }
+    const body = document.createElement('div'); body.className = 'cs-browse';
+    body.innerHTML = chars.map(c => { const sh = sheetOf(c); const n = Object.values(sh.slots).reduce((a, l) => a + l.length, 0);
+      return `<button type="button" class="cs-br-row" data-id="${esc(c.id)}"><span class="cs-br-ic">${U.I ? U.I.person : ''}</span><b>${esc(c.title || 'Untitled')}</b><small>${n ? n + (n === 1 ? ' item' : ' items') : 'No gear yet'}</small></button>`; }).join('');
+    let pick = null, close2 = () => {};
+    body.addEventListener('click', e => { const r = e.target.closest('[data-id]'); if (r) { pick = r.dataset.id; close2(); } });
+    await U.modal({ title: 'Character sheets', body, buttons: [{ label: 'Close', value: false, kind: 'ghost' }], onOpen: back => { close2 = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });
+    if (pick) { await U.openDoc(pick); await open(pick); }
+  }
   async function addFrom(text) {
-    if (!S.project) return;
+    if (!S.project || tooSmall()) return;
     const chars = characters();
     if (!chars.length) { U.toast('Add a character to your Characters folder first, then their sheet can hold gear.'); return; }
     const chs = chapters(), here = chs.findIndex(c => c.id === S.docId);
@@ -245,5 +261,8 @@ window.UnwipCharSheet = (function () {
   const tellLevel = () => { try { U.api.setLevel && U.api.setLevel(U.level()); } catch {} };
   U.on('level', tellLevel); setTimeout(tellLevel, 0);
 
-  return { open, isChar, addFrom, cleanName };
+  document.querySelectorAll('#plan-lore [data-lore]').forEach(b => b.onclick = () => {
+    if (b.dataset.lore === 'sheets') browse(); else if (window.UnwipBuild) window.UnwipBuild.fromBook('world');
+  });
+  return { open, browse, isChar, addFrom, cleanName };
 })();

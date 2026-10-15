@@ -159,7 +159,7 @@
   <div class="main">
     <aside class="binder" id="binder">
       <div class="binder-head">
-        <div class="mode-switch" id="mode-switch" title="Focus: just write. Detail: adds planning, Build, synopses and status labels. Lore: adds character sheets and the deep-end tools. Nothing is lost when you switch.">
+        <div class="mode-switch" id="mode-switch" title="Focus: just write. Detail: adds planning, Build, synopses and status labels. Lore: adds Character sheets and Open World on the left. Nothing is lost when you switch.">
           <button data-m="focused">Focus</button><button data-m="detailed">Detail</button><button data-m="lore">Lore</button>
         </div>
       </div>
@@ -169,6 +169,12 @@
         <button data-v="cork"><span data-icon="cork"></span>Corkboard</button>
         <button data-v="mood"><span data-icon="mood"></span>Moodboard</button>
         <button data-v="timeline"><span data-icon="timeline"></span>Timeline</button>
+      </div>
+      <!-- Lore level only (never on a phone): every character sheet in this book, and the Open World pieces -->
+      <div class="plan-nav plan-lore" id="plan-lore">
+        <div class="pn-head">Lore</div>
+        <button data-lore="sheets"><span data-icon="person"></span>Character sheets</button>
+        <button data-lore="world"><span data-icon="gem"></span>Open World</button>
       </div>
       <div class="binder-scroll" id="binder-tree"></div>
       <div class="binder-foot">

@@ -365,7 +365,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
       'In the example, every diary entry and letter in Dracula is its own scene.'],
     ['#editor', 'The page', 'Just write. Unwip saves every few seconds, keeps backups, and cleans up anything you paste in.',
       { docs: 'Pasting from Google Docs keeps italics and bold but drops the clutter.', word: 'Pasting from Word keeps italics and bold but drops the clutter.', obsidian: 'No Markdown symbols here: Ctrl+I and Ctrl+B (or the buttons above) give italics and bold you can see, and they export cleanly.' }],
-    ['#mode-switch', 'Focus, Detail or Lore', 'Focus is a clean page. Detail adds the corkboard, outline, status labels, moodboard, timeline and Build. Lore adds character sheets.',
+    ['#mode-switch', 'Focus, Detail or Lore', 'Focus is a clean page. Detail adds the corkboard, outline, status labels, moodboard, timeline and Build. Lore adds Character sheets and Open World under the views on the left.',
       { scrivener: 'Detail is where the Corkboard, Outliner and labels live.' },
       'Try the Timeline in Detail: each of Dracula’s dated entries sits on its day.'],
     ['#btn-writer', 'Writer mode', 'Full screen, nothing but the page. Typewriter scrolling keeps your line in the middle.',
