@@ -384,6 +384,22 @@ window.UnwipLook = (function () {
     }, t.classList.contains('tip-q') ? 80 : 450);
   });
   document.addEventListener('mousedown', () => { clearTimeout(tipT); tipEl.classList.add('hidden'); }, true);
+  // tapping or clicking a "?" shows what it means (and doesn't tick or pick the setting it sits next to); tap it
+  // again, or anywhere else, to close it. Phones have no hover, so this is the only way they see these.
+  let tapShown = null;
+  document.addEventListener('click', e => {
+    const t = e.target.closest && e.target.closest('.tip-q'); if (!t) { tapShown = null; return; }
+    e.preventDefault(); e.stopPropagation();
+    if (tapShown === t) { tipEl.classList.add('hidden'); tapShown = null; return; }
+    clearTimeout(tipT); tapShown = t; tipFor = t;
+    tipEl.textContent = t.dataset.tip; tipEl.classList.remove('hidden');
+    const r = t.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+    let x = Math.min(window.innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2)), y = r.bottom + 8;
+    if (y + h > window.innerHeight - 8) y = r.top - h - 8;
+    tipEl.style.left = x + 'px'; tipEl.style.top = Math.max(8, y) + 'px';
+  }, true);
+  document.addEventListener('pointerdown', e => { if (tapShown && !(e.target.closest && e.target.closest('.tip-q'))) { tipEl.classList.add('hidden'); tapShown = null; } }, true);
+  document.addEventListener('scroll', () => { if (tapShown) { tipEl.classList.add('hidden'); tapShown = null; } }, true);
 
   // ================================================================== TYPING DIALOG
   async function openTyping() {
