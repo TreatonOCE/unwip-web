@@ -39,7 +39,9 @@ window.UnwipCharSheet = (function () {
   btn.title = 'Character sheet: gear, stats and skills, chapter by chapter';
   btn.innerHTML = svg(ICON.hand, 15) + '<span>Character sheet</span>';
   const anchor = $('#btn-sheet'); if (anchor) anchor.parentNode.insertBefore(btn, anchor);
-  function refreshBtn() { btn.classList.toggle('hidden', !(S.project && U.level() >= 2 && isChar(S.docId))); }
+  const phoneNow = () => document.documentElement.classList.contains('web') && window.matchMedia('(max-width: 720px)').matches;
+  const hasSheet = id => { const f = id && U.findNode(id); return !!(f && Object.keys(sheetOf(f.node).slots).length); };
+  function refreshBtn() { btn.classList.toggle('hidden', !(S.project && isChar(S.docId) && (phoneNow() ? hasSheet(S.docId) : U.level() >= 2))); }
   U.on('doc', () => setTimeout(refreshBtn, 0)); U.on('level', refreshBtn); U.on('project', () => setTimeout(refreshBtn, 0));
   btn.onclick = () => open(S.docId);
 
@@ -67,8 +69,11 @@ window.UnwipCharSheet = (function () {
   // ---- the sheet
   // Lore stops at bigger screens: phones go up to Detail, so no way in (search, a link, Add to sheet) opens a sheet there
   const tooSmall = () => { if (!window.matchMedia('(max-width: 720px)').matches) return false; U.toast('Character sheets are part of Lore, which needs an iPad or computer.'); return true; };
+  // On a phone a sheet filled in on a bigger screen opens view only: the timeline, stats, inventory and skills as
+  // usual, the gear as a list instead of slots round a figure, and nothing to change.
   async function open(id) {
-    if (tooSmall()) return;
+    const ro = phoneNow();
+    if (ro && !hasSheet(id)) { tooSmall(); return; }
     const f = id && U.findNode(id); if (!f || !isChar(id)) { U.toast('Open a character in the Characters folder first.'); return; }
     const node = f.node;
     await U.flushSave();
@@ -82,7 +87,7 @@ window.UnwipCharSheet = (function () {
     const ledgerNames = L ? [...new Set([...L.stats.map(s => s.who || ''), ...L.got.map(g => g.who || '')])] : [];
     const st = { tab: 'char', sel: 'main', ci: null, editing: null };
 
-    const save = () => { node.csheet = JSON.parse(JSON.stringify(sh)); U.scheduleMeta(); };
+    const save = () => { if (ro) return; node.csheet = JSON.parse(JSON.stringify(sh)); U.scheduleMeta(); };
     let sh = sheetOf(node);
 
     const whoNow = () => (sh.who !== undefined && sh.who !== null ? sh.who : matchWho(node.title, ledgerNames.filter(Boolean)) ?? (ledgerNames.length === 1 ? ledgerNames[0] : null));
@@ -126,7 +131,9 @@ window.UnwipCharSheet = (function () {
       const detail = editing ? editForm(editing, ci) : `<div class="cs-detail">${selE ? `<b>${esc(selE.name)}</b><span class="cs-rar r-${selE.rar || 'common'}">${esc(RNAME[selE.rar] || 'Common')}</span><span class="cs-note">${esc(selE.note || '')}${selE.note ? ' ' : ''}Since ${esc(at(selE.ch) >= 0 ? chName(at(selE.ch)) : 'the start')}.</span>` : `<b>${esc(sel[1])}</b><span class="cs-note">Empty at this point.</span>`}
           <span class="cs-sp"></span>${selE && at(selE.ch) >= 0 ? `<button type="button" class="link-btn" data-goch="${esc(selE.ch)}">Go to that chapter</button>` : ''}<button type="button" class="btn small" data-edit="${st.sel}">${selE ? 'Change…' : 'Add an item…'}</button></div>`;
       const items = m.got.filter(g => g.kind === 'item' && g.ch <= ci), skills = m.got.filter(g => SKILLISH.has(g.kind) && g.ch <= ci);
-      const tabBody = st.tab === 'char' ? `<div class="cs-grid"><div class="cs-frame"><div class="cs-pic">${fig}</div><div class="cs-figs">${[['f1', 'Figure 1'], ['f2', 'Figure 2'], ['own', 'Yours']].map(([k, l]) => `<button type="button" class="cs-fig ${sh.fig === k ? 'on' : ''}" data-fig="${k}">${l}</button>`).join('')}${sh.fig === 'own' && sh.img ? '<button type="button" class="cs-fig" data-clearimg>Remove</button>' : ''}</div></div>${slotHtml}</div>${detail}`
+      const gearList = () => { const g = SLOTS.map(([sid, label]) => ({ label, e: slotAt(sid, ci) })).filter(x => x.e);
+        return g.length ? `<div class="cs-rows cs-gear">${g.map(({ label, e }) => `<div class="cs-row"><span><small>${esc(label)}</small><b>${esc(e.name)}</b>${e.note ? `<small>${esc(e.note)}</small>` : ''}</span><span class="cs-rar r-${e.rar || 'common'}">${esc(RNAME[e.rar] || 'Common')}</span></div>`).join('')}</div>` : '<p class="hint">Nothing equipped at this chapter.</p>'; };
+      const tabBody = st.tab === 'char' && ro ? gearList() : st.tab === 'char' ? `<div class="cs-grid"><div class="cs-frame"><div class="cs-pic">${fig}</div><div class="cs-figs">${[['f1', 'Figure 1'], ['f2', 'Figure 2'], ['own', 'Yours']].map(([k, l]) => `<button type="button" class="cs-fig ${sh.fig === k ? 'on' : ''}" data-fig="${k}">${l}</button>`).join('')}${sh.fig === 'own' && sh.img ? '<button type="button" class="cs-fig" data-clearimg>Remove</button>' : ''}</div></div>${slotHtml}</div>${detail}`
         : st.tab === 'stats' ? (statTiles.length ? `<div class="cs-rows">${statTiles.map(x => `<div class="cs-row"><span>${esc(x.s.label)}</span><span><b>${fmtV(x.v)}</b>${x.p && x.p.v !== x.v.v ? ` <small>${x.v.v > x.p.v ? 'up' : 'down'} from ${fmtV(x.p)} since ${esc(chName(prevCi))}</small>` : ''}</span></div>`).join('')}</div>` : emptyStats(w))
         : st.tab === 'inv' ? (items.length ? `<div class="cs-rows">${items.map(g => `<div class="cs-row"><span>${esc(g.name)}</span><small>${esc(chName(g.ch))}</small></div>`).join('')}</div>` : `<p class="hint">No items yet at this chapter. Items come from messages like <b>[Item Obtained: Rusty Key]</b> in your chapters. Gear you put in a slot shows on the Character tab.</p>`)
         : (skills.length ? `<div class="cs-chips">${skills.map(g => `<span class="cs-chip">${esc(g.name)} <small>${esc(g.kind)}, ${esc(chName(g.ch))}</small></span>`).join('')}</div>` : `<p class="hint">No skills yet at this chapter. Skills come from messages like <b>[New Skill Acquired: Shadow Step]</b> in your chapters.</p>`);
@@ -141,7 +148,8 @@ window.UnwipCharSheet = (function () {
         <div class="cs-tabs" role="tablist">${[['char', 'Character'], ['stats', 'Stats'], ['inv', 'Inventory'], ['skills', 'Skills']].map(([k, l]) => `<button type="button" role="tab" class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
         <div class="cs-body">${tabBody}</div>
         ${statTiles.length ? `<div class="cs-tiles">${statTiles.slice(0, 6).map(x => `<div class="cs-tile"><span>${esc(x.s.label)}</span><b>${fmtV(x.v)}</b><small>${x.p && x.v.v > x.p.v ? '+' + U.fmt(x.v.v - x.p.v) : ''}</small></div>`).join('')}</div>` : ''}
-        <div class="cs-foot"><label>Stats from <select class="cs-who">${whoOptions(w)}</select></label><span class="hint">Read from the [system messages] in your chapters. Nothing in the book changes.</span></div>`;
+        ${ro ? `<div class="cs-foot"><span class="hint">View only on a phone. Change gear on an iPad or computer.${w !== null ? ` Stats from ${esc(w || 'the main character')}.` : ''}</span></div>`
+          : `<div class="cs-foot"><label>Stats from <select class="cs-who">${whoOptions(w)}</select></label><span class="hint">Read from the [system messages] in your chapters. Nothing in the book changes.</span></div>`}`;
       wire();
     }
     function whoOptions(w) {
@@ -201,7 +209,7 @@ window.UnwipCharSheet = (function () {
       return c.toDataURL('image/jpeg', 0.84);
     }
     render();
-    await U.modal({ title: 'Character sheet', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
+    await U.modal({ title: ro ? 'Character sheet (view only)' : 'Character sheet', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
   }
 
   // ---- "Add to a character sheet…": from selected words in a chapter (the selection bar, or right-click on PC/Mac).

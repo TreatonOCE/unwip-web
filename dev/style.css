@@ -3294,3 +3294,15 @@ body.lore .selbar .sb-lore { display: contents; }
 .bd-view { display: flex; flex-direction: column; gap: 10px; }
 .bd-view-pic { display: grid; place-items: center; min-height: 160px; background: var(--panel-2); border-radius: 8px; overflow: hidden; }
 .bd-view-pic img { display: block; width: 100%; height: auto; }
+
+/* character sheet, view only on a phone: gear as a list */
+.cs-gear .cs-row > span:first-child { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cs-gear .cs-row small { color: var(--muted); }
+
+/* phone: the timeline is one row under "Up to date" (‹ track ›), and the page's sheet buttons sit above the name
+   instead of on top of it */
+@media (max-width: 720px) {
+  .cs-when { flex-basis: 100%; }
+  .cs-track { flex: 1 1 0; min-width: 0; margin: 0 10px; }
+}
+html.m-phone .page-charsheet:not(.hidden), html.m-phone .page-sheet:not(.hidden) { position: static; display: inline-flex; margin: 0 8px 12px 0; vertical-align: middle; }
