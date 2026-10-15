@@ -323,7 +323,8 @@ window.UnwipSync = (function () {
           U.walkTree(S.project.binder, n => { const t = theirs.get(n.id); if (!t || n.root) return; if ((t.title || '') !== (n.title || '')) diffs.push({ n, key: 'title', mine: n.title || 'Untitled', other: t.title || 'Untitled' }); if ((t.synopsis || '') !== (n.synopsis || '')) diffs.push({ n, key: 'synopsis', mine: n.synopsis || '(none)', other: t.synopsis || '(none)' });
             // a character sheet slot changed at the same chapter on both devices: you choose which item it is
             const ms = n.csheet && n.csheet.slots, ts = t.csheet && t.csheet.slots;
-            if (ms && ts) for (const [sid, list] of Object.entries(ts)) for (const te of list || []) { const me = (ms[sid] || []).find(x => x.ch === te.ch); if (me && (me.name || '') !== (te.name || '')) diffs.push({ n, key: 'gear', sid, me, te, mine: me.name || '(nothing)', other: te.name || '(nothing)' }); } });
+            const arr = v => Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : [];   // sheets sync between versions: odd data is skipped, never trusted
+            if (ms && ts && typeof ms === 'object' && typeof ts === 'object') for (const [sid, list] of Object.entries(ts)) for (const te of arr(list)) { const me = arr(ms[sid]).find(x => x.ch === te.ch); if (me && (me.name || '') !== (te.name || '')) diffs.push({ n, key: 'gear', sid, me, te, mine: me.name || '(nothing)', other: te.name || '(nothing)' }); } });
           let changed = 0;
           if (diffs.length) {
             const box = document.createElement('div');
@@ -335,14 +336,16 @@ window.UnwipSync = (function () {
           // character sheets: gear added on the other device comes in (a slot's change at the same chapter keeps this one's)
           let sheetsIn = 0;
           U.walkTree(S.project.binder, n => {
-            const t = theirs.get(n.id); if (!t || !t.csheet || !t.csheet.slots) return;
-            if (!n.csheet) { n.csheet = JSON.parse(JSON.stringify(t.csheet)); sheetsIn++; return; }
-            n.csheet.slots = n.csheet.slots || {};
+            const t = theirs.get(n.id); if (!t || !t.csheet || !t.csheet.slots || typeof t.csheet.slots !== 'object') return;
+            if (!n.csheet || typeof n.csheet !== 'object') { n.csheet = JSON.parse(JSON.stringify(t.csheet)); sheetsIn++; return; }
+            if (!n.csheet.slots || typeof n.csheet.slots !== 'object') n.csheet.slots = {};
+            const arr = v => Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : [];
             for (const [sid, list] of Object.entries(t.csheet.slots)) {
-              const mine = n.csheet.slots[sid] || [], have = new Set(mine.map(x => x.ch));
-              const add = (list || []).filter(x => x && !have.has(x.ch));
+              const mine = arr(n.csheet.slots[sid]), have = new Set(mine.map(x => x.ch));
+              const add = arr(list).filter(x => !have.has(x.ch));
               if (add.length) { n.csheet.slots[sid] = mine.concat(JSON.parse(JSON.stringify(add))); sheetsIn += add.length; }
             }
+            if (!n.csheet.sys && typeof t.csheet.sys === 'string') n.csheet.sys = t.csheet.sys;   // the stat system it follows
             if (!n.csheet.img && t.csheet.img) { n.csheet.img = t.csheet.img; if (t.csheet.fig === 'own' && n.csheet.fig !== 'own') n.csheet.fig = 'own'; }
           });
           if (sheetsIn) changed += sheetsIn;

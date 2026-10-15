@@ -7,6 +7,7 @@
 //   img   the writer's own picture, shrunk to 520 px (a data URL), only when fig is 'own'
 //   who   whose stats to follow, as the ledger names them ('' = the main character); unset = matched by name
 //   slots each slot's history: from chapter `ch` (a chapter's id) the slot holds `name` (empty = nothing)
+//   sys   the Build › Stat system this character follows (its id), to compare the chapters' numbers against
 // Nothing here changes the chapters. Everything is in the book's own file, so it syncs and backs up with it.
 window.UnwipCharSheet = (function () {
   'use strict';
@@ -58,7 +59,8 @@ window.UnwipCharSheet = (function () {
       if (ok.length) slots[sid] = ok;
     }
     const img = typeof c.img === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(c.img) ? c.img : '';
-    return { fig: ['f1', 'f2', 'own'].includes(c.fig) ? c.fig : 'f1', img, who: typeof c.who === 'string' || c.who === null ? c.who : undefined, slots };
+    const sys = typeof c.sys === 'string' && /^[\w-]{1,64}$/.test(c.sys) ? c.sys : '';
+    return { sys, fig: ['f1', 'f2', 'own'].includes(c.fig) ? c.fig : 'f1', img, who: typeof c.who === 'string' || c.who === null ? c.who : undefined, slots };
   }
   // the ledger's name for this character: the one picked, else the one whose name matches the sheet's title
   function matchWho(title, names) {
@@ -86,6 +88,8 @@ window.UnwipCharSheet = (function () {
     const at = ch => (pos.has(ch) ? pos.get(ch) : -1);   // a chapter that's gone counts as "from the start"
     const ledgerNames = L ? [...new Set([...L.stats.map(s => s.who || ''), ...L.got.map(g => g.who || '')])] : [];
     const st = { tab: 'char', sel: 'main', ci: null, editing: null };
+    let systems = [];
+    try { systems = window.UnwipBuild ? (await window.UnwipBuild.all('stats')).filter(x => x && x.data) : []; } catch (e) { console.warn(e); }
 
     const save = () => { if (ro) return; node.csheet = JSON.parse(JSON.stringify(sh)); U.scheduleMeta(); };
     let sh = sheetOf(node);
@@ -108,6 +112,20 @@ window.UnwipCharSheet = (function () {
     const valueAt = (s, ci) => { let v = null; for (const x of s.values) if (x.ci <= ci) v = x; return v; };
     const slotAt = (sid, ci) => { let e = null; for (const x of (sh.slots[sid] || []).slice().sort((a, b) => at(a.ch) - at(b.ch))) if (Math.max(0, at(x.ch)) <= ci) e = x; return e && e.name ? e : null; };
     const chName = ci => (chs[ci] && chs[ci].title) || `Chapter ${ci + 1}`;
+    // the stat system's numbers at a level: each stat and bar is its level-1 value plus its growth per level
+    const sysNow = () => systems.find(x => x.id === sh.sys) || null;
+    function expected(sys, L) {
+      const d = sys.data || {}, val = s => Math.round((+s.base || 0) + (+s.per || 0) * (L - 1));
+      return [...(d.res || []), ...(d.stats || [])].filter(s => s && s.name).map(s => ({ key: keyOf(s.name), label: s.name, want: val(s) }));
+    }
+    // compare at chapter ci: the chapters' numbers (the bar's top for HP/MP) against what the system says for that level
+    function compare(ci, statTiles, lv) {
+      const sys = sysNow(); if (!sys || !lv) return null;
+      const L = Math.max(1, Math.round(+lv.v || 1)), have = new Map(statTiles.map(x => [keyOf(x.s.label), x.v]));
+      // a number written before the latest level line is from an earlier level: not compared (it would always look wrong)
+      const rows = expected(sys, L).map(e => { const v = have.get(e.key); const fresh = v && (v.order == null || lv.order == null || v.order >= lv.order); const got = fresh ? (v.max != null ? v.max : v.v) : null; return { ...e, got, stale: !!(v && !fresh), ok: got == null ? null : Math.round(+got) === e.want }; });
+      return { sys, L, rows, off: rows.filter(r => r.ok === false) };
+    }
 
     function render() {
       const SP = stops(), last = SP.length - 1;
@@ -134,7 +152,7 @@ window.UnwipCharSheet = (function () {
       const gearList = () => { const g = SLOTS.map(([sid, label]) => ({ label, e: slotAt(sid, ci) })).filter(x => x.e);
         return g.length ? `<div class="cs-rows cs-gear">${g.map(({ label, e }) => `<div class="cs-row"><span><small>${esc(label)}</small><b>${esc(e.name)}</b>${e.note ? `<small>${esc(e.note)}</small>` : ''}</span><span class="cs-rar r-${e.rar || 'common'}">${esc(RNAME[e.rar] || 'Common')}</span></div>`).join('')}</div>` : '<p class="hint">Nothing equipped at this chapter.</p>'; };
       const tabBody = st.tab === 'char' && ro ? gearList() : st.tab === 'char' ? `<div class="cs-grid"><div class="cs-frame"><div class="cs-pic">${fig}</div><div class="cs-figs">${[['f1', 'Figure 1'], ['f2', 'Figure 2'], ['own', 'Yours']].map(([k, l]) => `<button type="button" class="cs-fig ${sh.fig === k ? 'on' : ''}" data-fig="${k}">${l}</button>`).join('')}${sh.fig === 'own' && sh.img ? '<button type="button" class="cs-fig" data-clearimg>Remove</button>' : ''}</div></div>${slotHtml}</div>${detail}`
-        : st.tab === 'stats' ? (statTiles.length ? `<div class="cs-rows">${statTiles.map(x => `<div class="cs-row"><span>${esc(x.s.label)}</span><span><b>${fmtV(x.v)}</b>${x.p && x.p.v !== x.v.v ? ` <small>${x.v.v > x.p.v ? 'up' : 'down'} from ${fmtV(x.p)} since ${esc(chName(prevCi))}</small>` : ''}</span></div>`).join('')}</div>` : emptyStats(w))
+        : st.tab === 'stats' ? sysBox(ci, statTiles, lv) + (statTiles.length ? `<div class="cs-rows">${statTiles.map(x => `<div class="cs-row"><span>${esc(x.s.label)}</span><span><b>${fmtV(x.v)}</b>${x.p && x.p.v !== x.v.v ? ` <small>${x.v.v > x.p.v ? 'up' : 'down'} from ${fmtV(x.p)} since ${esc(chName(prevCi))}</small>` : ''}</span></div>`).join('')}</div>` : emptyStats(w))
         : st.tab === 'inv' ? (items.length ? `<div class="cs-rows">${items.map(g => `<div class="cs-row"><span>${esc(g.name)}</span><small>${esc(chName(g.ch))}</small></div>`).join('')}</div>` : `<p class="hint">No items yet at this chapter. Items come from messages like <b>[Item Obtained: Rusty Key]</b> in your chapters. Gear you put in a slot shows on the Character tab.</p>`)
         : (skills.length ? `<div class="cs-chips">${skills.map(g => `<span class="cs-chip">${esc(g.name)} <small>${esc(g.kind)}, ${esc(chName(g.ch))}</small></span>`).join('')}</div>` : `<p class="hint">No skills yet at this chapter. Skills come from messages like <b>[New Skill Acquired: Shadow Step]</b> in your chapters.</p>`);
       body.innerHTML = `
@@ -149,8 +167,21 @@ window.UnwipCharSheet = (function () {
         <div class="cs-body">${tabBody}</div>
         ${statTiles.length ? `<div class="cs-tiles">${statTiles.slice(0, 6).map(x => `<div class="cs-tile"><span>${esc(x.s.label)}</span><b>${fmtV(x.v)}</b><small>${x.p && x.v.v > x.p.v ? '+' + U.fmt(x.v.v - x.p.v) : ''}</small></div>`).join('')}</div>` : ''}
         ${ro ? `<div class="cs-foot"><span class="hint">View only on a phone. Change gear on an iPad or computer.${w !== null ? ` Stats from ${esc(w || 'the main character')}.` : ''}</span></div>`
-          : `<div class="cs-foot"><label>Stats from <select class="cs-who">${whoOptions(w)}</select></label><span class="hint">Read from the [system messages] in your chapters. Nothing in the book changes.</span></div>`}`;
+          : `<div class="cs-foot"><label>Stats from <select class="cs-who">${whoOptions(w)}</select></label><label>Stat system <select class="cs-sys"><option value="">None</option>${systems.map(x => `<option value="${esc(x.id)}" ${x.id === sh.sys ? 'selected' : ''}>${esc(x.title || 'Untitled')}</option>`).join('')}</select></label><span class="hint">Read from the [system messages] in your chapters. Nothing in the book changes.</span></div>`}`;
       wire();
+    }
+    // the Stats tab's check against a stat system: one line when all is well, the mismatches when not
+    function sysBox(ci, statTiles, lv) {
+      if (!sh.sys) return systems.length && !ro ? '<p class="hint cs-sys-tip">Pick a Stat system at the bottom to check these numbers against how the character should grow.</p>' : '';
+      const sys = sysNow();
+      if (!sys) return '<p class="hint cs-sys-tip">The stat system this sheet followed isn’t in Build any more.</p>';
+      if (!lv) return `<p class="hint cs-sys-tip">To check against <b>${esc(sys.title || 'the stat system')}</b>, a chapter needs a level line like <b>[Level: 5]</b>.</p>`;
+      const c = compare(ci, statTiles, lv);
+      const rows = c.rows.filter(r => r.ok !== null);
+      const head = c.off.length ? `<b>${c.off.length === 1 ? '1 number doesn’t' : c.off.length + ' numbers don’t'} match</b> ${esc(sys.title || 'the stat system')} at level ${U.fmt(c.L)}.`
+        : rows.length ? `Everything matches ${esc(sys.title || 'the stat system')} at level ${U.fmt(c.L)}.` : `None of ${esc(sys.title || 'the stat system')}’s stats are in the chapters yet.`;
+      const stale = c.rows.filter(r => r.stale).map(r => r.label);
+      return `<div class="cs-sys ${c.off.length ? 'off' : 'ok'}"><p>${head}${stale.length ? ` <span class="hint">Not checked (last given before this level): ${esc(stale.join(', '))}.</span>` : ''}</p>${c.off.map(r => `<div class="cs-sys-row"><span>${esc(r.label)}</span><span>Chapters say <b>${U.fmt(r.got)}</b>, the system says <b>${U.fmt(r.want)}</b></span></div>`).join('')}</div>`;
     }
     function whoOptions(w) {
       const opts = ledgerNames.length ? ledgerNames : [];
@@ -200,6 +231,7 @@ window.UnwipCharSheet = (function () {
       });
       const name = $('.cs-in-name', body); if (name) name.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-saveslot]', body).click(); } });
       const who = $('.cs-who', body); if (who) who.onchange = () => { sh.who = who.value === '__none' ? null : who.value; save(); st.ci = null; render(); };
+      const sysSel = $('.cs-sys', body); if (sysSel) sysSel.onchange = () => { sh.sys = sysSel.value; save(); st.tab = 'stats'; render(); };
     }
     // the writer's own picture: shrunk so the book file stays small
     async function shrink(blob) {
@@ -231,8 +263,10 @@ window.UnwipCharSheet = (function () {
     const chars = characters();
     if (!chars.length) { U.toast('Add a character to your Characters folder first, then their sheet can hold gear.'); return; }
     const body = document.createElement('div'); body.className = 'cs-browse';
-    body.innerHTML = chars.map(c => { const sh = sheetOf(c); const n = Object.values(sh.slots).reduce((a, l) => a + l.length, 0);
-      return `<button type="button" class="cs-br-row" data-id="${esc(c.id)}"><span class="cs-br-ic">${U.I ? U.I.person : ''}</span><b>${esc(c.title || 'Untitled')}</b><small>${n ? n + (n === 1 ? ' item' : ' items') : 'No gear yet'}</small></button>`; }).join('');
+    const pos = new Map(chapters().map((c, i) => [c.id, i])), at = ch => (pos.has(ch) ? pos.get(ch) : -1);
+    const equipped = sh => Object.values(sh.slots).filter(l => { const last = l.slice().sort((a, b) => at(a.ch) - at(b.ch)).pop(); return last && last.name; }).length;
+    body.innerHTML = chars.map(c => { const sh = sheetOf(c); const n = equipped(sh);
+      return `<button type="button" class="cs-br-row" data-id="${esc(c.id)}"><span class="cs-br-ic">${U.I ? U.I.person : ''}</span><b>${esc(c.title || 'Untitled')}</b><small>${n ? n + ' equipped' : 'No gear yet'}</small></button>`; }).join('');
     let pick = null, close2 = () => {};
     body.addEventListener('click', e => { const r = e.target.closest('[data-id]'); if (r) { pick = r.dataset.id; close2(); } });
     await U.modal({ title: 'Character sheets', body, buttons: [{ label: 'Close', value: false, kind: 'ghost' }], onOpen: back => { close2 = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });

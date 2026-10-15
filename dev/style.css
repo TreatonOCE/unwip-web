@@ -3306,3 +3306,12 @@ body.lore .selbar .sb-lore { display: contents; }
   .cs-track { flex: 1 1 0; min-width: 0; margin: 0 10px; }
 }
 html.m-phone .page-charsheet:not(.hidden), html.m-phone .page-sheet:not(.hidden) { position: static; display: inline-flex; margin: 0 8px 12px 0; vertical-align: middle; }
+
+/* character sheet › Stats: the check against a Build stat system */
+.cs-sys { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: var(--paper); }
+.cs-sys p { margin: 0; }
+.cs-sys.ok { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.cs-sys.off { border-color: #c98a2b; background: color-mix(in srgb, #c98a2b 9%, var(--paper)); }
+.cs-sys-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0 0; font-size: 13px; flex-wrap: wrap; }
+.cs-sys-row span:first-child { font-weight: 600; }
+.cs-sys-tip { margin: 0 0 10px; }
