@@ -4,6 +4,7 @@
 //  3. Messy draft     - no backspace, what you wrote fades, spellcheck off
 //  4. Make it smaller - break a chapter into tiny ticks (pinned beside the page)
 //  5. Your patterns   - when you write best and where you stall (kept only in the project file)
+//  6. Interview a character - questions to answer in a character's voice (built-in sets or your own)
 window.UnwipStuck = (function () {
   'use strict';
   const U = window.__unwip;
@@ -52,11 +53,12 @@ window.UnwipStuck = (function () {
 
   // ================================================================== DIALOG
   const CARDS = [
-    { id: 'fifty', icon: '✏️', title: 'Just 50 words', sub: 'A tiny goal to get started. Starting is the hard part.' },
+    { id: 'fifty', icon: '✏️', title: 'Just 50 words', sub: 'A small goal to get you started.' },
     { id: 'why', icon: '🧭', title: 'Why am I stuck?', sub: 'Pick a reason and get a concrete next step.' },
-    { id: 'messy', icon: '🌀', title: 'Messy draft', sub: 'No backspace, no red lines. Words fade as you go. Just forward.' },
+    { id: 'messy', icon: '🌀', title: 'Messy draft', sub: 'No backspace and no red lines, and words fade as you go.' },
     { id: 'steps', icon: '🪜', title: 'Make it smaller', sub: 'Break this chapter into tiny ticks you can do in a minute.' },
-    { id: 'patterns', icon: '📈', title: 'Your patterns', sub: 'When you write best and where you tend to stall.' }
+    { id: 'patterns', icon: '📈', title: 'Your patterns', sub: 'When you write best and where you tend to stall.' },
+    { id: 'interview', icon: '🎙️', title: 'Interview a character', sub: 'Answer a few questions in their voice. Villain, love interest and more.' }
   ];
   let after = null;   // action to run once the dialog has closed
   function closeThen(fn) { after = fn; const b = $('.modal-back .stuck-close'); if (b) b.click(); }
@@ -68,7 +70,7 @@ window.UnwipStuck = (function () {
     body.className = 'stuck';
     const show = view => { body.innerHTML = ''; VIEWS[view] ? VIEWS[view](body, show) : home(body, show); body.closest('.m-body') && (body.closest('.m-body').scrollTop = 0); };
     after = null;
-    const p = U.modal({ title: 'Spark: let’s get you moving', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }],
+    const p = U.modal({ title: 'Spark: help getting started', body, wide: true, buttons: [{ label: 'Close', value: false, kind: 'ghost' }],
       onOpen: back => { const b = back.querySelector('.m-foot .btn'); if (b) b.classList.add('stuck-close'); } });
     show(start || 'home');
     await p;
@@ -102,7 +104,7 @@ window.UnwipStuck = (function () {
     }));
     $('#st-go', body).onclick = () => {
       const w = $('#st-w', body).checked, m = $('#st-m', body).checked;
-      closeThen(async () => { await toEnd(); if (m) startMessy({ fade: true, noBack: true, quiet: true }); U.beginSprint(minutes, goal, { mini: true, writer: w, message: `Just ${goal} words. Go.` }); });
+      closeThen(async () => { await toEnd(); if (m) startMessy({ fade: true, noBack: true, quiet: true }); U.beginSprint(minutes, goal, { mini: true, writer: w, message: `Just ${goal} words.` }); });
     };
   }
   async function toEnd() {
@@ -130,7 +132,7 @@ window.UnwipStuck = (function () {
       'Add a clock: something has to happen before ____.',
       'Make two characters want opposite things here.',
       'Move the scene somewhere uncomfortable: too loud, too cold, too public.',
-      'Skip ahead to the scene you’re dying to write. Come back to this one later.'] },
+      'Skip ahead to the scene you most want to write. Come back to this one later.'] },
     { id: 'hate', label: 'I hate what I’ve written', acts: ['snapshot', 'messy', 'fifty'], prompts: [
       'First drafts are meant to be rough. You’re shovelling sand into the box so you can build castles later.',
       'Don’t reread. Write forward. Rereading is editing, and that’s a job for another day.',
@@ -138,7 +140,7 @@ window.UnwipStuck = (function () {
       'Write one line you love, even if it doesn’t fit. Then keep going from there.'] },
     { id: 'tired', label: 'I’m tired or not in the mood', acts: ['fifty', 'steps'], prompts: [
       'Set five minutes. If you still hate it after that, you’re allowed to stop, and it still counts.',
-      'Write 50 words. That’s a writing day.',
+      'Write 50 words. That still counts as a writing day.',
       'Do a tiny job instead: name a side character, fill in a character sheet, or write one synopsis.',
       'Change something: writer mode, a new theme, typewriter sounds on. A new feel can trick your brain into starting.'] },
     { id: 'start', label: 'I don’t know how to start', acts: ['steps', 'fifty'], prompts: [
@@ -156,7 +158,7 @@ window.UnwipStuck = (function () {
   const ACTIONS = {
     tk: { label: 'Leave a TK note and skip ahead', run: leaveTK },
     last: { label: 'Show where I left off', run: null },
-    interview: { label: 'Interview my character', run: interview },
+    interview: { label: 'Interview my character', view: 'interview' },
     excited: { label: 'Write the scene I’m excited about', run: excitedScene },
     snapshot: { label: 'Take a snapshot first', run: async () => { await U.takeSnapshot('Before a messy rewrite'); } },
     messy: { label: 'Messy draft mode', view: 'messy' },
@@ -193,7 +195,7 @@ window.UnwipStuck = (function () {
   function leftOff() {
     const blocks = $$(':scope > p, :scope > blockquote', editor).filter(p => p.textContent.replace(/​/g, '').trim() && !p.classList.contains('scene'));
     const last = blocks.pop();
-    if (!last) return '<p>This document is empty, which is a fresh start. Try “Just 50 words”.</p>';
+    if (!last) return '<p>This document is empty. Try “Just 50 words”.</p>';
     return `<div class="ip-label">Where you left off</div><blockquote>${esc(last.textContent.replace(/​/g, ''))}</blockquote>`;
   }
   async function leaveTK() {
@@ -215,29 +217,77 @@ window.UnwipStuck = (function () {
     U.scheduleMeta(); U.renderBinder();
     return node;
   }
-  // Interview my character: a note of questions to answer in their voice. The questions are yours to change
-  // (settings.interviewQs, shared between devices); these are the ones it starts with.
-  const INTERVIEW_QS = ['What do you want right now, more than anything?', 'What are you afraid will happen next?', 'What are you not telling anyone?', 'What would you never do? What would make you do it?', 'What do you think of the other people in this scene?', 'What happens if you get what you want?'];
-  const interviewQs = () => { const q = S.settings && S.settings.interviewQs; return Array.isArray(q) && q.length ? q : INTERVIEW_QS; };
-  async function interview() {
-    if (!S.project) { U.toast('Open a book first.'); return; }
-    const f = S.docId && U.findNode(S.docId);
-    const who = (f && f.node.pov) || 'my character';
-    const node = await makeDoc(sectionId('notes'), `Interview: ${who}`, `<p><i>Answer in your character’s voice. No one else will read this.</i></p>` + interviewQs().map(q => `<h2>${esc(q)}</h2><p><br></p>`).join(''));
-    if (S.docId) U.openSplit(node.id); else await U.openDoc(node.id);
-    U.toastAction('Opened beside your chapter, in Notes. Answer as them, quickly, without thinking too hard.', 'Change the questions', editInterview, 8000);
+  // ---------------------------------------------------------------- 6. Interview a character
+  // A note of questions to answer in a character's voice. Built-in sets, plus "My questions" (settings.interviewQs,
+  // shared between devices). The last set used is remembered (settings.interviewSet).
+  const SETS = {
+    main: { name: 'Main character', qs: ['What do you want right now, more than anything?', 'What are you afraid will happen next?', 'What are you not telling anyone?', 'What would you never do? What would make you do it?', 'What do you think of the other people in this scene?', 'What happens if you get what you want?'] },
+    villain: { name: 'Villain', qs: ['What do you want, and why do you think you deserve it?', 'When did you first decide you were right?', 'How do you see the hero?', 'Who are you still loyal to?', 'What would make you stop?', 'What do you tell yourself at night?'] },
+    love: { name: 'Love interest', qs: ['What did you notice first about them?', 'What do you like about them that you haven’t said?', 'What gets in the way?', 'What are you worried they’ll find out about you?', 'What would you give up for them? What wouldn’t you?'] },
+    side: { name: 'Side character', qs: ['What are you doing when the main character isn’t around?', 'What do you want that has nothing to do with the main story?', 'What do you really think of the main character?', 'What do you know that they don’t?', 'Where would you rather be right now?'] },
+    backstory: { name: 'Backstory', qs: ['Where did you grow up, and what was it like?', 'Who looked after you?', 'What’s a day you still think about?', 'What did you lose along the way?', 'What habit do you have that you picked up as a child?'] }
+  };
+  const myQs = () => { const q = S.settings && S.settings.interviewQs; return Array.isArray(q) && q.length ? q : null; };
+  const setQs = id => id === 'mine' ? (myQs() || SETS.main.qs) : (SETS[id] || SETS.main).qs;
+  function characterNames() {
+    const out = [], root = S.project.binder.find(n => n.root && n.kind === 'characters');
+    if (root) U.walkTree(root.children || [], n => { if (n.type === 'doc' && !n.map && n.title) out.push(n.title.trim()); });
+    const f = S.docId && U.findNode(S.docId), pov = f && f.node.pov && f.node.pov.trim();
+    if (pov && !out.some(t => t.toLowerCase() === pov.toLowerCase())) out.unshift(pov);
+    return { names: [...new Set(out)], pov };
   }
-  async function editInterview() {
+  function interviewView(body, show) {
+    const { names, pov } = characterNames();
+    let set = (S.settings && S.settings.interviewSet) || 'main';
+    if (set === 'mine' && !myQs()) set = 'main';
+    const first = pov ? names.find(n => n.toLowerCase() === pov.toLowerCase()) : names[0];
+    const sets = [...Object.entries(SETS).map(([id, v]) => [id, v.name]), ...(myQs() ? [['mine', 'My questions']] : [])];
+    body.innerHTML = `${backLink()}<h3 class="st-h">Interview a character</h3>
+      <p>Answer a few questions in their voice. It goes in Notes, beside your chapter, and nobody else sees it. Answer quickly; the first thing that comes is usually the useful one.</p>
+      <div class="form-grid">
+        <div class="field"><label>Who</label><select id="iv-who">${names.map(n => `<option ${n === first ? 'selected' : ''}>${esc(n)}</option>`).join('')}<option value="__other">Someone else…</option></select>
+          <input id="iv-other" class="hidden" placeholder="Their name" style="margin-top:6px"></div>
+        <div class="field"><label>Questions</label><select id="iv-set">${sets.map(([id, n]) => `<option value="${id}" ${id === set ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
+      </div>
+      <ol class="iv-preview" id="iv-prev"></ol>
+      <div class="st-actions" style="justify-content:space-between"><button type="button" class="btn ghost" id="iv-edit">Write my own questions…</button><button type="button" class="btn primary" id="iv-go">Start the interview</button></div>`;
+    wireBack(body, show);
+    const who = $('#iv-who', body), other = $('#iv-other', body), sel = $('#iv-set', body);
+    if (!names.length) { who.value = '__other'; other.classList.remove('hidden'); }
+    const prev = () => { $('#iv-prev', body).innerHTML = setQs(sel.value).map(q => `<li>${esc(q)}</li>`).join(''); };
+    prev();
+    sel.onchange = prev;
+    who.onchange = () => { other.classList.toggle('hidden', who.value !== '__other'); if (who.value === '__other') other.focus(); };
+    $('#iv-edit', body).onclick = async () => { await editInterview(sel.value); show('interview'); };
+    $('#iv-go', body).onclick = () => {
+      const name = (who.value === '__other' ? other.value.trim() : who.value) || 'my character', id = sel.value;
+      closeThen(() => interview(name, id));
+    };
+  }
+  async function interview(who, setId) {
+    if (!S.project) { U.toast('Open a book first.'); return; }
+    if (!who) { const f = S.docId && U.findNode(S.docId); who = (f && f.node.pov) || 'my character'; }
+    if (!setId) setId = (S.settings && S.settings.interviewSet) || 'main';
+    if (setId === 'mine' && !myQs()) setId = 'main';
+    try { S.settings = await U.api.setSettings({ interviewSet: setId }); } catch {}
+    const label = setId === 'main' || setId === 'mine' ? '' : ` (${SETS[setId].name.toLowerCase()})`;
+    const node = await makeDoc(sectionId('notes'), `Interview: ${who}${label}`, `<p><i>Answer as ${esc(who === 'my character' ? 'your character' : who)}. No one else will read this.</i></p>` + setQs(setId).map(q => `<h2>${esc(q)}</h2><p><br></p>`).join(''));
+    if (S.docId) U.openSplit(node.id); else await U.openDoc(node.id);
+    U.toast(S.docId ? 'Opened beside your chapter. It’s saved in Notes.' : 'Saved in Notes.', '', 6000);
+  }
+  async function editInterview(fromSet) {
     const body = document.createElement('div');
-    body.innerHTML = `<p>One question per line. New interviews use these; ones you’ve already made stay as they are. They follow you to your other devices.</p>
-      <textarea id="iv-qs" rows="10" style="width:100%;font:inherit;line-height:1.5" spellcheck="true"></textarea>
-      <p class="hint">Tip: “this scene” questions work best when you start the interview from a chapter.</p>`;
-    body.querySelector('#iv-qs').value = interviewQs().join('\n');
-    const v = await U.modal({ title: 'Character interview questions', body, buttons: [{ label: 'Use the usual questions', value: 'reset', kind: 'ghost' }, { label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
+    const start = myQs() || setQs(fromSet && fromSet !== 'mine' ? fromSet : 'main');
+    body.innerHTML = `<p>One question per line. They show up as “My questions” when you start an interview, and they follow you to your other devices. Interviews you’ve already made don’t change.</p>
+      <div class="field"><label>Start from</label><select id="iv-from"><option value="">(keep what’s below)</option>${Object.entries(SETS).map(([id, v]) => `<option value="${id}">${esc(v.name)}</option>`).join('')}</select></div>
+      <textarea id="iv-qs" rows="10" style="width:100%;font:inherit;line-height:1.5;margin-top:8px" spellcheck="true"></textarea>`;
+    const ta = body.querySelector('#iv-qs'); ta.value = start.join('\n');
+    body.querySelector('#iv-from').onchange = e => { if (e.target.value) ta.value = SETS[e.target.value].qs.join('\n'); };
+    const v = await U.modal({ title: 'My interview questions', body, buttons: [...(myQs() ? [{ label: 'Delete my questions', value: 'reset', kind: 'ghost' }] : []), { label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
     if (!v) return;
-    const list = v === 'reset' ? null : body.querySelector('#iv-qs').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 60);
-    try { S.settings = await U.api.setSettings({ interviewQs: list && list.length ? list : null }); } catch {}
-    U.toast(v === 'reset' || !list.length ? 'Back to the usual questions.' : `Saved ${list.length} question${list.length === 1 ? '' : 's'}.`);
+    const list = v === 'reset' ? [] : ta.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 60);
+    try { S.settings = await U.api.setSettings(list.length ? { interviewQs: list, interviewSet: 'mine' } : { interviewQs: null, interviewSet: 'main' }); } catch {}
+    U.toast(list.length ? `Saved ${list.length} question${list.length === 1 ? '' : 's'} as My questions.` : 'Your questions were deleted. The built-in sets are still there.');
   }
   async function excitedScene() {
     if (!S.docId || U.rootOf(S.docId).kind !== 'manuscript') { U.toast('Open a chapter first.'); return; }
@@ -304,7 +354,7 @@ window.UnwipStuck = (function () {
     if (window.UnwipLook) window.UnwipLook.setMessyFade(false);
     renderMessy();
     const words = Math.max(0, S.sessionTyped - m.typed0);
-    if (report) U.quoteToast(words ? `Messy draft done: ${fmt(words)} words. That’s real progress. Tidy up another day.` : 'Messy draft stopped.');
+    if (report) U.quoteToast(words ? `Messy draft done: ${fmt(words)} words. Tidy up another day.` : 'Messy draft stopped.');
   }
   U.on('keydown', e => {
     if (!messy) return;
@@ -367,7 +417,7 @@ window.UnwipStuck = (function () {
     box.onmousedown = e => { if (!e.target.closest('input')) e.preventDefault(); };
     $$('input[type=checkbox]', box).forEach(c => c.onchange = () => {
       n.steps[+c.dataset.i].done = c.checked; U.scheduleMeta();
-      if (c.checked && n.steps.every(s => s.done)) U.quoteToast('Every step done. That chapter just got smaller!');
+      if (c.checked && n.steps.every(s => s.done)) U.quoteToast('Every step done. Nice work.');
       else if (c.checked) U.toast('✓ Nice. Next one.', '', 1600);
       renderSteps(); editor.focus();
     });
@@ -425,7 +475,7 @@ window.UnwipStuck = (function () {
     $$('[data-break]', body).forEach(b => b.onclick = () => closeThen(async () => { await U.openDoc(b.dataset.break); openStuck('steps'); }));
   }
 
-  const VIEWS = { home, fifty: fiftyView, why: (b, s) => whyView(b, s), messy: messyView, steps: stepsView, patterns: patternsView };
+  const VIEWS = { home, interview: interviewView, fifty: fiftyView, why: (b, s) => whyView(b, s), messy: messyView, steps: stepsView, patterns: patternsView };
 
   const btn = $('#btn-stuck');
   if (btn) { btn.innerHTML = `<span class="stuck-ic">${I.flame}</span><span class="tb-label">Spark</span>`; btn.onclick = () => openStuck(); }

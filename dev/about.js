@@ -147,7 +147,7 @@ window.UnwipAbout = (function () {
       <p class="about-slogan">Write to finish.</p>
       <h4>From the developer</h4>
       <div class="about-note"><p>I built Unwip, with the help of AI coding tools, to fix the headaches I kept running into as a writer: formatting that fell apart on the way between programs, syncing I couldn’t trust, and work that one app wouldn’t open properly in another.</p>
-        <p>At the same time, AI was being added to everything, including the places where we write. I wanted an app that gives you full control of your work and keeps it private. Unwip is that app.</p></div>
+        <p>At the same time, AI was being added to everything, including the places where we write. I wanted an app that gives you full control of your work and keeps it private.</p></div>
       <h4>No AI inside</h4><p>${NO_AI}</p>
       <p class="about-small">The one optional exception, and only if you choose it: the <b>natural voice</b> for Read aloud is a small speech model (machine learning) that you download separately. It only reads your words aloud, can’t write, change or suggest anything, and runs on your device. Unwip works fully without it.${window.UnwipVoice ? ' <button class="link-btn" type="button" id="ab-voice">About the natural voice…</button>' : ''}</p>
       <h4>Your writing stays yours</h4><p>Your books are saved on your device. If you connect Dropbox, they’re copied to <b>your own</b> Dropbox and nowhere else. Unwip has no account, no server of its own and no tracking. Reports you send with “Report a problem” contain no writing.</p>

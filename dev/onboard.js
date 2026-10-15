@@ -107,7 +107,7 @@ window.UnwipIntro = (function () {
       ${f ? `<div class="in-map"><h3>Coming from ${esc(f.name)}: where things are</h3><table>${f.map.map(([a, b]) => `<tr><td>${esc(a)}</td><td>→</td><td>${esc(b)}</td></tr>`).join('')}</table><p>${esc(f.tip)}</p></div>` : ''}
       <p class="in-custom"><button class="link-btn" type="button" id="in-custom">${ans.custom ? 'Use the simple setup instead' : 'Change layout, font or colours…'}</button></p>`;
     else if (name === 'layout') h = `
-      <h2>Which layout feels like home?</h2>
+      <h2>Which layout would you like?</h2>
       <p class="in-lead">${f ? `We’ve picked the one closest to ${esc(f.name)}. ` : ''}Switch any time with the Focused / Detailed buttons at the top.</p>
       <div class="in-grid three">${Object.entries(LAYOUTS).map(([id, l]) => `<button class="in-choice tall${ans.layout === id ? ' on' : ''}" data-layout="${id}">${layoutPreview(id)}<b>${l.name}</b><span class="in-like">${l.like}</span><span>${l.desc}</span></button>`).join('')}</div>`;
     else if (name === 'structure') h = `
@@ -135,7 +135,7 @@ window.UnwipIntro = (function () {
       if (ans.from === 'obsidian') actions.push(['vault', '🗂️ Bring in my Obsidian vault', 'Pick the vault folder (or any folder of chapter files). Sub-folders come too.']);
       if (ans.from !== 'scrivener') actions.push(['files', ans.from === 'word' ? '📝 Bring in my Word files' : '📁 Bring in my book from files', 'One file or one per chapter: Word, LibreOffice, RTF, text or Markdown. Chapters are found automatically.']);
       h = `
-      <h2>${ans.custom ? 'All set' : 'Let’s get your book in'}</h2>
+      <h2>${ans.custom ? 'All set' : 'Bring your book in'}</h2>
       ${ans.custom ? '' : `<p class="in-lead">Set up like ${esc((FROM[ans.from] || FROM.new).name)}. Change any of this later in Settings.</p>`}
       <ul class="in-summary">
         <li><b>Layout</b> ${esc(LAYOUTS[ans.layout].name)}</li>
@@ -145,7 +145,7 @@ window.UnwipIntro = (function () {
       </ul>
       <h3 class="in-h3">What would you like to start with?</h3>
       <div class="in-grid">${choose([
-        ['example', '🦇 An example book: Dracula', 'The opening chapters of Bram Stoker’s Dracula, laid out the way you chose: diary entries, letters, characters, places and a timeline. Poke at it freely.'],
+        ['example', '🦇 An example book: Dracula', 'The opening chapters of Bram Stoker’s Dracula, laid out the way you chose: diary entries, letters, characters, places and a timeline. Change anything you like.'],
         ...actions,
         ['blank', '📖 A blank book', 'Name it and start writing.']
       ], ans.action, 'action')}</div>`;
@@ -372,7 +372,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
       { hemingway: 'This is the distraction-free mode. Settings › Typewriter adds focus dimming and sounds.', scrivener: 'Like Composition mode.' }],
     ['#btn-new', 'New', 'Add a scene, chapter, folder or map, or a template section like Factions, Magic or Monsters where every entry starts from the same sheet.'],
     ['#btn-cmdk', 'Find anything', 'Press Ctrl+K (or this magnifying glass) and type what you want: “snapshot”, “epub”, “timeline”, a chapter name. Every feature is in there.'],
-    ['#btn-stuck', 'Spark and Sprints', 'Spark has five little tools for a blank page or a slow day. Sprint, next to it, is a timed burst of writing with a word target.'],
+    ['#btn-stuck', 'Spark and Sprints', 'Spark has six small tools for a blank page or a slow day. Sprint, next to it, is a timed burst of writing with a word target.'],
     ['#btn-build-book', 'Build', 'Maps, magic systems, rune alphabets, sigils, coats of arms, insignia and LitRPG character sheets, open beside your chapter. Anything you make can go straight into the book.',
       null, 'Try a map: paint the land yourself, or roll a random world, town or dungeon floor to start from.'],
     ['#btn-revise', 'Revise', 'Highlights repeated words, adverbs, long sentences and filler for you to look at, without AI. It never changes anything by itself.',
@@ -516,7 +516,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     if (!b) { b = document.createElement('button'); b.id = 'btn-settle'; b.type = 'button'; right.insertBefore(b, right.firstChild); }
     const settled = !!(S.settings && S.settings.settledIn);
     b.className = 'btn ' + (settled ? 'settle-tour' : 'primary settle-new');
-    b.textContent = settled ? 'Take a tour' : 'Let’s get you settled in';
+    b.textContent = settled ? 'Take a tour' : 'Set up Unwip';
     b.title = settled ? 'A quick walk round the buttons, in the example book' : 'Tell Unwip what you wrote with before, and bring your book in';
     b.onclick = () => settled ? tourExample() : start();
   }

@@ -132,9 +132,9 @@ window.UnwipPlay = (function () {
       check: t => { const ps = paras(t), bad = ps.filter(p => !isSpeech(p)).length; return [rule('10 lines or more', ps.length >= 10, `${ps.length}/10`), rule('Every line is speech', ps.length && !bad, bad ? `${bad} line${bad > 1 ? 's' : ''} aren’t speech` : '')]; } },
     { id: 'notags', icon: '🏷️', title: 'No dialogue tags', desc: 'A conversation of 8+ lines with no “said”, “asked”, “whispered” or other tags. Show who’s talking through what they do.',
       check: t => { const n = count(t, TAGS), sp = paras(t).filter(p => /["“”]/.test(p)).length; return [rule('8 lines with speech', sp >= 8, `${sp}/8`), rule('No dialogue tags', sp && !n, n ? `${n} tag${n > 1 ? 's' : ''} used` : '')]; } },
-    { id: 'onesentence', icon: '➰', title: 'One long sentence', desc: '100+ words in one single sentence that still reads clearly. Commas, dashes and semicolons are your friends.',
+    { id: 'onesentence', icon: '➰', title: 'One long sentence', desc: '100+ words in one single sentence that still reads clearly. Commas, dashes and semicolons help.',
       check: t => { const s = sentences(t).length; return [rule('100 words or more', countWords(t) >= 100, `${countWords(t)}/100`), rule('Only one sentence', s === 1, s > 1 ? `${s} sentences` : '')]; } },
-    { id: 'short', icon: '⚡', title: 'Short and sharp', desc: 'An action scene of 120+ words where every sentence is under 8 words. Feel the pace.',
+    { id: 'short', icon: '⚡', title: 'Short and sharp', desc: 'An action scene of 120+ words where every sentence is under 8 words.',
       check: t => { const long = sentences(t).filter(s => countWords(s) >= 8).length; return [rule('120 words or more', countWords(t) >= 120, `${countWords(t)}/120`), rule('Every sentence under 8 words', countWords(t) && !long, long ? `${long} too long` : '')]; } },
     { id: 'lipogram', icon: '🔤', title: 'No letter E', desc: 'Write 60+ words without using the letter E once. Much harder than it sounds.',
       check: t => { const e = count(t, /e/gi); return [rule('60 words or more', countWords(t) >= 60, `${countWords(t)}/60`), rule('No letter E', countWords(t) && !e, e ? `${e} E${e > 1 ? 's' : ''} found` : '')]; } },
@@ -399,7 +399,7 @@ window.UnwipPlay = (function () {
         ${row('Average sentence', 'avg', ' words')}${row('Variety', 'variety', '', 'how much lengths change')}${row('Longest', 'longest', ' words')}${row('Shortest', 'shortest', ' words')}
         ${row('Reading grade', 'grade')}${row('Adverbs', 'adverbs', '%')}${row('Dialogue', 'speech', '%')}</table>
       <details class="mm-model"><summary>Their paragraph</summary><p>${esc(cur.model)}</p></details>
-      <p class="rp-note">A ✓ means you’re close. Matching rhythm is the point. Copying words isn’t.</p></div>`;
+      <p class="rp-note">A ✓ means you’re close. Aim to match the rhythm, in your own words.</p></div>`;
   }
 
   // ---- timer (warm-ups)
@@ -413,7 +413,7 @@ window.UnwipPlay = (function () {
       if (left <= 0) {
         clearInterval(timer); el.textContent = 'Time!'; el.classList.add('over'); chime();
         const words = countWords(ed.innerText) - w0, mins = (Date.now() - t0) / 60000;
-        U.modal({ title: 'Warm-up done', body: `<div class="sprint-result"><div class="big">${fmt(Math.max(0, words))}</div><div class="lbl">words in ${minutes} minutes · ${Math.round(Math.max(0, words) / mins)} wpm</div><p style="margin-top:12px">Loose fingers, warm brain. Keep going here, or go and write the real thing.</p></div>`, buttons: [{ label: 'Keep writing', value: true, kind: 'ghost' }, { label: 'Back to Play', value: 'home', kind: 'primary' }] })
+        U.modal({ title: 'Warm-up done', body: `<div class="sprint-result"><div class="big">${fmt(Math.max(0, words))}</div><div class="lbl">words in ${minutes} minutes · ${Math.round(Math.max(0, words) / mins)} wpm</div><p style="margin-top:12px">You’re warmed up. Keep going here, or go back to your book.</p></div>`, buttons: [{ label: 'Keep writing', value: true, kind: 'ghost' }, { label: 'Back to Play', value: 'home', kind: 'primary' }] })
           .then(v => { if (v === 'home') close(); else ed.focus(); });
         return;
       }

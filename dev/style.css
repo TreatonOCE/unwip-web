@@ -3135,3 +3135,6 @@ body:not(.writer) .st-writer { display: none; }
 body.writer .statusbar.peek { opacity: 1; }
 body.writer .statusbar { z-index: 7; }
 @media (max-width: 720px) { .st-writer { display: none !important; } }
+/* Spark › Interview a character: the questions in the chosen set */
+.iv-preview { margin: 12px 0 0; padding: 10px 14px 10px 32px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.iv-preview li + li { margin-top: 3px; }

@@ -480,7 +480,7 @@ window.UnwipLook = (function () {
         ['drop', 'Drop', 'Each letter falls in from above and lands with a small bounce.'],
         ['pop', 'Pop', 'Each letter starts big and shrinks into place.'],
         ['ink', 'Ink', 'Each letter starts blurry and sharpens, like ink soaking into paper.'],
-        ['strike', 'Typewriter strike', 'Each letter slams onto the page, dark and slightly crooked, like a typewriter key hitting the ribbon.'],
+        ['strike', 'Typewriter strike', 'Each letter lands on the page dark and slightly crooked, like a typewriter key striking the ribbon.'],
         ['glow', 'Glow', 'Each letter lights up warm and bright, then cools to the normal colour, like an ember.'],
         ['spin', 'Spin', 'Each letter spins in from small and settles into place.'],
         ['scatter', 'Scatter', 'Each letter flies in from a random direction and lands in its place.'],

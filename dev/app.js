@@ -617,7 +617,7 @@
     }
     let labelled = false;
     for (const r of S.project.binder) {
-      if (!r.root && !labelled) { labelled = true; const l = document.createElement('div'); l.className = 'tree-unsorted'; l.textContent = 'New — drag into place'; tree.appendChild(l); }
+      if (!r.root && !labelled) { labelled = true; const l = document.createElement('div'); l.className = 'tree-unsorted'; l.textContent = 'New: drag into place'; tree.appendChild(l); }
       build(r, 0);
     }
     emit('binder');
@@ -3489,7 +3489,7 @@
     if (custom > 0) minutes = Math.min(240, custom);
     const goal = Math.max(0, +$('#sp-goal', body).value || 0);
     S.sprintPlan = { rounds, brk, round: 1, minutes, goal, recs: [] };
-    beginSprint(minutes, goal, { writer: $('#sp-writer', body).checked, message: rounds > 1 ? `Sprint 1 of ${rounds}: ${minutes} minutes. Go!` : null });
+    beginSprint(minutes, goal, { writer: $('#sp-writer', body).checked, message: rounds > 1 ? `Sprint 1 of ${rounds} started: ${minutes} minutes.` : null });
   }
   // ---- breaks: between rounds, or a timer on its own
   function sprintChime() {
@@ -3532,11 +3532,11 @@
     S.sprint.timer = setInterval(() => {
       const sp = S.sprint; if (!sp) return;
       renderSprint();
-      if (sp.mini && sp.goal && !sp.cheered && S.sessionTyped - sp.startTyped >= sp.goal) { sp.cheered = true; quoteToast(`${fmt(sp.goal)} words. That was the hard part. Keep going if it's flowing — the timer's still running.`); }
+      if (sp.mini && sp.goal && !sp.cheered && S.sessionTyped - sp.startTyped >= sp.goal) { sp.cheered = true; quoteToast(`${fmt(sp.goal)} words, goal reached. You can keep going if you like: the timer's still running.`); }
       if (Date.now() >= sp.end) endSprint(true, false);
     }, 500);
     renderSprint();
-    if (opts.writer) setWriter(true); else quoteToast(opts.message || `Sprint started: ${minutes} minutes. Go!`);
+    if (opts.writer) setWriter(true); else quoteToast(opts.message || `Sprint started: ${minutes} minutes.`);
     editor.focus();
   }
   async function endSprint(showResult, early) {
@@ -3558,7 +3558,7 @@
       plan.round++;
       notify('Sprint done', `${fmt(words)} words. ${plan.brk}-minute break, then sprint ${plan.round} of ${plan.rounds}.`);
       quoteToast(`Sprint ${plan.round - 1} of ${plan.rounds} done: ${fmt(words)} words. ${plan.brk}-minute break. Stretch, drink some water.`);
-      startBreak(plan.brk, () => { if (S.slug) beginSprint(plan.minutes, plan.goal, { message: `Sprint ${plan.round} of ${plan.rounds}. Go!` }); else S.sprintPlan = null; });
+      startBreak(plan.brk, () => { if (S.slug) beginSprint(plan.minutes, plan.goal, { message: `Sprint ${plan.round} of ${plan.rounds} started.` }); else S.sprintPlan = null; });
       return;
     }
     S.sprintPlan = null;
@@ -3730,7 +3730,7 @@
         ${dial({ pct: daily ? week / (daily * 7) : 0, big: fmt(week), small: daily ? `of ${fmt(daily * 7)}` : 'words', label: 'This week', color: '#7a5cc7', size: 120 })}
         <div class="stat-stack">
           <div class="stat-card flame"><span class="ic">${I.flame}</span><b>${st.current}</b><span>${st.current ? `day streak<br><small>best ${st.best}</small>` : st.best ? `day streak<br><small>best ${st.best} · write today to start again</small>` : `day streak<br><small>write today to start one</small>`}</span></div>
-          <div class="stat-card"><span class="ic">${I.book}</span><b>${fmt(totalWords)}</b><span>words in your manuscripts<br><small>${totalWords ? `≈ ${fmt(Math.max(1, Math.round(totalWords / 280)))} paperback page${Math.max(1, Math.round(totalWords / 280)) === 1 ? '' : 's'}` : 'your first page is waiting'}</small></span></div>
+          <div class="stat-card"><span class="ic">${I.book}</span><b>${fmt(totalWords)}</b><span>words in your manuscripts<br><small>${totalWords ? `≈ ${fmt(Math.max(1, Math.round(totalWords / 280)))} paperback page${Math.max(1, Math.round(totalWords / 280)) === 1 ? '' : 's'}` : 'nothing written yet'}</small></span></div>
         </div>
         ${daily ? '' : `<button class="btn ghost small dash-setgoal" id="dash-setgoal">Set a daily goal</button>`}
       </div>

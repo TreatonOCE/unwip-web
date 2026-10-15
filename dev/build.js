@@ -302,8 +302,8 @@ window.UnwipBuild = (function () {
     const body = document.createElement('div');
     body.innerHTML = `<div class="field"><label>Book</label><select id="ab-p">${list.map(p => `<option value="${esc(p.slug)}">${esc(p.title)}</option>`).join('')}</select></div>
       ${isMap ? `<div class="field" style="margin-top:12px"><label>How</label>
-        <label class="bd-radio"><input type="radio" name="ab-how" value="link" checked> <span><b>Linked</b> — change it here or in the book, and every book that links it sees the change</span></label>
-        <label class="bd-radio"><input type="radio" name="ab-how" value="copy"> <span><b>A copy</b> — this book gets its own copy to change separately</span></label></div>`
+        <label class="bd-radio"><input type="radio" name="ab-how" value="link" checked> <span><b>Linked</b>: change it here or in the book, and every book that links it sees the change</span></label>
+        <label class="bd-radio"><input type="radio" name="ab-how" value="copy"> <span><b>A copy</b>: this book gets its own copy to change separately</span></label></div>`
         : `<p class="hint" style="margin-top:10px">Adds it as a page in the book’s ${ROOT === 'notes' ? 'Notes' : 'Places'}, with a picture. It’s a copy: changes made here later won’t reach the book (add it again to update it).</p>`}`;
     const ok = await U.modal({ title: `Add “${it.title}” to a book`, body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Add', value: true, kind: 'primary' }] });
     if (!ok) return;

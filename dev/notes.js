@@ -173,7 +173,7 @@ window.UnwipNotes = (function () {
     const c = e.target.closest('span.cmt'), f = e.target.closest('sup.fn');
     if (!c && !f) { tip.classList.add('hidden'); return; }
     const note = c ? c.dataset.note : f.dataset.fn;
-    tip.innerHTML = `<b>${c ? 'Comment' : 'Footnote ' + (footnotes().findIndex(x => x.el === f) + 1)}</b>${note ? esc(note) : '<i>Empty — click to write it</i>'}`;
+    tip.innerHTML = `<b>${c ? 'Comment' : 'Footnote ' + (footnotes().findIndex(x => x.el === f) + 1)}</b>${note ? esc(note) : '<i>Empty. Click to write it.</i>'}`;
     const r = (c || f).getBoundingClientRect();
     tip.style.left = Math.min(window.innerWidth - 280, Math.max(8, r.left)) + 'px';
     tip.style.top = (r.bottom + 6) + 'px';
