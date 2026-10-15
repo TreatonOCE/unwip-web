@@ -166,7 +166,7 @@ window.UnwipPlay = (function () {
     problem: ['someone is lying', 'the bridge is out', 'they have one hour', 'nobody remembers their name', 'the wrong person gets the message', 'a promise has to be broken', 'they’re being followed', 'the money is fake', 'an old friend comes back', 'a storm traps everyone inside', 'the plan worked too well', 'they must choose who to save', 'a secret is overheard', 'the door won’t open again', 'someone is missing', 'the cure is the poison', 'a debt comes due', 'they’re mistaken for someone else', 'the map is wrong', 'a rival needs their help', 'the ghost wants something', 'the sun doesn’t rise', 'they lose their voice', 'the king is dead', 'a lie has to come true', 'the animals are fleeing', 'a stranger knows too much', 'it must be back before dawn', 'the dragon is the victim', 'everyone is pretending']
   };
   const DIE_LABEL = { who: 'Who', where: 'Where', what: 'Object', problem: 'Problem' };
-  const KIND = { prompt: ['📜', 'Daily story starter'], exercise: ['🎯', 'Exercise'], warmup: ['⏱️', 'Warm-up'], dice: ['🎲', 'Story dice'], mimic: ['🪞', 'Style mimic'], free: ['✍️', 'Free write'] };
+  const KIND = { prompt: ['📜', 'Daily story starter'], exercise: ['🎯', 'Exercise'], warmup: ['⏱️', 'Warm-up'], dice: ['🎲', 'Story dice'], mimic: ['🪞', 'Style mimic'], word: ['📖', 'Word practice'], free: ['✍️', 'Free write'] };
 
   // ================================================================== DATA
   let index = null;
@@ -182,27 +182,31 @@ window.UnwipPlay = (function () {
   // ================================================================== LIBRARY TABS + HOME
   let tab = 'write';
   try { tab = localStorage.getItem('unwip-lib-tab') || 'write'; } catch {}
-  function setTab(t) {
+  let curView = 'home';
+  function setTab(t, keep) {
     tab = t; try { localStorage.setItem('unwip-lib-tab', t); } catch {}
     $$('#lib-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     $('#write-home').classList.toggle('hidden', t !== 'write');
     $('#play-home').classList.toggle('hidden', t !== 'play');
     const bh = $('#build-home'); if (bh) bh.classList.toggle('hidden', t !== 'build');
-    if (t === 'play') renderHome('home');
+    if (t === 'play' && !(keep && curView !== 'home')) renderHome('home');
     if (t === 'build' && window.UnwipBuild) window.UnwipBuild.render();
   }
   $$('#lib-tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
-  U.on('library', () => setTab(tab));
+  // the library refreshes itself now and then (syncing, settings): don't throw someone out of a game or the dice
+  U.on('library', () => setTab(tab, true));
 
   let promptOffset = 0;
   async function renderHome(view, arg) {
     await loadIndex();
     const box = $('#play-home');
     box.scrollTop = 0;
+    curView = view || 'home';
     if (view === 'exercises') return exercisesView(box);
     if (view === 'dice') return diceView(box);
     if (view === 'warmup') return warmupView(box);
     if (view === 'mimic') return mimicView(box);
+    if (view === 'words' && window.UnwipWords) return window.UnwipWords.view(box, { back, wireHome, write: newPiece, mode: arg });
     const p = PROMPTS[(dayOfYear() + promptOffset) % PROMPTS.length];
     const week = [...Array(7)].reduce((a, _, i) => a + (index.days[dayKey(i)] || 0), 0);
     const done = new Set(index.pieces.filter(x => x.kind === 'exercise' && x.passed).map(x => x.exId));
@@ -220,6 +224,7 @@ window.UnwipPlay = (function () {
         <button class="pl-tool" data-v="warmup"><span>⏱️</span><b>Warm-up</b><em>A quick timed freewrite to stretch before your real writing.</em></button>
         <button class="pl-tool" data-v="dice"><span>🎲</span><b>Story dice</b><em>Roll a character, a place, an object and a problem. Write the scene.</em></button>
         <button class="pl-tool" data-v="mimic"><span>🪞</span><b>Style mimic</b><em>Paste a paragraph you love, write your own, and compare the rhythm.</em></button>
+        <button class="pl-tool" data-v="words"><span>📖</span><b>Word games</b><em>Guess the five-letter word, match words to meanings, a thesaurus, and a list of words to learn.</em></button>
       </div>
       <div class="lib-row pl-journal-head"><h1>Journal</h1></div>
       ${pieces.length ? `<div class="pl-journal">${pieces.map(x => `<div class="pl-piece" data-id="${x.id}"><span class="pl-pk">${KIND[x.kind] ? KIND[x.kind][0] : '✍️'}</span>
@@ -337,6 +342,7 @@ window.UnwipPlay = (function () {
     const x = cur;
     if (x.kind === 'exercise') { side.classList.remove('hidden'); runChecks(); return; }
     if (x.kind === 'mimic') { side.classList.remove('hidden'); runMimic(); return; }
+    if (x.kind === 'word' && window.UnwipWords) { side.classList.remove('hidden'); window.UnwipWords.load().then(runWords, () => {}); return; }
     side.classList.add('hidden'); side.innerHTML = '';
   }
   function runChecks() {
@@ -350,6 +356,19 @@ window.UnwipPlay = (function () {
       <div class="pl-rules">${res.map(r => `<div class="pl-rule ${r.ok ? 'ok' : ''}"><span>${r.ok ? '✓' : '○'}</span><div><b>${esc(r.label)}</b>${r.detail ? `<em>${esc(r.detail)}</em>` : ''}</div></div>`).join('')}</div>
       ${passed ? '<div class="pl-passed">🎉 All rules met. Nice work!</div>' : ''}</div>`;
     if (passed && !was) { chime(); U.toast('🎉 Exercise complete!', '', 2500); }
+    saveIndex();
+  }
+
+  // ---- word practice: ticks off the words as you use them
+  function runWords() {
+    if (!cur || cur.kind !== 'word') return;
+    const W = window.UnwipWords, vocab = cur.vocab || [], got = W.used(ed.innerText, vocab), all = got.length && got.every(Boolean);
+    const was = cur.passed; cur.passed = all;
+    side.innerHTML = `<div class="rp-head"><div class="rp-title">📖 Word practice</div></div><div class="rp-scroll">
+      <p class="pl-ex-desc">Use ${vocab.length === 1 ? 'the word' : 'each word'} in your writing. Any ending counts.</p>
+      <div class="pl-rules">${vocab.map((w, i) => `<div class="pl-rule ${got[i] ? 'ok' : ''}"><span>${got[i] ? '✓' : '○'}</span><div><b>${esc(w.replace(/_/g, ' '))}</b><em>${esc(W.meaning(w))}</em></div></div>`).join('')}</div>
+      ${all ? '<div class="pl-passed">🎉 All used. Nice work!</div>' : ''}</div>`;
+    if (all && !was) chime();
     saveIndex();
   }
 
@@ -420,7 +439,7 @@ window.UnwipPlay = (function () {
     cur.words = n; cur.updated = Date.now();
     if (!cur.title && n >= 3) { const first = ed.innerText.trim().split(/\n/)[0].split(/\s+/).slice(0, 6).join(' '); cur.title = first + '…'; $('#pl-title').value = cur.title; }
     clearTimeout(saveP); saveP = setTimeout(savePiece, 600);
-    clearTimeout(checkT); checkT = setTimeout(() => { if (cur.kind === 'exercise') runChecks(); else if (cur.kind === 'mimic') runMimic(); }, 250);
+    clearTimeout(checkT); checkT = setTimeout(() => { if (cur.kind === 'exercise') runChecks(); else if (cur.kind === 'mimic') runMimic(); else if (cur.kind === 'word') runWords(); }, 250);
   });
   ed.addEventListener('paste', e => {
     e.preventDefault();

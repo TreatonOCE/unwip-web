@@ -70,6 +70,14 @@
     glyph: ['Data glyph', 'M-36-36H-12V-12H-36Z M12-36H36V-12H12Z M-36 12H-12V36H-36Z M12 12H24V24H12Z M24 24H36V36H24Z M-12-24H12M-24-12V12M24-12V12']
   };
   const SYM_KEYS = Object.keys(SYM);
+  // the line symbols in groups, so the list is easy to scan
+  const GROUPS = [['Tech & system', ['chip', 'network', 'neural', 'hexcore', 'radar', 'power', 'cursor', 'target', 'glyph', 'antenna', 'pulse', 'atom', 'crosshair', 'lock', 'ascend']],
+    ['Combat', ['skull', 'dagger', 'swords', 'spear', 'claw', 'shield', 'bolt']],
+    ['Nature & body', ['eye', 'serpent', 'wings', 'flame', 'sun', 'moon', 'hand']],
+    ['Shapes & signs', ['star', 'triangle', 'infinity', 'stack', 'hourglass', 'cog', 'crown', 'key', 'anchor', 'rook']]];
+  const LIB = window.UnwipSymbols;
+  // a symbol from the shared library (animals and the like), drawn solid in the line colour
+  const libSym = (k, col) => LIB && LIB.get(k) ? LIB.g(k, col) : '';
   const blank = () => ({ frame: 'hex', symbol: 'eye', scheme: 'neon', name: '', desig: '', code: '', weight: 5, panel: true, ticks: true, double: true, custom: null, pattern: 'none', symScale: 1, rank: 0, glow: false, nodes: false, readout: false, readL: '', readR: '', barcode: false, glitch: false, orbit: false, scope: false });
   // a steady number from the name, so barcodes and readouts don't change every time it's drawn
   const hash = str => { let h = 2166136261; for (const c of String(str || 'unwip')) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -150,7 +158,10 @@
       ${dg ? `<path d="M40 482H${200 - Math.min(160, (d.desig || '').length * 6.8 + 12)}M${200 + Math.min(160, (d.desig || '').length * 6.8 + 12)} 482H360" stroke="${C.acc}" stroke-width="2"/><text x="200" y="488" text-anchor="middle" font-family="${COND}" font-size="17" letter-spacing="4"${fit((d.desig || '').length, 17, 4, 300)} fill="${C.acc}">${dg}</text>` : ''}
       ${cd ? `<text x="372" y="512" text-anchor="end" font-family="Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="${C.main}" opacity=".6">${cd}</text>` : ''}` : '';
     const sk = k * (+d.symScale || 1), syCy = cy + (d.frame === 'triangle' ? 40 : 0) - (d.rank ? 16 : 0);
-    const symPath = (col, op, dx) => `<g transform="translate(${200 + (dx || 0)} ${syCy}) scale(${sk})"><path d="${sym[1]}" fill="none" stroke="${col}" stroke-width="${symW / (+d.symScale || 1)}" stroke-linejoin="round" stroke-linecap="round"${op ? ` opacity="${op}"` : ''}/></g>`;
+    const isLib = !SYM[d.symbol] && LIB && LIB.get(d.symbol);
+    const symPath = (col, op, dx) => isLib
+      ? `<g transform="translate(${200 + (dx || 0)} ${syCy}) scale(${sk * 0.95})"${op ? ` opacity="${op}"` : ''}>${libSym(d.symbol, col)}</g>`
+      : `<g transform="translate(${200 + (dx || 0)} ${syCy}) scale(${sk})"><path d="${sym[1]}" fill="none" stroke="${col}" stroke-width="${symW / (+d.symScale || 1)}" stroke-linejoin="round" stroke-linecap="round"${op ? ` opacity="${op}"` : ''}/></g>`;
     const hv = hash(d.name + d.code + d.desig);
     const extras = [];
     if (d.orbit) extras.push(`<circle cx="200" cy="${syCy}" r="${Math.min(118, 50 * sk + 18)}" fill="none" stroke="${C.acc}" stroke-width="1.6" stroke-dasharray="3 7"/><circle cx="${200 + Math.min(118, 50 * sk + 18) * Math.cos(-0.7)}" cy="${syCy + Math.min(118, 50 * sk + 18) * Math.sin(-0.7)}" r="5" fill="${C.acc}"/>`);
@@ -204,7 +215,8 @@
           <div class="bs-grid in-reads"><label>Left readout<input data-d="readL" value="${esc(d.readL || '')}" placeholder="e.g. HX-11 // NETWORK OPS" maxlength="34"></label><label>Right readout<input data-d="readR" value="${esc(d.readR || '')}" placeholder="e.g. 0x7AC4A25C" maxlength="34"></label></div>
           <p class="bm-help">The side readouts show when “Side readouts” is ticked. Leave them empty for a code made from the name.</p>
           <label class="in-w">Rank chevrons <select data-d="rank">${[0, 1, 2, 3].map(n => `<option value="${n}" ${+d.rank === n ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></label></section>
-        <section class="bm-card"><h2>Symbol</h2><label class="in-w">Size <input type="range" data-d="symScale" min="0.5" max="1.5" step="0.05" value="${d.symScale || 1}"></label><div class="in-syms">${SYM_KEYS.map(k => `<button type="button" class="in-sym ${d.symbol === k ? 'on' : ''}" data-sym="${k}" title="${esc(SYM[k][0])}">${symIcon(k, '#2a2a2a')}</button>`).join('')}</div></section>
+        <section class="bm-card"><h2>Symbol</h2><label class="in-w">Size <input type="range" data-d="symScale" min="0.5" max="1.5" step="0.05" value="${d.symScale || 1}"></label>${GROUPS.map(([name, keys]) => `<h4 class="in-group">${name}</h4><div class="in-syms">${keys.filter(k => SYM[k]).map(k => `<button type="button" class="in-sym ${d.symbol === k ? 'on' : ''}" data-sym="${k}" title="${esc(SYM[k][0])}">${symIcon(k, '#2a2a2a')}</button>`).join('')}</div>`).join('')}
+          ${LIB ? `<h4 class="in-group">Animals, monsters and more</h4><div class="in-syms">${LIB.get(d.symbol) && !SYM[d.symbol] ? `<button type="button" class="in-sym on" data-sym="${d.symbol}" title="${esc(LIB.get(d.symbol).label)}">${LIB.icon(d.symbol, '#2a2a2a')}</button>` : ''}<button type="button" class="in-sym in-lib" id="in-lib" title="Lions, crows, dragons, skulls, numerals…">More…</button></div>` : ''}</section>
         <section class="bm-card"><h2>Colours</h2><div class="chip-row">${Object.entries(SCHEMES).map(([k, v]) => `<button type="button" class="chip in-sch ${d.scheme === k && !d.custom ? 'on' : ''}" data-sch="${k}"><i style="background:${v.bg}"></i><i style="background:${v.main}"></i><i style="background:${v.acc}"></i>${v.name}</button>`).join('')}</div>
           <div class="in-cols"><label>Background <input type="color" data-c="bg" value="${C.bg}"></label><label>Lines <input type="color" data-c="main" value="${C.main}"></label><label>Accent <input type="color" data-c="acc" value="${C.acc}"></label></div></section>
       </div></div>`;
@@ -222,6 +234,7 @@
     };
     box.onclick = e => {
       const t = e.target.closest('button'); if (!t) return; const d = it.data;
+      if (t.id === 'in-lib') { LIB.pick({ title: 'Pick a symbol', current: d.symbol }).then(k => { if (k) { d.symbol = k; save(); draw(); } }); return; }
       if (t.dataset.frame) d.frame = t.dataset.frame;
       else if (t.dataset.sym) d.symbol = t.dataset.sym;
       else if (t.dataset.sch) { d.scheme = t.dataset.sch; d.custom = null; }

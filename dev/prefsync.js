@@ -12,7 +12,7 @@ window.UnwipPrefs = (function () {
   const { S } = U;
 
   // kept in the settings file
-  const SHARED = ['litrpg', 'snippets', 'defaultStyle', 'author', 'dailyGoal', 'quotes', 'myTemplates', 'fontFavs', 'trackStuck', 'stuckNudge', 'proofOn', 'proofRemind'];
+  const SHARED = ['litrpg', 'snippets', 'defaultStyle', 'author', 'dailyGoal', 'quotes', 'myTemplates', 'fontFavs', 'trackStuck', 'stuckNudge', 'proofOn', 'proofRemind', 'wordList'];
   // kept in this browser's storage (look.js); the screen size stays per device
   const STORE = { 'unwip-look': v => { const o = { ...v }; delete o.uiSize; return o; }, 'unwip-typing': v => v };
   const ALL = [...SHARED, ...Object.keys(STORE)];

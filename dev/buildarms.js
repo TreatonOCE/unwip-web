@@ -55,7 +55,14 @@
     tear: ['Drop', 'gutté', 'gouttes', ['M0 -40C10 -16 26 4 26 18A26 26 0 0 1 -26 18C-26 4 -10 -16 0 -40Z']],
     eye: ['Eye', 'eye', 'eyes', ['M-42 0Q0 -38 42 0Q0 38 -42 0Z' + circ(0, 0, 13)], true]
   };
-  const blank = () => ({ shape: 'heater', div: 'plain', t1: 'azure', t2: 'or', ord: 'none', t3: 'or', charge: 'mullet', count: 3, t4: 'argent', ref: null, motto: '', mottoOn: true, mottoCol: 'argent', layout: 'auto', size: 1, pos: null });
+  // the shared symbol library (symbols.js) gets these hand-drawn charges too, sorted into sections
+  const SECT = { mullet: 'sky', estoile: 'sky', sun: 'sky', crescent: 'sky', cross: 'shapes', roundel: 'shapes', annulet: 'shapes', lozenge: 'shapes', heart: 'shapes', tear: 'shapes', eye: 'shapes',
+    tower: 'things', crown: 'things', key: 'weapons', sword: 'weapons', axe: 'weapons', tree: 'plants', mount: 'plants' };
+  const SYM = window.UnwipSymbols;
+  if (SYM) for (const [k, v] of Object.entries(CH)) SYM.register(k, { label: v[0], section: SECT[k] || 'shapes', b1: v[1], b2: v[2], paths: v[3], evenodd: !!v[4], cut: v[5] || '' });
+  const symDef = k => CH[k] ? { b1: CH[k][1], b2: CH[k][2], label: CH[k][0] } : SYM && SYM.get(k);
+  const article = w => /^[aeiou]/i.test(w) ? 'an' : 'a';
+  const blank = () => ({ shape: 'heater', div: 'plain', t1: 'azure', t2: 'or', ord: 'none', t3: 'or', charge: 'mullet', count: 3, t4: 'argent', ref: null, motto: '', mottoOn: true, mottoCol: 'argent', layout: 'auto', size: 1, pos: null, extras: [] });
 
   // ================================================================== DRAWING
   const col = t => (T[t] || T.argent)[2];
@@ -166,10 +173,18 @@
         inner = `<g transform="scale(.42)">${B.sigils.sigilG({ ...D, width: D.width + 4 }, null, line)}${B.sigils.sigilG(D, null, c)}</g>`;
       }
     } else {
-      const def = CH[d.charge]; if (!def) return '';
-      inner = def[3].map(p => `<path d="${p}" fill="${c}" ${def[4] ? 'fill-rule="evenodd"' : ''} stroke="${line}" stroke-width="2.2" stroke-linejoin="round"/>`).join('') + (def[5] ? `<path d="${def[5]}" fill="${line}"/>` : '');
+      const def = CH[d.charge];
+      if (def) inner = def[3].map(p => `<path d="${p}" fill="${c}" ${def[4] ? 'fill-rule="evenodd"' : ''} stroke="${line}" stroke-width="2.2" stroke-linejoin="round"/>`).join('') + (def[5] ? `<path d="${def[5]}" fill="${line}"/>` : '');
+      else if (SYM && SYM.get(d.charge)) inner = SYM.g(d.charge, c, line, 2.2);
+      else return '';
     }
     return fitSpots(d, spots(d) || []).map(([x, y, s], i) => `<g data-chi="${i}" data-x="${x}" data-y="${y}" data-s="${s}" transform="translate(${x} ${y}) scale(${s})">${inner}</g>`).join('');
+  }
+  // more symbols, as many as you like: each with its own colour and size, wherever it's dragged to
+  function extrasG(d) {
+    if (!SYM || !Array.isArray(d.extras)) return '';
+    return d.extras.map((e, i) => { const c = col(e.t), line = e.t === 'sable' ? '#6b6b6b' : '#1d1d1f';
+      return `<g data-exi="${i}" data-x="${e.x}" data-y="${e.y}" data-s="${e.s}" transform="translate(${e.x} ${e.y}) scale(${e.s})">${SYM.g(e.k, c, line, 2.2)}</g>`; }).join('');
   }
   function armsSVG(d, refs, size) {
     const sh = (SHAPES[d.shape] || SHAPES.heater)[1];
@@ -187,7 +202,7 @@
         ${lines.map((l, i) => `<text x="100" y="${(lines.length > 1 ? 259 + i * (fs + 1.5) : 264) + fs * 0.35}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="${fs.toFixed(1)}" letter-spacing="1"${fits(l)} fill="${d.mottoCol === 'sable' || d.mottoCol === 'gules' || d.mottoCol === 'azure' || d.mottoCol === 'vert' || d.mottoCol === 'purpure' || d.mottoCol === 'sanguine' ? '#f2f1ec' : '#1d1d1f'}">${esc(l)}</text>`).join('')}</g>` : '';
     const H = motto ? 290 : 244;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 ${H}" width="${size ? size * 200 / H : '100%'}" height="${size || '100%'}"><defs><clipPath id="${id}"><path d="${sh}"/></clipPath></defs>
-      <g clip-path="url(#${id})">${field(d)}${ordinary(d)}</g>${bord}${chargeG(d, refs)}
+      <g clip-path="url(#${id})">${field(d)}${ordinary(d)}</g>${bord}${chargeG(d, refs)}${extrasG(d)}
       <path d="${sh}" fill="none" stroke="#1d1d1f" stroke-width="3.2" stroke-linejoin="round"/>${ribbon}</svg>`;
   }
 
@@ -202,7 +217,7 @@
         const R = refs && refs.item, A = R && R.data, g = A && A.glyphs && A.glyphs.find(x => x.id === (d.ref && d.ref.glyph));
         const nm = d.charge === 'rune' ? (g && (g.name || (g.key || '').toUpperCase()) ? `rune${n > 1 ? 's' : ''} “${g.name || g.key.toUpperCase()}”` : `rune${n > 1 ? 's' : ''}`) : `sigil${n > 1 ? 's' : ''}${R ? ` of ${R.title}` : ''}`;
         ch = `${n === 1 ? (/^[aeiou]/i.test(nm) ? 'an' : 'a') : num} ${nm} ${tn(d.t4)}`;
-      } else { const def = CH[d.charge]; if (def) { const word = n === 1 ? def[1] : def[2]; ch = `${n === 1 ? (/^[aeiou]/i.test(word) ? 'an' : 'a') : num} ${word} ${tn(d.t4)}`; } }
+      } else { const def = symDef(d.charge); if (def) { const word = n === 1 ? def.b1 : def.b2; ch = `${n === 1 ? article(word) : num} ${word} ${tn(d.t4)}`; } }
       const L = d.layout || 'auto', how = n > 1 && layoutsFor(n).includes(L) ? (L === 'onetwo' && n === 4 ? 'one, two and one' : LAYOUTS[L] ? LAYOUTS[L][1] : '') : '';
       if (ch && how) ch = ch.replace(new RegExp(` ${tn(d.t4)}$`), ` ${how} ${tn(d.t4)}`);   // the heralds' order: three mullets in fess Or
     }
@@ -212,6 +227,8 @@
     else if (ch) s += `, ${ch}`;
     if (o && d.ord === 'chief') s += `, ${o}`;
     if (o && d.ord === 'bordure') s += `, ${o}`;
+    const more = (d.extras || []).map(e => { const D = symDef(e.k); return D ? `${article(D.b1)} ${D.b1} ${tn(e.t)}` : ''; }).filter(Boolean);
+    if (more.length) s += `; and ${more.length > 1 ? more.slice(0, -1).join(', ') + ' and ' + more[more.length - 1] : more[0]}`;
     return s + '.';
   }
   function tinctureNotes(d) {
@@ -277,7 +294,7 @@
         <h3>Band <small>(ordinary)</small></h3><div class="field"><select id="ar-ord">${Object.entries(ORD).map(([k, v]) => `<option value="${k}" ${d.ord === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></div>
         ${d.ord !== 'none' ? sw('t3', 'Band colour') : ''}
         <h3>Symbols <small>(charges)</small></h3>
-        <div class="ar-charges">${charges.map(([k, l]) => `<button type="button" class="ar-ch ${d.charge === k ? 'on' : ''}" data-ch="${k}" title="${l}">${k === 'none' ? '<span>—</span>' : `<svg viewBox="-50 -50 100 100">${CH[k][3].map(p => `<path d="${p}" ${CH[k][4] ? 'fill-rule="evenodd"' : ''}/>`).join('')}</svg>`}</button>`).join('')}
+        <div class="ar-charges">${!CH[d.charge] && SYM && SYM.get(d.charge) ? `<button type="button" class="ar-ch lib on" data-ch="${d.charge}" title="${esc(SYM.get(d.charge).label)}">${SYM.icon(d.charge)}</button>` : ''}${charges.map(([k, l]) => `<button type="button" class="ar-ch ${d.charge === k ? 'on' : ''}" data-ch="${k}" title="${l}">${k === 'none' ? '<span>—</span>' : `<svg viewBox="-50 -50 100 100">${CH[k][3].map(p => `<path d="${p}" ${CH[k][4] ? 'fill-rule="evenodd"' : ''}/>`).join('')}</svg>`}</button>`).join('')}${SYM ? '<button type="button" class="ar-ch ar-all" id="ar-all" title="All symbols: animals, dragons, numerals and more">All…</button>' : ''}
           ${runeOpts.length ? '<span class="ar-chl">Your runes</span>' : ''}${runeOpts.slice(0, 60).map(({ r, g }) => { const A = Object.assign(B.runes.blank(), r.data); const gw = B.runes.glyphW(A), gh = B.runes.glyphH(A); return `<button type="button" class="ar-ch rune ${d.charge === 'rune' && d.ref && d.ref.glyph === g.id ? 'on' : ''}" data-rune="${r.id}|${g.id}" title="${esc(r.title)}: ${esc(g.name || (g.key || '').toUpperCase())}"><svg viewBox="${-8} ${-8} ${gw + 16} ${gh + 16}">${B.runes.glyphG({ ...A, width: Math.max(A.width, 4) }, g, 'currentColor')}</svg></button>`; }).join('')}
           ${sigils.length ? '<span class="ar-chl">Your sigils</span>' : ''}${sigils.map(s => `<button type="button" class="ar-ch sigil ${d.charge === 'sigil' && d.ref && d.ref.id === s.id ? 'on' : ''}" data-sigil="${s.id}" title="Sigil: ${esc(s.title)}"><svg viewBox="-104 -104 208 208">${B.sigils.sigilG(Object.assign(B.sigils.blank(), s.data || {}), null, 'currentColor')}</svg></button>`).join('')}</div>
         ${runes.length || sigils.length ? '' : '<p class="bm-help">Runes and sigils you make in Build show up here too.</p>'}
@@ -285,6 +302,12 @@
           <div class="field"><label>Arrangement</label><div class="chip-row" id="ar-layout">${layoutsFor(d.count || 1).map(k => `<button type="button" class="chip ${(d.layout || 'auto') === k || (!layoutsFor(d.count || 1).includes(d.layout || 'auto') && k === 'auto') ? 'on' : ''}" data-layout="${k}">${k === 'custom' ? '✋ ' : ''}${LAYOUTS[k][0]}</button>`).join('')}</div>
             ${d.layout === 'custom' ? '<p class="bm-help">Drag the symbols on the shield to move them. Pick another arrangement to go back.</p>' : ''}</div>
           <div class="field"><label>Size <small id="ar-size-v">${Math.round((+d.size || 1) * 100)}%</small></label><input type="range" id="ar-size" min="40" max="180" step="5" value="${Math.round((+d.size || 1) * 100)}"></div>` : ''}
+        ${SYM ? `<h3>More symbols</h3>
+          <div class="ar-extras">${(d.extras || []).map((e, i) => { const D = SYM.get(e.k); return D ? `<div class="ar-ex" data-i="${i}"><span class="ar-ex-ic">${SYM.icon(e.k)}</span><span class="ar-ex-n">${esc(D.label)}</span>
+            <select data-ex-t aria-label="Colour">${Object.entries(T).map(([k, v]) => `<option value="${k}" ${e.t === k ? 'selected' : ''}>${v[0]} (${v[1]})</option>`).join('')}</select>
+            <input type="range" data-ex-s min="15" max="120" step="5" value="${Math.round(e.s * 100)}" aria-label="Size"><button type="button" class="icon-btn small" data-ex-del title="Remove">×</button></div>` : ''; }).join('')}</div>
+          <button type="button" class="btn small" id="ar-ex-add">+ Add a symbol</button>
+          ${(d.extras || []).length ? '<p class="bm-help">Drag them on the shield to place them.</p>' : '<p class="bm-help">Add as many as you like, each in its own colour and size: a crow on a tower, a numeral, a second beast.</p>'}` : ''}
         <h3>Motto</h3><div class="field"><input id="ar-motto" value="${esc(d.motto || '')}" placeholder="e.g. We do not kneel"></div>
         ${(d.motto || '').trim() ? `<label class="bd-check"><input type="checkbox" id="ar-mon" ${d.mottoOn ? 'checked' : ''}> Show the motto on a ribbon</label>${sw('mottoCol', 'Ribbon colour')}` : ''}
       </aside></div>`;
@@ -296,6 +319,7 @@
     $('#ar-ord', box).onchange = e => { d.ord = e.target.value; re(); };
     $$('.ar-sw', box).forEach(s => $$('.ar-t', s).forEach(b => b.onclick = () => { d[s.dataset.key] = b.dataset.t; re(); }));
     $$('.ar-ch', box).forEach(b => b.onclick = async () => {
+      if (b.id === 'ar-all') { const k = await SYM.pick({ title: 'The main symbol', current: d.charge }); if (!k) return; d.charge = k; d.ref = null; return re(); }
       if (b.dataset.rune) { const [rid, gid] = b.dataset.rune.split('|'); d.charge = 'rune'; d.ref = { id: rid, glyph: gid }; }
       else if (b.dataset.sigil) { d.charge = 'sigil'; d.ref = { id: b.dataset.sigil }; }
       else { d.charge = b.dataset.ch; d.ref = null; }
@@ -307,6 +331,19 @@
       if (L === 'custom' && d.layout !== 'custom') { const cur = [...$('#ar-shield', box).querySelectorAll('[data-chi]')].map(g => [+g.dataset.x, +g.dataset.y]); d.pos = cur; }
       d.layout = L; re();
     });
+    const add = $('#ar-ex-add', box);
+    if (add) add.onclick = async () => {
+      const k = await SYM.pick({ title: 'Add a symbol' }); if (!k) return;
+      const n = (d.extras || []).length, metal = T[d.t1] && T[d.t1][3] === 'metal';
+      d.extras = [...(d.extras || []), { k, t: metal ? 'sable' : 'or', x: 100 + ((n % 3) - 1) * 30, y: 118 + (Math.floor(n / 3) % 3) * 26 - 26, s: .45 }];
+      re();
+    };
+    $$('.ar-ex', box).forEach(row => {
+      const e = () => d.extras[+row.dataset.i];
+      row.querySelector('[data-ex-t]').onchange = ev => { e().t = ev.target.value; paint(); ctx.changed(); };
+      row.querySelector('[data-ex-s]').oninput = ev => { e().s = +ev.target.value / 100; paint(); ctx.changed(); };
+      row.querySelector('[data-ex-del]').onclick = () => { d.extras.splice(+row.dataset.i, 1); re(); };
+    });
     const size = $('#ar-size', box); if (size) size.oninput = () => { d.size = +size.value / 100; $('#ar-size-v', box).textContent = size.value + '%'; paint(); ctx.changed(); };
     $('#ar-motto', box).oninput = e => { const had = !!(d.motto || '').trim(); d.motto = e.target.value; paint(); ctx.changed(); if (had !== !!d.motto.trim()) { const pos = e.target.selectionStart; drawAll(); const m = $('#ar-motto', box); m.focus(); m.setSelectionRange(pos, pos); } };
     const mon = $('#ar-mon', box); if (mon) mon.onchange = e => { d.mottoOn = e.target.checked; paint(); ctx.changed(); };
@@ -316,6 +353,7 @@
     sh.innerHTML = armsSVG(d, refs);
     sh.classList.toggle('dragging-on', d.layout === 'custom');
     if (d.layout === 'custom') dragCharges(sh);
+    dragExtras(sh);
     $('#ar-blazon', box).innerHTML = `<small>The herald’s description</small><p>${esc(blazon(d, refs))}</p>`;
     const notes = tinctureNotes(d);
     $('#ar-warn', box).innerHTML = notes.length ? `<b>Heralds’ rule of colour</b><p>Metal (gold, silver) goes on colour, and colour on metal, so arms can be read from far away. Here ${esc(notes.join('; '))}. It’s your world, so break the rule if you mean to: real arms sometimes do.</p>` : '';
@@ -338,6 +376,25 @@
       };
       svg.addEventListener('pointermove', move); svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
     }));
+  }
+  // the extra symbols can always be dragged
+  function dragExtras(sh) {
+    const svg = sh.querySelector('svg'); if (!svg) return;
+    svg.querySelectorAll('[data-exi]').forEach(g => { g.style.cursor = 'grab'; g.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const m = svg.getScreenCTM(); if (!m) return;
+      const inv = m.inverse(), pt = svg.createSVGPoint();
+      const at = ev => { pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(inv); return [Math.max(0, Math.min(200, p.x)), Math.max(0, Math.min(244, p.y))]; };
+      const [sx, sy] = at(e), ox = +g.dataset.x - sx, oy = +g.dataset.y - sy, s = +g.dataset.s, i = +g.dataset.exi;
+      svg.setPointerCapture(e.pointerId);
+      const move = ev => { const [x, y] = at(ev); g.dataset.x = (x + ox).toFixed(1); g.dataset.y = (y + oy).toFixed(1); g.setAttribute('transform', `translate(${g.dataset.x} ${g.dataset.y}) scale(${s})`); };
+      const up = () => {
+        svg.removeEventListener('pointermove', move); svg.removeEventListener('pointerup', up); svg.removeEventListener('pointercancel', up);
+        if (d.extras[i]) { d.extras[i].x = +g.dataset.x; d.extras[i].y = +g.dataset.y; }
+        paint(); ctx.changed();
+      };
+      svg.addEventListener('pointermove', move); svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+    }); });
   }
   async function refsFor(item) { const r = item.data && item.data.ref; return { item: r && r.id ? await B.get(r.id) : null }; }
   B.editors.arms = {
