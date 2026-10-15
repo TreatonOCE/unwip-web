@@ -33,7 +33,7 @@
     const k = Math.min(w, h) * 0.08, b = (cx, cy, dx, dy) => `M${cx + dx * k} ${cy}H${cx}V${cy + dy * k}`;
     return `<g fill="none" stroke="${col}"><rect x="${x + 3}" y="${y + 3}" width="${w - 6}" height="${h - 6}" stroke-width=".6" opacity=".35"/>
       <path d="${b(x + 3, y + 3, 1, 1)}${b(x + w - 3, y + 3, -1, 1)}${b(x + 3, y + h - 3, 1, -1)}${b(x + w - 3, y + h - 3, -1, -1)}" stroke-width="1.6"/></g>
-      <text x="${x + 10}" y="${y + 13}" font-family="Menlo, Consolas, monospace" font-size="7" letter-spacing="1.2" fill="${col}" opacity=".85">${esc(String(label || 'SYSTEM').toUpperCase())}</text>
+      <text x="${x + 10}" y="${y + 13}" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="7" letter-spacing="1.2" fill="${col}" opacity=".85">${esc(String(label || 'SYSTEM').toUpperCase())}</text>
       <path d="M${x + w - 34} ${y + 9}h5M${x + w - 27} ${y + 9}h5M${x + w - 20} ${y + 9}h10" stroke="${col}" stroke-width="2" opacity=".7"/>
       <path d="M${x + 10} ${y + 17}H${x + w - 10}" stroke="${col}" stroke-width=".5" opacity=".4"/>`;
   }
@@ -98,7 +98,7 @@
       let x, y;
       if (vert) { x = li * colW; y = pos; } else { y = li * lineH; x = dir === 'rtl' ? maxLen - pos - size : pos; }
       if (t.g) parts += `<g transform="translate(${x} ${y})">${glyphG(A, t.g, col)}</g>`;
-      else parts += `<text x="${x + (vert ? gw / 2 : 5)}" y="${y + gh * 0.75}"${vert ? ' text-anchor="middle"' : ''} font-family="${A.cap === 'circuit' ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${gh * 0.8}" fill="${col}" opacity=".35">${esc(t.ch)}</text>`;
+      else parts += `<text x="${x + (vert ? gw / 2 : 5)}" y="${y + gh * 0.75}"${vert ? ' text-anchor="middle"' : ''} font-family="${A.cap === 'circuit' ? "'IBM Plex Mono', Menlo, Consolas, monospace" : 'Bookhaven, Georgia, serif'}" font-size="${gh * 0.8}" fill="${col}" opacity=".35">${esc(t.ch)}</text>`;
     }));
     const hud = A.panel === 'system', pad = hud ? CELL * 1.6 : CELL, top = hud ? pad + 14 : pad;
     const W = Math.max((vert ? lines.length * colW - CELL * 1.4 : maxLen) + pad * 2, hud ? 120 : 0), H = (vert ? maxLen : lines.length * lineH - CELL * 1.4) + pad + top;
@@ -111,9 +111,9 @@
     const list = A.glyphs.filter(g => (g.strokes || []).length), per = opts.per || 6, cw = Math.max(glyphW(A), CELL * 2) + CELL * 2.4, ch = glyphH(A) + CELL * 3.2;
     const rows = Math.max(1, Math.ceil(list.length / per)), W = Math.min(per, Math.max(1, list.length)) * cw + CELL * 2, H = rows * ch + CELL * 2;
     const cells = list.map((g, i) => { const x = CELL + (i % per) * cw + (cw - glyphW(A)) / 2, y = CELL * 1.4 + Math.floor(i / per) * ch;
-      return `<g transform="translate(${x} ${y})">${glyphG(A, g)}</g><text x="${CELL + (i % per) * cw + cw / 2}" y="${y + glyphH(A) + CELL * 1.25}" text-anchor="middle" font-family="${A.cap === 'circuit' ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${CELL * 0.62}" fill="${A.color}">${esc((g.key || '').toUpperCase())}${g.name ? ' · ' + esc(g.name) : ''}</text>`; }).join('');
+      return `<g transform="translate(${x} ${y})">${glyphG(A, g)}</g><text x="${CELL + (i % per) * cw + cw / 2}" y="${y + glyphH(A) + CELL * 1.25}" text-anchor="middle" font-family="${A.cap === 'circuit' ? "'IBM Plex Mono', Menlo, Consolas, monospace" : 'Bookhaven, Georgia, serif'}" font-size="${CELL * 0.62}" fill="${A.color}">${esc((g.key || '').toUpperCase())}${g.name ? ' · ' + esc(g.name) : ''}</text>`; }).join('');
     const hudTop = A.panel === 'system' ? 18 : 0;
-    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ${-hudTop} ${W} ${H + hudTop}" width="${W * (opts.scale || 1)}" height="${(H + hudTop) * (opts.scale || 1)}"><rect y="${-hudTop}" width="${W}" height="${H + hudTop}" fill="${opts.bg || panelBG(A)}"/>${hudTop ? hudFrame(0, -hudTop, W, H + hudTop, A.color, opts.title || 'System // alphabet') : ''}${cells || `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Georgia" font-size="12" fill="#999">No runes yet</text>`}</svg>`, w: W, h: H + hudTop };
+    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ${-hudTop} ${W} ${H + hudTop}" width="${W * (opts.scale || 1)}" height="${(H + hudTop) * (opts.scale || 1)}"><rect y="${-hudTop}" width="${W}" height="${H + hudTop}" fill="${opts.bg || panelBG(A)}"/>${hudTop ? hudFrame(0, -hudTop, W, H + hudTop, A.color, opts.title || 'System // alphabet') : ''}${cells || `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="12" fill="#999">No runes yet</text>`}</svg>`, w: W, h: H + hudTop };
   }
   // a random rune: a few joined strokes, not a copy of one already in the set (dice, not AI)
   function randomRune(A) {
@@ -356,7 +356,7 @@
     if (ringText && !alpha) {
       // no rune alphabet picked: the words go round in plain letters (monospace in the System look)
       const sys = D.bg === 'system', txt = esc(ringText.toUpperCase()), fs = Math.min(11, 520 / Math.max(12, ringText.length + 4));
-      runes = `<defs><path id="sg-ring-path" d="M0 87A87 87 0 1 1 0.01 87"/></defs><text font-family="${sys ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${fs}" letter-spacing="${sys ? 2 : 3}" fill="${c}" text-anchor="middle"><textPath href="#sg-ring-path" startOffset="50%">${sys ? '// ' + txt + ' //' : txt}</textPath></text>`;
+      runes = `<defs><path id="sg-ring-path" d="M0 87A87 87 0 1 1 0.01 87"/></defs><text font-family="${sys ? "'IBM Plex Mono', Menlo, Consolas, monospace" : 'Bookhaven, Georgia, serif'}" font-size="${fs}" letter-spacing="${sys ? 2 : 3}" fill="${c}" text-anchor="middle"><textPath href="#sg-ring-path" startOffset="50%">${sys ? '// ' + txt + ' //' : txt}</textPath></text>`;
     } else if (ringText) {
       const list = tokens(alpha, ringText).filter(t => t.g || t.space), h = 13, sc = h / Math.max(1, glyphH(alpha)), gw = glyphW(alpha) * sc;
       const step = 360 / Math.max(list.length, 12);
@@ -416,8 +416,8 @@
       body = `<defs><filter id="sg-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
         <path d="${ticks}" stroke="${col}" stroke-width=".6" opacity=".45" fill="none"/>
         <path d="${br(-100, -100, 1, 1)}${br(100, -100, -1, 1)}${br(-100, 100, 1, -1)}${br(100, 100, -1, -1)}" stroke="${col}" stroke-width="1.2" fill="none" opacity=".8"/>
-        <text x="-97" y="99" font-family="Menlo, Consolas, monospace" font-size="5" letter-spacing=".8" fill="${col}" opacity=".75">SIGIL // ${String(D.n).padStart(2, '0')}${+D.star ? ' // STAR ' + D.star : ''}</text>
-        <text x="97" y="99" text-anchor="end" font-family="Menlo, Consolas, monospace" font-size="5" letter-spacing=".8" fill="${col}" opacity=".55">BOUND ${D.strokes.length}</text>
+        <text x="-97" y="99" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="5" letter-spacing=".8" fill="${col}" opacity=".75">SIGIL // ${String(D.n).padStart(2, '0')}${+D.star ? ' // STAR ' + D.star : ''}</text>
+        <text x="97" y="99" text-anchor="end" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="5" letter-spacing=".8" fill="${col}" opacity=".55">BOUND ${D.strokes.length}</text>
         <g filter="url(#sg-glow)">${g}</g>`;
     }
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-104 -104 208 208" width="${size}" height="${size}">${bg ? `<rect x="-104" y="-104" width="208" height="208" fill="${bg}"/>` : ''}${guides}${body}${opts.overlay || ''}</svg>`;

@@ -40,7 +40,7 @@
     y += 6;
     const st = d.stats.map((s, i) => { const col = i % 2, gx = col ? 400 : 56, gy = y + Math.floor(i / 2) * 40; return `<text x="${gx}" y="${gy}" font-size="20" fill="${P.soft}">${x(s.name)}</text><text x="${gx + 290}" y="${gy}" font-size="22" fill="${P.ink}" text-anchor="end" font-weight="bold">${x(fmt(at(s, L)))}</text>`; }).join('');
     void rows;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 ${H}" width="800" height="${H}" font-family="ui-monospace, Menlo, Consolas, monospace">
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 ${H}" width="800" height="${H}" font-family="'IBM Plex Mono', Menlo, Consolas, monospace">
       <rect width="800" height="${H}" rx="18" fill="${P.bg}"/><rect x="16" y="16" width="768" height="${H - 32}" rx="12" fill="${P.panel}" stroke="${P.line}" stroke-width="2"/>
       <text x="400" y="62" text-anchor="middle" font-size="18" letter-spacing="6" fill="${P.accent}">STATUS</text>
       <text x="56" y="112" font-size="30" font-weight="bold" fill="${P.ink}">${x(d.name || item.title || 'Unnamed')}</text>

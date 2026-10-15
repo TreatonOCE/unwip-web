@@ -66,6 +66,7 @@ window.UnwipCommand = (function () {
     ['Insights: pacing and characters', 'chapter length dialogue scenes pov point of view character tracker appearances chart', '', detailed(() => U.setView('insights')), desk(inProject)],
     ['Writing goals', 'target daily words deadline', '', () => U.goalsDialog(), desk(inProject)],
     ['Report a problem', 'bug broken not working feedback help crash error send support', '', () => window.UnwipAbout && window.UnwipAbout.report(), () => !!window.UnwipAbout],
+    ['Your rights', 'rights own ownership copyright commercial sell licence license credit attribution reuse assets symbols', '', () => window.UnwipAbout && window.UnwipAbout.rights(), () => !!window.UnwipAbout],
     ['Open-source licences', 'licenses licences fonts ofl harper electron chromium credits copyright', '', () => window.UnwipAbout && window.UnwipAbout.licenses(), () => !!window.UnwipAbout],
     ['About Unwip', 'version credits licences licenses privacy ai no ai', '', () => window.UnwipAbout && window.UnwipAbout.about(), () => !!window.UnwipAbout],
     ['Sprint history', 'sprints wpm words per minute speed average best runs timer delete', '', () => window.UnwipSprints && window.UnwipSprints.open(), () => !!window.UnwipSprints],

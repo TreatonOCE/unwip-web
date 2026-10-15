@@ -276,7 +276,7 @@
   };
   const lookOf = d => Object.assign({ theme: 'parchment', frame: 'double', summary: true, costs: true, kinds: true, count: true }, d.look || {});
   // ---- the System look: drawn like a game's status window (LitRPG), monospace, glowing lines, bars for costs
-  const MONO = "Menlo, Consolas, 'DejaVu Sans Mono', monospace";
+  const MONO = "'IBM Plex Mono', Menlo, Consolas, monospace";
   const GLOW = '<defs><filter id="bm-glow" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
   const wrapW = (s, n, max) => { const words = String(s || '').split(/\s+/), lines = []; let l = ''; for (const x of words) { if ((l + ' ' + x).trim().length > n) { lines.push(l.trim()); l = x; } else l += ' ' + x; } if (l.trim()) lines.push(l.trim()); return lines.slice(0, max); };
   // the System window's frame follows the Border choice: Double line (a thin box and corner brackets), Ornate (a
@@ -352,11 +352,11 @@
       : `<rect x="18" y="18" width="764" height="464" rx="16" fill="none" stroke="${P.line}" stroke-width="3"/><rect x="28" y="28" width="744" height="444" rx="12" fill="none" stroke="${P.line}" stroke-width="1"/>`;
     const costY = kinds.length ? 330 : 360, kindY = costs.length ? 418 : 370;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="${w}" height="${h}"><rect width="800" height="500" rx="24" fill="${P.bg}"/>${frame}
-      <text x="400" y="${sum.length ? 110 : 150}" text-anchor="middle" font-family="Georgia, serif" font-size="52" fill="${P.ink}">${x(item.title)}</text>
-      ${sum.map((l, i) => `<text x="400" y="${170 + i * 34}" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="26" fill="${P.soft}">${x(l)}</text>`).join('')}
-      ${costs.map((c, i) => `<g transform="translate(${400 - (costs.length * 150) / 2 + i * 150 + 75} ${costY})"><circle r="44" fill="${P.disc}" stroke="${P.line}" stroke-width="2"/><text y="-4" text-anchor="middle" font-family="Georgia, serif" font-size="17" fill="${P.ink}">${x((c.name || '').slice(0, 12))}</text><text y="20" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="${P.accent}">${'●'.repeat(c.weight || 1)}</text></g>`).join('')}
-      ${kinds.length ? (() => { const wd = kinds.map(k => Math.max(70, x(k.name).length * 10 + 30)), total = wd.reduce((a, b) => a + b, 0) + (kinds.length - 1) * 12; let at = 400 - total / 2; return kinds.map((k, i) => { const g = `<g transform="translate(${at} ${kindY - 16})"><rect width="${wd[i]}" height="32" rx="16" fill="none" stroke="${P.accent}" stroke-width="1.5"/><text x="${wd[i] / 2}" y="21" text-anchor="middle" font-family="Georgia, serif" font-size="16" fill="${P.ink}">${x(k.name.slice(0, 16))}</text></g>`; at += wd[i] + 12; return g; }).join(''); })() : ''}
-      ${L.count ? `<text x="400" y="458" text-anchor="middle" font-family="Georgia, serif" font-size="16" fill="${P.line}">${d.spells.length} spell${d.spells.length === 1 ? '' : 's'} · ${d.elements.length} kind${d.elements.length === 1 ? '' : 's'} of magic</text>` : ''}</svg>`;
+      <text x="400" y="${sum.length ? 110 : 150}" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="52" fill="${P.ink}">${x(item.title)}</text>
+      ${sum.map((l, i) => `<text x="400" y="${170 + i * 34}" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-style="italic" font-size="26" fill="${P.soft}">${x(l)}</text>`).join('')}
+      ${costs.map((c, i) => `<g transform="translate(${400 - (costs.length * 150) / 2 + i * 150 + 75} ${costY})"><circle r="44" fill="${P.disc}" stroke="${P.line}" stroke-width="2"/><text y="-4" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="17" fill="${P.ink}">${x((c.name || '').slice(0, 12))}</text><text y="20" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="14" fill="${P.accent}">${'●'.repeat(c.weight || 1)}</text></g>`).join('')}
+      ${kinds.length ? (() => { const wd = kinds.map(k => Math.max(70, x(k.name).length * 10 + 30)), total = wd.reduce((a, b) => a + b, 0) + (kinds.length - 1) * 12; let at = 400 - total / 2; return kinds.map((k, i) => { const g = `<g transform="translate(${at} ${kindY - 16})"><rect width="${wd[i]}" height="32" rx="16" fill="none" stroke="${P.accent}" stroke-width="1.5"/><text x="${wd[i] / 2}" y="21" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="16" fill="${P.ink}">${x(k.name.slice(0, 16))}</text></g>`; at += wd[i] + 12; return g; }).join(''); })() : ''}
+      ${L.count ? `<text x="400" y="458" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="16" fill="${P.line}">${d.spells.length} spell${d.spells.length === 1 ? '' : 's'} · ${d.elements.length} kind${d.elements.length === 1 ? '' : 's'} of magic</text>` : ''}</svg>`;
   }
   B.editors.magic = {
     blank, open, check,

@@ -81,7 +81,7 @@
   const blank = () => ({ frame: 'hex', symbol: 'eye', scheme: 'neon', name: '', desig: '', code: '', weight: 5, panel: true, ticks: true, double: true, custom: null, pattern: 'none', symScale: 1, rank: 0, glow: false, nodes: false, readout: false, readL: '', readR: '', barcode: false, glitch: false, orbit: false, scope: false });
   // a steady number from the name, so barcodes and readouts don't change every time it's drawn
   const hash = str => { let h = 2166136261; for (const c of String(str || 'unwip')) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
-  const COND = "'Bahnschrift SemiCondensed', Bahnschrift, 'DIN Condensed', 'Avenir Next Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif";
+  const COND = "Oswald, 'Arial Narrow', sans-serif";
   const colours = d => Object.assign({}, SCHEMES[d.scheme] || SCHEMES.neon, d.custom || {});
 
   // ---- the frames, around a centre of 200,200
@@ -156,7 +156,7 @@
     const fit = (n, f, sp, max) => n * (f * 0.56 + sp) > max ? ` textLength="${max}" lengthAdjust="spacingAndGlyphs"` : '';
     const text = hasText ? `<text x="200" y="${d.desig ? 450 : 462}" text-anchor="middle" font-family="${COND}" font-weight="700" font-size="${fs}" letter-spacing="${ls}"${fit(nm.length, fs, ls, 350)} fill="${C.main}">${nm}</text>
       ${dg ? `<path d="M40 482H${200 - Math.min(160, (d.desig || '').length * 6.8 + 12)}M${200 + Math.min(160, (d.desig || '').length * 6.8 + 12)} 482H360" stroke="${C.acc}" stroke-width="2"/><text x="200" y="488" text-anchor="middle" font-family="${COND}" font-size="17" letter-spacing="4"${fit((d.desig || '').length, 17, 4, 300)} fill="${C.acc}">${dg}</text>` : ''}
-      ${cd ? `<text x="372" y="512" text-anchor="end" font-family="Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="${C.main}" opacity=".6">${cd}</text>` : ''}` : '';
+      ${cd ? `<text x="372" y="512" text-anchor="end" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="${C.main}" opacity=".6">${cd}</text>` : ''}` : '';
     const sk = k * (+d.symScale || 1), syCy = cy + (d.frame === 'triangle' ? 40 : 0) - (d.rank ? 16 : 0);
     const isLib = !SYM[d.symbol] && LIB && LIB.get(d.symbol);
     const symPath = (col, op, dx) => isLib
@@ -169,7 +169,7 @@
     if (d.nodes) { const cs = cornersOf(d); extras.push(`<path d="${cs.map(([x, y]) => { const q = Math.atan2(y - syCy, x - 200), r = 62 * Math.min(1.4, sk / 2.15 + 0.3); return `M${x.toFixed(1)} ${y.toFixed(1)}L${(200 + r * Math.cos(q)).toFixed(1)} ${(syCy + r * Math.sin(q)).toFixed(1)}`; }).join('')}" stroke="${C.acc}" stroke-width="1" opacity=".55" stroke-dasharray="2 4"/>${cs.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${Math.max(5, d.weight * 1.1)}" fill="${C.bg}" stroke="${C.acc}" stroke-width="${Math.max(1.6, d.weight * 0.45)}"/>`).join('')}`); }
     if (d.rank) extras.push([...Array(+d.rank)].map((_, i) => `<path d="M168 ${syCy + 92 + i * 14}L200 ${syCy + 80 + i * 14}L232 ${syCy + 92 + i * 14}" fill="none" stroke="${C.acc}" stroke-width="5" stroke-linejoin="miter"/>`).join(''));
     if (d.readout) { const L = (d.readL || ((d.code || ('SYS-' + String(hv % 97).padStart(2, '0'))) + ' // ' + (d.desig || 'UNIT').slice(0, 12))).toUpperCase().slice(0, 34), R = (d.readR || ('0x' + hv.toString(16).toUpperCase().padStart(8, '0'))).toUpperCase().slice(0, 34);
-      extras.push(`<text transform="translate(16 200) rotate(-90)" text-anchor="middle" font-family="Menlo, Consolas, monospace" font-size="11" letter-spacing="3" fill="${C.main}" opacity=".55">${esc(L)}</text><text transform="translate(384 200) rotate(90)" text-anchor="middle" font-family="Menlo, Consolas, monospace" font-size="11" letter-spacing="3" fill="${C.main}" opacity=".55">${R}</text>`); }
+      extras.push(`<text transform="translate(16 200) rotate(-90)" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="11" letter-spacing="3" fill="${C.main}" opacity=".55">${esc(L)}</text><text transform="translate(384 200) rotate(90)" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="11" letter-spacing="3" fill="${C.main}" opacity=".55">${R}</text>`); }
     const barH = d.barcode ? 34 : 0, H2 = H + barH;
     let barcode = '';
     if (d.barcode) { let x = 120, b = ''; for (let i = 0; i < 48 && x < 280; i++) { const w = 1 + ((hv >>> (i % 29)) ^ i * 7) % 4; if (i % 2 === 0) b += `<rect x="${x}" y="${H + 4}" width="${w}" height="22"/>`; x += w + 1; } barcode = `<g fill="${C.main}" opacity=".8">${b}</g>`; }

@@ -8,7 +8,7 @@ window.UnwipSymbols = (function () {
     ['plants', 'Plants'], ['sky', 'Sun, moon & stars'], ['weapons', 'Weapons & tools'], ['things', 'Places & things'], ['dark', 'Death & dark'], ['numerals', 'Numerals']];
   const DEFS = {};   // key -> { label, section, b1, b2, paths, box (512: game-icons; 0: drawn around 0,0 about 84 across), evenodd, cut }
   // from game-icons.net
-  for (const [k, [label, section, b1, b2, d]] of Object.entries(window.UnwipSymbolData || {})) DEFS[k] = { label, section, b1, b2, paths: [d], box: 512 };
+  for (const [k, [label, section, b1, b2, d, by]] of Object.entries(window.UnwipSymbolData || {})) DEFS[k] = { label, section, b1, b2, paths: [d], box: 512, by };
 
   // ---- Roman numerals, drawn as shapes (no font needed, so they look the same in every picture and export)
   const GLYPH = {
@@ -44,7 +44,7 @@ window.UnwipSymbols = (function () {
     const body = document.createElement('div'); body.className = 'sym-pick';
     const only = opts.sections ? SECTIONS.filter(([s]) => opts.sections.includes(s)) : SECTIONS;
     body.innerHTML = `<input class="sym-search" type="search" placeholder="Find a symbol: lion, crow, skull, IV…" aria-label="Find a symbol">
-      <div class="sym-sections">${only.map(([s, name]) => { const keys = inSection(s); return keys.length ? `<section data-sec="${s}"><h4>${name}</h4><div class="sym-grid">${keys.map(k => `<button type="button" class="sym-b ${opts.current === k ? 'on' : ''}" data-sym="${k}" title="${U.esc(DEFS[k].label)}">${icon(k)}<span>${U.esc(DEFS[k].label)}</span></button>`).join('')}</div></section>` : ''; }).join('')}</div>`;
+      <p class="sym-note">The animals and objects are by artists at game-icons.net: free to use, even commercially, with a short credit when you publish (Build shows the line).</p><div class="sym-sections">${only.map(([s, name]) => { const keys = inSection(s); return keys.length ? `<section data-sec="${s}"><h4>${name}</h4><div class="sym-grid">${keys.map(k => `<button type="button" class="sym-b ${opts.current === k ? 'on' : ''}" data-sym="${k}" title="${U.esc(DEFS[k].label)}">${icon(k)}<span>${U.esc(DEFS[k].label)}</span></button>`).join('')}</div></section>` : ''; }).join('')}</div>`;
     let chosen = null;
     const p = U.modal({ title: opts.title || 'Pick a symbol', body, wide: true, buttons: [{ label: 'Cancel', value: null, kind: 'ghost' }],
       onOpen: () => setTimeout(() => { const s = body.querySelector('.sym-search'); if (s && !matchMedia('(pointer: coarse)').matches) s.focus(); }, 50) });
@@ -61,5 +61,12 @@ window.UnwipSymbols = (function () {
     await p;
     return chosen;
   }
-  return { SECTIONS, register, get, g, icon, pick, inSection, roman, keys: () => Object.keys(DEFS) };
+  // the credit a picture needs when it uses game-icons.net symbols (CC BY 3.0 asks for the artist's name), or null
+  function credit(keys) {
+    const by = [...new Set((keys || []).map(k => DEFS[k] && DEFS[k].by).filter(Boolean))].sort();
+    if (!by.length) return null;
+    const names = by.length === 1 ? by[0] : by.slice(0, -1).join(', ') + ' and ' + by[by.length - 1];
+    return { by, line: `Symbols by ${names}, game-icons.net, CC BY 3.0` };
+  }
+  return { SECTIONS, register, get, g, icon, pick, inSection, roman, credit, keys: () => Object.keys(DEFS) };
 })();

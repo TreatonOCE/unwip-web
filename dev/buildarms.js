@@ -192,14 +192,14 @@
     const bord = d.ord === 'bordure' ? `<path d="${sh}" fill="none" stroke="${col(d.t3)}" stroke-width="28" clip-path="url(#${id})"/>` : '';
     const motto = d.mottoOn && (d.motto || '').trim();
     const mc = col(d.mottoCol || 'argent'), up = (motto || '').toUpperCase();
-    // capitals in Georgia are about 0.72em wide (plus 1 of letter spacing); long mottos go on two lines
+    // capitals in Bookhaven are about 0.72em wide (plus 1 of letter spacing); long mottos go on two lines
     let lines = [up];
     if (up.length > 22) { const mid = up.length / 2; let cut = -1; for (let i = 0; i < up.length; i++) if (up[i] === ' ' && (cut < 0 || Math.abs(i - mid) < Math.abs(cut - mid))) cut = i; lines = cut > 0 ? [up.slice(0, cut), up.slice(cut + 1)] : [up]; }
     const longest = Math.max(...lines.map(l => l.length), 1), fs = Math.max(6, Math.min(15, (148 / longest - 1) / 0.72, lines.length > 1 ? 11 : 15));
     const fits = l => l.length * (fs * 0.72 + 1) > 150 ? ` textLength="150" lengthAdjust="spacingAndGlyphs"` : '';
     const ribbon = motto ? `<g><path d="M22 254H4L13 266L4 278H22Z" fill="${mc}" stroke="#1d1d1f" stroke-width="1.6" stroke-linejoin="round"/><path d="M178 254H196L187 266L196 278H178Z" fill="${mc}" stroke="#1d1d1f" stroke-width="1.6" stroke-linejoin="round"/>
         <path d="M18 250Q100 240 182 250V276Q100 266 18 276Z" fill="${mc}" stroke="#1d1d1f" stroke-width="1.8" stroke-linejoin="round"/>
-        ${lines.map((l, i) => `<text x="100" y="${(lines.length > 1 ? 259 + i * (fs + 1.5) : 264) + fs * 0.35}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="${fs.toFixed(1)}" letter-spacing="1"${fits(l)} fill="${d.mottoCol === 'sable' || d.mottoCol === 'gules' || d.mottoCol === 'azure' || d.mottoCol === 'vert' || d.mottoCol === 'purpure' || d.mottoCol === 'sanguine' ? '#f2f1ec' : '#1d1d1f'}">${esc(l)}</text>`).join('')}</g>` : '';
+        ${lines.map((l, i) => `<text x="100" y="${(lines.length > 1 ? 259 + i * (fs + 1.5) : 264) + fs * 0.35}" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="${fs.toFixed(1)}" letter-spacing="1"${fits(l)} fill="${d.mottoCol === 'sable' || d.mottoCol === 'gules' || d.mottoCol === 'azure' || d.mottoCol === 'vert' || d.mottoCol === 'purpure' || d.mottoCol === 'sanguine' ? '#f2f1ec' : '#1d1d1f'}">${esc(l)}</text>`).join('')}</g>` : '';
     const H = motto ? 290 : 244;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 ${H}" width="${size ? size * 200 / H : '100%'}" height="${size || '100%'}"><defs><clipPath id="${id}"><path d="${sh}"/></clipPath></defs>
       <g clip-path="url(#${id})">${field(d)}${ordinary(d)}</g>${bord}${chargeG(d, refs)}${extrasG(d)}

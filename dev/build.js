@@ -45,8 +45,22 @@ window.UnwipBuild = (function () {
     await put(it);
   }
   // pictures of everything (for thumbnails, Copy picture, Save PNG and Add to book)
-  const svgURL = svg => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  // A picture drawn from SVG can't see the page's fonts, so the bundled fonts it names (Bookhaven, Oswald, IBM Plex
+  // Mono) go inside it. Exported pictures then never depend on the fonts of the computer they were made on.
+  let fontsP = null;
+  const loadFonts = () => fontsP || (fontsP = new Promise(res => {
+    if (window.UnwipPictureFonts) return res();
+    const s = document.createElement('script'); s.src = 'picture-fonts.js'; s.onload = s.onerror = () => res(); document.head.appendChild(s);
+  }));
+  const fontCSS = {};
+  function withFonts(svg) {
+    const PF = window.UnwipPictureFonts; if (!PF) return svg;
+    const css = Object.keys(PF).filter(f => svg.includes(f)).map(f => fontCSS[f] || (fontCSS[f] = PF[f].map(([w, st, b64]) => `@font-face{font-family:'${f}';src:url(data:font/woff;base64,${b64}) format('woff');font-weight:${w};font-style:${st}}`).join(''))).join('');
+    return css ? svg.replace(/<svg\b[^>]*>/, m => `${m}<defs><style>${css}</style></defs>`) : svg;
+  }
+  const svgURL = svg => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(withFonts(svg));
   async function svgCanvas(svg, w, h) {
+    await loadFonts();
     const img = new Image(); img.src = svgURL(svg);
     await img.decode();
     const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
@@ -62,6 +76,7 @@ window.UnwipBuild = (function () {
   // ================================================================== THE BUILD PAGE
   const ago = t => { const d = (Date.now() - t) / 1000; if (d < 60) return 'just now'; if (d < 3600) return Math.floor(d / 60) + ' min ago'; if (d < 86400) return Math.floor(d / 3600) + ' h ago'; return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); };
   async function render() {
+    await loadFonts();
     const box = $('#build-home'); if (!box) return;
     await refresh();
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
@@ -127,9 +142,25 @@ window.UnwipBuild = (function () {
     document.title = on ? (cur && cur.title || 'Build') + ' — Unwip' : 'Unwip — Write to finish';
   }
   function saved(t) { const el = $('#bd-saved'); if (el) el.textContent = t; }
-  function changed() { if (!cur) return; saved('Saving…'); clearTimeout(saveT); saveT = setTimeout(saveNow, 600); }
+  function changed() { if (!cur) return; saved('Saving…'); clearTimeout(saveT); saveT = setTimeout(saveNow, 600); creditSoon(); }
+  // game-icons.net symbols ask for a credit (CC BY 3.0) when a picture using them is published: say so, with the line
+  const symbolsIn = it => { const d = (it && it.data) || {};
+    if (it.kind === 'arms') return [d.charge, ...(d.extras || []).map(e => e.k)];
+    if (it.kind === 'sigil') return (d.syms || []).map(y => y.k);
+    if (it.kind === 'insignia') return [d.symbol];
+    return []; };
+  let creditT = null;
+  const creditSoon = () => { clearTimeout(creditT); creditT = setTimeout(showCredit, 250); };
+  function showCredit() {
+    const bar = $('#bd-credit'); if (!bar) return;
+    const c = cur && window.UnwipSymbols && window.UnwipSymbols.credit(symbolsIn(cur));
+    bar.classList.toggle('hidden', !c); if (!c) { bar.innerHTML = ''; return; }
+    bar.innerHTML = `<span>Uses symbols by ${esc(c.by.join(', '))} from game-icons.net (free to use, even commercially). If you publish this picture, add the credit: <b>${esc(c.line)}</b></span><button class="btn small ghost" type="button" id="bd-credit-copy">Copy credit</button>`;
+    $('#bd-credit-copy').onclick = async () => { try { await navigator.clipboard.writeText(c.line); U.toast('Credit copied. Put it with the picture, or on your book’s copyright page.'); } catch { U.toast(esc(c.line), '', 8000); } };
+  }
   async function saveNow() { clearTimeout(saveT); saveT = null; if (!cur) return; await put(cur); saved('Saved'); }
   async function open(id, from) {
+    await loadFonts();
     const it = await get(id); if (!it) { U.toast('Couldn’t open that.', 'warn'); if (!ret && !from) render(); return; }
     await close(true);
     if (from !== undefined) ret = from || null;
@@ -155,6 +186,7 @@ window.UnwipBuild = (function () {
     $('#bd-done').onclick = () => close();
     active = ed;
     await ed.open(cur, main, { changed, extra: $('.bd-extra', top), items: () => items, get, KINDS, svgCanvas, svgURL });
+    showCredit();
   }
   $('#bd-title').addEventListener('input', e => { if (cur) { cur.title = e.target.value; changed(); } });
   $('#bd-back').innerHTML = I.back; $('#bd-back').onclick = () => close();
@@ -182,6 +214,7 @@ window.UnwipBuild = (function () {
     M.open(it.id, host);
   }
   async function close(quiet) {
+    { const bar = $('#bd-credit'); if (bar) { bar.classList.add('hidden'); bar.innerHTML = ''; } }
     if (!cur) { if (!quiet) { const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r !== 'book') render(); } return; }
     if (cur.kind === 'map') { await window.UnwipMaps.close(true); return; }
     await saveNow();
@@ -284,5 +317,5 @@ window.UnwipBuild = (function () {
   async function all(kind) { await refresh(); const out = []; for (const h of items.filter(x => !kind || x.kind === kind)) { const it = await get(h.id); if (it) out.push(it); } return out; }
 
   { const bb = document.getElementById('btn-build-book'); if (bb) { bb.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V9l3-2 3 2v3h4V9l3-2 3 2v12z"/><path d="M10 21v-4a2 2 0 0 1 4 0v4"/><path d="M7 7V3M17 7V3"/></svg><span class="tb-label">Build</span>'; bb.onclick = () => fromBook(); } }
-  return { KINDS, editors, render, refresh, open, close, create, fromBook, flush, get from() { return ret; }, readMap, writeMap, get, put, all, svgCanvas, svgURL, copyCanvas, savePNG, canvasBytes, addToBook, get items() { return items; } };
+  return { KINDS, editors, render, refresh, open, close, create, fromBook, flush, get from() { return ret; }, readMap, writeMap, get, put, all, svgCanvas, svgURL, loadFonts, copyCanvas, savePNG, canvasBytes, addToBook, get items() { return items; } };
 })();

@@ -151,23 +151,43 @@ window.UnwipAbout = (function () {
       <h4>No AI inside</h4><p>${NO_AI}</p>
       <p class="about-small">The one optional exception, and only if you choose it: the <b>natural voice</b> for Read aloud is a small speech model (machine learning) that you download separately. It only reads your words aloud, can’t write, change or suggest anything, and runs on your device. Unwip works fully without it.${window.UnwipVoice ? ' <button class="link-btn" type="button" id="ab-voice">About the natural voice…</button>' : ''}</p>
       <h4>Your writing stays yours</h4><p>Your books are saved on your device. If you connect Dropbox, they’re copied to <b>your own</b> Dropbox and nowhere else. Unwip has no account, no server of its own and no tracking. Reports you send with “Report a problem” contain no writing.</p>
+      <h4>Your rights</h4><p>What you make with Unwip is yours, to use anywhere, including in work you sell. Remix Unwip’s built-in artwork into your own work as you like; just don’t sell or give away the built-in artwork on its own. The details are under Your rights.</p>
       <h4>Thank you</h4>
-      <p>Unwip is built with free and open-source fonts and software, used under their licences: the fonts EB Garamond, Crimson Pro, Cinzel and Oswald, Larkspur (our cut of Lora) and Bookhaven (our cut of Libre Baskerville), the Build symbols from game-icons.net, the WordNet dictionary${api.web ? '' : ', the Harper grammar checker, and Electron and Chromium, which run the PC app'}. The full licence texts are under Open-source licences.</p>
+      <p>Unwip is built with free and open-source fonts and software, used under their licences: the fonts EB Garamond, Crimson Pro, Cinzel and Oswald, Larkspur (our cut of Lora) and Bookhaven (our cut of Libre Baskerville) and IBM Plex Mono, the Build symbols from game-icons.net, the WordNet dictionary${api.web ? '' : ', the Harper grammar checker, and Electron and Chromium, which run the PC app'}. The full licence texts are under Open-source licences.</p>
       <h4>Trademarks</h4>
       <p class="about-small">Scrivener, Microsoft Word, Google Docs, Dropbox, OneDrive, Kindle, Apple Books, Kobo and other product names mentioned in Unwip belong to their owners. They’re named only to say what Unwip works with; Unwip isn’t made by, endorsed by or connected to any of them.</p>
-      <div class="sy-moves"><button class="btn" type="button" id="ab-lic">Open-source licences…</button><button class="btn" type="button" id="ab-report">Report a problem…</button><button class="btn" type="button" id="ab-usage">What I’ve used…</button></div>`;
+      <div class="sy-moves"><button class="btn" type="button" id="ab-rights">Your rights…</button><button class="btn" type="button" id="ab-lic">Open-source licences…</button><button class="btn" type="button" id="ab-report">Report a problem…</button><button class="btn" type="button" id="ab-usage">What I’ve used…</button></div>`;
     { const vb = body.querySelector('#ab-voice'); if (vb) vb.onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); window.UnwipVoice.setup(); }; }
+    body.querySelector('#ab-rights').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); rights(); };
     body.querySelector('#ab-lic').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); licenses(); };
     body.querySelector('#ab-usage').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); window.UnwipUsage && window.UnwipUsage.open(); };
     body.querySelector('#ab-report').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); report(); };
     await U.modal({ title: 'About Unwip', body, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
   }
 
+  // ---------------------------------------------------------------- your rights (plain English; also on the website)
+  const RIGHTS = [
+    ['What you make is yours', 'Unwip claims no ownership of anything you write or make with it: your books, notes, maps, coats of arms, rune alphabets, sigils, insignia, magic systems, character sheets and every file you export. Your work stays on your device, and in your own Dropbox if you connect it. Unwip has no account and never uploads it.'],
+    ['Use it anywhere, including commercially', 'Use what you make in anything, including work you sell: books, covers, maps, games, art and merchandise. Unwip’s built-in shapes, symbols, fonts and styles can be part of it, changed and remixed however you like. You don’t need to credit Unwip.'],
+    ['What you can’t do', 'Don’t sell, share or give away Unwip’s built-in artwork on its own, as itself: for example as a symbol or stamp pack, brushes, clip art, stock images or templates made of it with little or no change of your own, and don’t use it to build a competing asset pack or tool. Once it’s part of something you made, that’s up to you.'],
+    ['Other people’s work inside Unwip', 'Some fonts, symbols, the word games’ dictionary and parts of the software were made by others and are used under their own licences (Open-source licences lists them all with their notices). Those licences come first, and some allow more than this page does. The animal and object symbols from game-icons.net are free to use, even commercially, but ask for a short credit when you publish a picture that uses them, for example on your book’s copyright page: “Symbols by Lorc and Delapouite, game-icons.net, CC BY 3.0”. Build shows the exact line for each picture.'],
+    ['Check your own use', 'Coats of arms, sigils, runes, insignia and names you make with Unwip, including with its random buttons, can look like real arms, national or official emblems, trademarks or names by coincidence. Before you use one publicly, especially commercially, check it doesn’t copy someone else’s.'],
+    ['Record (proof of writing)', 'Replay and screen videos show how words arrived on the page. They’re a record for you and your readers, not legal proof of authorship.'],
+    ['No guarantee', 'Unwip is provided as it is. As far as the law where you live allows, Unwip doesn’t promise that its built-in artwork is free of anyone else’s rights, and isn’t responsible for how you use what you make. Nothing here takes away rights you have under your local consumer law (for example the Australian Consumer Law, or consumer law in the EU and UK).']
+  ];
+  async function rights() {
+    const body = document.createElement('div'); body.className = 'about rights';
+    body.innerHTML = RIGHTS.map(([h, t]) => `<h4>${esc(h)}</h4><p>${esc(t)}</p>`).join('') + '<div class="sy-moves"><button class="btn" type="button" id="rt-lic">Open-source licences…</button></div>';
+    body.querySelector('#rt-lic').onclick = () => { const x = body.closest('.modal-back'); const b = x && x.querySelector('.m-foot button'); if (b) b.click(); licenses(); };
+    await U.modal({ title: 'Your rights', body, buttons: [{ label: 'Close', value: true, kind: 'primary' }] });
+  }
+
   // ---------------------------------------------------------------- open-source licences (the full texts)
   const FONTS = [
     ['EB Garamond', 'OFL-EBGaramond.txt'], ['Larkspur', 'OFL-larkspur.txt', 'A modified version of Lora, renamed because “Lora” is a Reserved Font Name.'],
     ['Bookhaven', 'OFL-bookhaven.txt', 'A modified version of Libre Baskerville, renamed because “Libre Baskerville” is a Reserved Font Name.'],
-    ['Crimson Pro', 'OFL-crimsonpro.txt'], ['Cinzel', 'OFL-cinzel.txt'], ['Oswald', 'OFL-oswald.txt']
+    ['Crimson Pro', 'OFL-crimsonpro.txt'], ['Cinzel', 'OFL-cinzel.txt'], ['Oswald', 'OFL-oswald.txt'],
+    ['IBM Plex Mono', 'OFL-ibmplexmono.txt', 'The latin set only (from Fontsource), used for the system-style text in Build pictures.']
   ];
   async function readText(rel) {
     if (api.licenseText) return api.licenseText(rel);
@@ -182,10 +202,12 @@ window.UnwipAbout = (function () {
     }
     if (window.UnwipSymbolData) items.push({ name: 'Symbols in Build (game-icons.net)', kind: 'Animals and objects · Creative Commons Attribution 3.0',
       copy: 'By Lorc, Delapouite, Caro Asercion, Carl Olsen and Faithtoken, from game-icons.net.',
-      note: 'The lions, crows, dragons and other animal and object symbols in coats of arms, sigils and insignia. Used unchanged, drawn in the colours you pick.',
+      note: 'The lions, crows, dragons and other animal and object symbols in coats of arms, sigils and insignia, drawn in the colours you pick. If you publish a picture that uses them, credit the artist, for example “Symbols by Lorc, game-icons.net, CC BY 3.0” (Build shows the exact line for each picture).',
       text: 'Icons from https://game-icons.net by Lorc, Delapouite, Caro Asercion, Carl Olsen and Faithtoken,\nlicensed under Creative Commons Attribution 3.0 Unported (CC BY 3.0):\nhttps://creativecommons.org/licenses/by/3.0/\n\nYou are free to share and adapt them for any purpose, even commercially,\nas long as you give appropriate credit, provide a link to the licence, and indicate if changes were made.' });
     const wn = await readText('vendor/WORDNET-LICENSE.txt');
     if (wn) items.push({ name: 'WordNet 3.0', kind: 'Word games in Play · WordNet licence', copy: 'WordNet 3.0 Copyright 2006 by Princeton University. All rights reserved.', note: 'The words, meanings and other words for each one in Play’s word games and thesaurus. Rude and offensive words, and names, were left out.', text: wn });
+    const setup = await readText('vendor/SETUP-NOTICES.txt');
+    if (setup && !api.web) items.push({ name: 'Libraries in the Windows setup program', kind: '0BSD, ISC and BSD 3-Clause', copy: 'winres (Thomas Combeléran), resize (Jan Schlicht) and the Go image libraries (The Go Authors).', text: setup });
     const harper = await readText('vendor/harper/LICENSE');
     if (harper) items.push({ name: 'Harper 2.10.0', kind: 'Grammar checker · Apache License 2.0', copy: 'By Automattic and the Harper contributors (github.com/Automattic/harper). Included unmodified.', note: 'Harper is built together with 252 smaller open-source libraries and the Rust standard library. Their notices are listed next.', text: harper });
     if (harper) items.push({ name: 'Libraries inside Harper', kind: 'MIT, Apache 2.0, Unicode, Zlib, MPL 2.0 and others', copy: 'The Rust libraries compiled into Harper, each with its version, licence, source and authors, followed by every licence text in full.', lazy: 'vendor/harper/THIRD-PARTY-NOTICES.txt' });
@@ -235,5 +257,5 @@ window.UnwipAbout = (function () {
   }
   U.on('library', layoutCheck); layoutCheck();
 
-  return { about, report, licenses, note, log: () => log.slice() };
+  return { about, report, licenses, rights, RIGHTS, note, log: () => log.slice() };
 })();
