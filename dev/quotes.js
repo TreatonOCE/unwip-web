@@ -138,7 +138,7 @@ window.UnwipQuotes = (function () {
     ['Every writer has a nemesis. Mine is the fridge.', 'Doug Deadline'],
     ['If you’re waiting for a free weekend to write, I’ve got bad news about weekends.', 'Doug Deadline'],
     ['Write the scene you’re avoiding first. The dread is always bigger than the scene.', 'Doug Deadline'],
-    ['Adverbs are like glitter. One is festive. Ten and you’ll be finding them for weeks.', 'Edith Lessmore'],
+    ['Adverbs are like glitter. A pinch looks festive. Tip in the whole jar and you’ll be picking them out for weeks.', 'Edith Lessmore'],
     ['If you love a sentence so much you can’t cut it, cut it, then have a little cry.', 'Edith Lessmore'],
     ['“Very” is the word you reach for when you can’t be bothered finding the right one. I say this with love.', 'Edith Lessmore'],
     ['Your favourite paragraph is a houseguest who won’t leave. Show it the door, gently.', 'Edith Lessmore'],
