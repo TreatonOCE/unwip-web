@@ -66,7 +66,7 @@ window.UnwipBuild = (function () {
     await refresh();
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     box.innerHTML = `
-      <div class="pl-head"><div><h1>Build</h1><p>The pieces of your world: maps, magic, runes, sigils and coats of arms. They belong to the world, not one book, so any book can use them.</p></div></div>
+      <div class="pl-head"><div><h1>Build</h1><p>The pieces of your world: maps, magic, runes, sigils, coats of arms, insignia and character sheets. They belong to the world, not one book, so any book can use them.</p></div></div>
       <div class="pl-tools bd-tools">${ORDER.map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}</div>
       ${items.length ? ORDER.filter(k => by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
         <div class="bd-grid">${by(k).map(x => `<div class="bd-card" data-id="${x.id}" tabindex="0">
@@ -197,7 +197,7 @@ window.UnwipBuild = (function () {
     const canWin = !!api.buildWindow;
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const body = document.createElement('div'); body.className = 'bd-pick';
-    body.innerHTML = `<p class="hint">Your world’s maps, magic, runes, sigils and coats of arms. ${canWin ? 'Each opens in its own window, so you can keep it beside your chapter. (↩ opens it in this window instead.)' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
+    body.innerHTML = `<p class="hint">Your world’s maps, magic, runes, sigils, coats of arms, insignia and character sheets. ${canWin ? 'Each opens in its own window, so you can keep it beside your chapter. (↩ opens it in this window instead.)' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
       ${items.length ? ORDER.filter(k => by(k).length).map(k => `<h4>${KINDS[k].plural}</h4><div class="bd-pick-list">${by(k).map(x => `<div class="bd-pick-row" data-id="${x.id}">
           <button type="button" class="bd-pick-open" data-open="${x.id}"><span class="bd-pick-th">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : KINDS[k].icon}</span><span><b>${esc(x.title || 'Untitled')}</b><small>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</small></span></button>
           ${canWin ? `<button type="button" class="icon-btn bd-pick-win" data-here="${x.id}" title="Open it in this window instead, over the chapter">↩</button>` : ''}</div>`).join('')}</div>`).join('') : '<p class="lib-empty">Nothing built yet.</p>'}

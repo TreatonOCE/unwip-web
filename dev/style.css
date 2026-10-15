@@ -2289,10 +2289,14 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 @media (max-width: 900px) { .lib-head-right .lib-total { display: none; } .lib-tabs { margin-left: 16px; } }
 @media (max-width: 640px) {
   /* one tidy header: the name with sync and settings, then Write / Play across the width */
-  .lib-head { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 10px; padding: 10px 14px; }
-  .lib-head .brand { grid-column: 1; grid-row: 1; }
+  /* the name keeps its size; sync, record and settings share what's left, and the sync pill shortens with … */
+  .lib-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 10px; padding: 10px 14px; }
+  .lib-head .brand { grid-column: 1; grid-row: 1; min-width: 0; }
   .lib-head .brand-wordmark { height: 28px; }
-  .lib-head-right { grid-column: 2; grid-row: 1; gap: 4px; }
+  .lib-head .brand-beta { margin: 0 0 0 4px; padding: 1px 6px; font-size: 10px; }
+  .lib-head-right { grid-column: 2; grid-row: 1; gap: 4px; min-width: 0; justify-content: flex-end; }
+  .lib-head-right > * { flex-shrink: 0; }
+  .lib-head-right > .dbx-pill { flex-shrink: 1; min-width: 34px; }
   .lib-head .lib-tabs { grid-column: 1 / -1; grid-row: 2; margin: 0; }
   .lib-head .lib-tabs button { flex: 1; padding: 7px 0; }
   .dbx-pill { margin-right: 0; max-width: 52vw; overflow: hidden; }
@@ -2870,7 +2874,7 @@ body.litrpg .editor p.lit-sys, body.litrpg #editor p.lit-sys { margin: .5em auto
 .br-dark .br-dot { fill: #2c4a68; }
 /* Build › Insignia */
 .in-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px; max-width: 1240px; margin: 0 auto; padding: 18px; }
-@media (max-width: 900px) { .in-page { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .in-page { grid-template-columns: 1fr; padding: 12px; } .in-left { position: static; } .in-shot img { max-width: 300px; } }
 .in-left { position: sticky; top: 0; align-self: start; }
 .in-shot img { width: 100%; max-width: 480px; display: block; margin: 0 auto; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
 .in-syms { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 6px; }
