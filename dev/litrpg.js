@@ -141,5 +141,5 @@ window.UnwipLitRPG = (function () {
   }
   setTimeout(apply, 0);
   U.on('project', () => setTimeout(apply, 0));
-  return { settingsSection, shortcutsDialog, markSys, STARTER, _test: { expand, SYS } };
+  return { settingsSection, shortcutsDialog, markSys, apply, STARTER, _test: { expand, SYS } };
 })();

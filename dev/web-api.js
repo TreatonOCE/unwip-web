@@ -485,6 +485,10 @@
     buildList: async () => { const out = []; for (const k of await FS.keys(`${LIB}/_Build/items/`)) { if (!/\/[\w-]+\.json$/.test(k)) continue; const x = await FS.json(k, null); if (x && x.id) out.push({ id: x.id, kind: x.kind, title: x.title, created: x.created, updated: x.updated, thumb: x.thumb || '', world: x.world || '' }); } return out; },
     buildLoad: async id => FS.json(`${LIB}/_Build/items/${safeId(id)}.json`, null),
     buildSave: async (id, json) => { await FS.write(`${LIB}/_Build/items/${safeId(id)}.json`, json); return true; },
+    // settings shared between devices (prefsync.js); dropbox.js carries the file
+    prefsRead: async () => ({ main: await FS.read(`${LIB}/_Settings/shared.json`), extra: [] }),
+    prefsWrite: async json => { await FS.write(`${LIB}/_Settings/shared.json`, json); return true; },
+    onPrefsChange: on('prefs'),
     buildDelete: async id => { await FS.remove(`${LIB}/_Build/items/${safeId(id)}.json`); return true; },
     onNoteCmd: on('note'), onPastePlain: on('pastePlain'), onSplit: on('split'),
     find: async (t, o) => find(t, o), stopFind: async () => { clearFind(); },

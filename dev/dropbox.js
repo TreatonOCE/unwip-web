@@ -21,6 +21,7 @@ window.UnwipDropbox = (function () {
     if (CONFLICT.test(rel)) return false;
     const m = /^([^/]+)\/(.+)$/.exec(rel); if (!m) return false;
     if (m[1].toLowerCase() === '_build') return /^items\/[\w-]+\.json$/.test(m[2]);   // Build: the world's maps, magic, runes and arms
+    if (m[1].toLowerCase() === '_settings') return m[2].toLowerCase() === 'shared.json';   // settings shared between devices
     if (m[1].startsWith('_')) return false;
     if (/(^|\/)(desktop\.ini|thumbs\.db|\.ds_store|icon\r|~\$[^/]*|\.[^/]*)$/i.test(m[2])) return false;   // system files Dropbox won't store
     return /^project\.json$|^docs\/[\w-]+\.html$|^media\/[^/]+$|^snapshots\/[\w-]+\/[^/]+$|^proof\/[\w-]+\.json$/.test(m[2]);
@@ -310,7 +311,7 @@ window.UnwipDropbox = (function () {
     st.remote = cache; st.cursor = j.cursor; return cache;
   }
   // files in Dropbox that belong to no book (a book deleted on a PC whose last few files hadn't gone yet) are left alone
-  const bookless = cache => { const books = new Set(Object.keys(cache).filter(k => /^[^/]+\/project\.json$/.test(k)).map(k => k.split('/')[0])); return k => !k.startsWith('_build/') && !books.has(k.split('/')[0]); };
+  const bookless = cache => { const books = new Set(Object.keys(cache).filter(k => /^[^/]+\/project\.json$/.test(k)).map(k => k.split('/')[0])); return k => !k.startsWith('_build/') && !k.startsWith('_settings/') && !books.has(k.split('/')[0]); };
   // which books are different in Dropbox from what this device last synced? Same content under a new version number
   // isn't a change. ("_build" stands for the Build pieces.)
   let newsBooks = new Set();
@@ -369,6 +370,17 @@ window.UnwipDropbox = (function () {
     if (progress) progress.down++;
     const b = await download(R.lower);
     const localRel = R.rel;   // Dropbox's spelling of the name
+    // the shared settings changed here and elsewhere: merge them (the newest change of each setting wins) and send
+    // the merged file back, rather than keeping a copy beside it
+    if (/^_settings\/shared\.json$/i.test(localRel) && (mine || dirty.has(k))) {
+      const now = await FS.read(LOCAL + localRel), here = now != null ? now : (mine ? new TextDecoder().decode(mine) : '{}');
+      const P = t => { try { const j = JSON.parse(t); return j && j.keys ? j : { keys: {} }; } catch { return { keys: {} }; } };
+      const out = { v: 1, keys: { ...P(new TextDecoder().decode(b)).keys } };
+      for (const [key, e] of Object.entries(P(here).keys)) if (!out.keys[key] || (e.at || 0) > (out.keys[key].at || 0)) out.keys[key] = e;
+      await origWrite(LOCAL + localRel, JSON.stringify(out));
+      st.records[k] = { rev: R.rev, hash: R.hash }; dirty.add(k); running && (running.again = true);
+      touched.add(localRel); return;
+    }
     if (mine) await keepMine(localRel, mine, b);
     // saved here while this sync was busy fetching it: keep that version too rather than writing over it
     if (dirty.has(k)) { const now = await FS.read(LOCAL + localRel); if (now != null && (!mine || await contentHash(asBytes(now)) !== await contentHash(mine))) await keepMine(localRel, asBytes(now), b); }
@@ -417,6 +429,7 @@ window.UnwipDropbox = (function () {
   function tell(touched) {
     for (const rel of touched) {
       const b = /^_build\/items\/([\w-]+)\.json$/i.exec(rel); if (b) { emit('build', { id: b[1] }); continue; }
+      if (/^_settings\/shared\.json$/i.test(rel)) { emit('prefs', {}); continue; }
       const m = /^([^/]+)\/(project\.json|docs\/([\w-]+)\.html)$/.exec(rel); if (!m) continue;
       emit('external', { slug: m[1], file: m[2], id: m[3] || null });
     }

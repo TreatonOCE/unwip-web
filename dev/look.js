@@ -53,7 +53,7 @@ window.UnwipLook = (function () {
     anim: 'none', sound: 'off', volume: 0.5, bell: true };
 
   function load(key, def) { try { return { ...def, ...JSON.parse(localStorage.getItem(key) || '{}') }; } catch { return { ...def }; } }
-  function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} }
+  function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} if (window.UnwipPrefs) window.UnwipPrefs.changed(key); }
   let look = load('unwip-look', DEF_LOOK);
   // older setting from the simple Light/Dark/System picker
   try { const old = localStorage.getItem('folio-theme'); if (old && !localStorage.getItem('unwip-look')) look.theme = old === 'light' ? 'paper' : old === 'dark' ? 'night' : 'system'; } catch {}
@@ -524,6 +524,8 @@ window.UnwipLook = (function () {
     setTheme(id) { look = { ...look, theme: id }; save('unwip-look', look); applyLook(); }, THEMES,
     attach, openThemes, openTyping, applyLook, setMessyFade, updateFocus,
     typewriterActive, caretRect, typewriterPosition: () => typing.twPos || 0.45, smoothScroll: () => typing.twSmooth,
-    get typing() { return typing; }, get look() { return look; }
+    get typing() { return typing; }, get look() { return look; },
+    // settings that arrived from another device (prefsync.js): read them again and show them
+    reload() { look = load('unwip-look', DEF_LOOK); typing = load('unwip-typing', DEF_TYPE); applyLook(); try { placeCaret(); updateFocus(); } catch {} }
   };
 })();
