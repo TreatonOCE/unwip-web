@@ -25,7 +25,7 @@
   // the rune's strokes as an SVG group in grid units (0..glyphW, 0..glyphH), drawn in colour col
   // System (circuit) ends: strokes run like traces on a board, straight and at 45°, with a ring where a trace ends and
   // a dot where three or more meet. On a dark panel they glow.
-  const PANEL = { dark: '#0b1420', system: '#07101e', light: '#f4ecd8' };
+  const PANEL = { dark: '#121418', system: '#07101e', light: '#f4ecd8' };
   const isDark = A => A.panel === 'dark' || A.panel === 'system';
   const panelBG = A => PANEL[A.panel] || PANEL.light;
   // the System window: a game-interface frame round a picture (border, corner brackets, a header line)
@@ -53,7 +53,7 @@
     const deg = {}; for (const s of list) { deg[s.a] = (deg[s.a] || 0) + 1; if (s.b !== s.a) deg[s.b] = (deg[s.b] || 0) + 1; }
     const paths = list.map(s => `<path d="${tracePath(A, s)}"/>`).join('');
     const nodes = Object.entries(deg).map(([i, n]) => { const [x, y] = dotXY(A, +i); return n === 1 ? `<circle cx="${x}" cy="${y}" r="${sw * 1.15}" fill="${panelBG(A)}" stroke-width="${sw * 0.75}"/>` : n >= 3 ? `<circle cx="${x}" cy="${y}" r="${sw * 0.95}" fill="${c}" stroke="none"/>` : ''; }).join('');
-    const glow = isDark(A) ? `<g stroke-width="${sw * 3.2}" opacity=".18" stroke-linecap="round">${paths}</g>` : '';
+    const glow = isDark(A) ? `<g stroke-width="${sw * (A.panel === 'system' ? 4.2 : 3.2)}" opacity="${A.panel === 'system' ? .3 : .18}" stroke-linecap="round">${paths}</g>` : '';
     return `<g${skew} fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="${cap}" stroke-linejoin="${join}">${glow}${paths}${nodes}</g>`;
   }
   function glyphSVG(A, g, size, col) {
@@ -161,7 +161,7 @@
         <div class="field"><label>Stroke</label><input type="range" id="br-w" min="1.2" max="7" step="0.2"></div>
         <div class="field"><label>Ends</label><select id="br-cap"><option value="round">Ink (round)</option><option value="square">Carved (square)</option><option value="circuit">System (circuit traces)</option></select></div>
         <div class="field"><label>Background</label><select id="br-panel"><option value="">Parchment</option><option value="dark">Dark panel (glows)</option><option value="system">System window (game interface)</option></select></div>
-        <div class="field"><label>Slant</label><input type="range" id="br-slant" min="-20" max="20" step="1"></div>
+        <div class="field"><label>Slant: <b id="br-slant-v">upright</b></label><input type="range" id="br-slant" min="-20" max="20" step="1" list="br-slant-mid" title="Snaps to upright near the middle. Double-click to reset."><datalist id="br-slant-mid"><option value="0"></option></datalist></div>
         <div class="field"><label>Spacing</label><input type="range" id="br-sp" min="0.4" max="2.5" step="0.1"></div>
         <div class="field"><label>Direction</label><select id="br-dir"><option value="ltr">Left to right</option><option value="rtl">Right to left</option><option value="ttb">Top to bottom (columns)</option></select></div>
         <div class="field"><label>Colour</label><input type="color" id="br-col"></div>
@@ -177,7 +177,7 @@
     };
     gridOpts();
     const panel = $('#br-panel', box);
-    const dark = () => box.querySelector('.br-wrap').classList.toggle('br-dark', isDark(A));
+    const dark = () => { const w = box.querySelector('.br-wrap'); w.classList.toggle('br-dark', isDark(A)); w.classList.toggle('br-system', A.panel === 'system'); };
     W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; col.value = A.color; panel.value = A.panel || ''; dark();
     const spx = $('#br-sp', box), dirx = $('#br-dir', box);
     spx.value = A.spacing || 1; dirx.value = A.dir || 'ltr';
@@ -186,7 +186,11 @@
     W.oninput = () => { A.width = +W.value; all(); };
     // picking circuit traces the first time: a dark panel and a cyan line, like a game's interface (change either after)
     cap.onchange = () => { A.cap = cap.value; if (A.cap === 'circuit' && !A.panel && /^#2b2118$/i.test(A.color)) { A.panel = 'dark'; A.color = '#5fd0ff'; col.value = A.color; panel.value = 'dark'; dark(); } all(); };
-    panel.onchange = () => { A.panel = panel.value; if (isDark(A) && /^#2b2118$/i.test(A.color)) { A.color = '#5fd0ff'; col.value = A.color; } else if (!A.panel && /^#5fd0ff$/i.test(A.color)) { A.color = '#2b2118'; col.value = A.color; } dark(); all(); }; sl.oninput = () => { A.slant = +sl.value; all(); }; col.oninput = () => { A.color = col.value; all(); };
+    panel.onchange = () => { A.panel = panel.value; if (isDark(A) && /^#2b2118$/i.test(A.color)) { A.color = '#5fd0ff'; col.value = A.color; } else if (!A.panel && /^#5fd0ff$/i.test(A.color)) { A.color = '#2b2118'; col.value = A.color; } dark(); all(); }; const slantV = () => { const v = A.slant || 0, el = $('#br-slant-v', box); if (el) el.textContent = v ? `${Math.abs(v)}° ${v > 0 ? 'right' : 'left'}` : 'upright'; };
+    // close to the middle snaps to upright, so a neutral slant is easy to hit; double-click puts it back
+    sl.oninput = () => { let v = +sl.value; if (Math.abs(v) <= 2) { v = 0; sl.value = 0; } A.slant = v; slantV(); all(); };
+    sl.ondblclick = () => { sl.value = 0; A.slant = 0; slantV(); all(); };
+    slantV(); col.oninput = () => { A.color = col.value; all(); };
     grid.onchange = async () => {
       let v = grid.value;
       if (v === 'custom') {

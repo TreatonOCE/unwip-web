@@ -279,11 +279,20 @@
   const MONO = "Menlo, Consolas, 'DejaVu Sans Mono', monospace";
   const GLOW = '<defs><filter id="bm-glow" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
   const wrapW = (s, n, max) => { const words = String(s || '').split(/\s+/), lines = []; let l = ''; for (const x of words) { if ((l + ' ' + x).trim().length > n) { lines.push(l.trim()); l = x; } else l += ' ' + x; } if (l.trim()) lines.push(l.trim()); return lines.slice(0, max); };
-  function hud(W, H, P, label, right) {
+  // the System window's frame follows the Border choice: Double line (a thin box and corner brackets), Ornate (a
+  // tech frame: cut corners, a second dashed line, ticks along the edges), None (just the header bar)
+  function hud(W, H, P, label, right, frame = 'double') {
     const k = 22, br = (x, y, dx, dy) => `M${x + dx * k} ${y}H${x}V${y + dy * k}`;
-    return `<rect width="${W}" height="${H}" fill="${P.bg}"/>${GLOW}
-      <rect x="14" y="14" width="${W - 28}" height="${H - 28}" fill="none" stroke="${P.line}" stroke-width="1" opacity=".4"/>
-      <path d="${br(14, 14, 1, 1)}${br(W - 14, 14, -1, 1)}${br(14, H - 14, 1, -1)}${br(W - 14, H - 14, -1, -1)}" fill="none" stroke="${P.line}" stroke-width="3"/>
+    let box = '';
+    if (frame === 'double') box = `<rect x="14" y="14" width="${W - 28}" height="${H - 28}" fill="none" stroke="${P.line}" stroke-width="1" opacity=".4"/>
+      <path d="${br(14, 14, 1, 1)}${br(W - 14, 14, -1, 1)}${br(14, H - 14, 1, -1)}${br(W - 14, H - 14, -1, -1)}" fill="none" stroke="${P.line}" stroke-width="3"/>`;
+    else if (frame === 'ornate') {
+      const c = 18, cut = `M${14 + c} 14H${W - 14 - c}L${W - 14} ${14 + c}V${H - 14 - c}L${W - 14 - c} ${H - 14}H${14 + c}L14 ${H - 14 - c}V${14 + c}Z`;
+      let ticks = ''; for (let x = 60; x < W - 50; x += 24) ticks += `M${x} ${H - 14}v-${x % 72 === 12 ? 10 : 5}`; for (let y = 90; y < H - 50; y += 24) ticks += `M14 ${y}h${y % 72 === 18 ? 10 : 5}M${W - 14} ${y}h-${y % 72 === 18 ? 10 : 5}`;
+      box = `<path d="${cut}" fill="none" stroke="${P.line}" stroke-width="2.5"/><rect x="22" y="22" width="${W - 44}" height="${H - 44}" fill="none" stroke="${P.line}" stroke-width="1" stroke-dasharray="6 6" opacity=".45"/>
+        <path d="${ticks}" stroke="${P.line}" stroke-width="1.2" opacity=".7"/>${[[14 + c, 14], [W - 14 - c, 14], [14 + c, H - 14], [W - 14 - c, H - 14]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.5" fill="${P.accent}"/>`).join('')}`;
+    }
+    return `<rect width="${W}" height="${H}" fill="${P.bg}"/>${GLOW}${box}
       <rect x="30" y="30" width="${W - 60}" height="34" fill="${P.line}" opacity=".12"/>
       <text x="44" y="53" font-family="${MONO}" font-size="16" letter-spacing="3" fill="${P.line}">◆ ${esc(label)}</text>
       <text x="${W - 44}" y="53" text-anchor="end" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${P.accent}">${esc(right)}</text>`;
@@ -301,7 +310,7 @@
     if (kinds.length) { let at = 44; out += `<text x="44" y="${y}" font-family="${MONO}" font-size="13" letter-spacing="3" fill="${P.line}" opacity=".8">SCHOOLS</text>`; y += 30;
       kinds.forEach(k => { const t = `[${(k.name || '').toUpperCase()}]`; out += `<text x="${at}" y="${y}" font-family="${MONO}" font-size="17" fill="${P.accent}">${x(t)}</text>`; at += t.length * 10.5 + 16; }); }
     const foot = L.count ? `<text x="44" y="${h > 0 ? 458 : 458}" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${P.soft}">SKILLS: ${d.spells.length}  //  SCHOOLS: ${d.elements.length}  //  RULES: ${d.rules.filter(r => !r.off).length}</text>` : '';
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="${w}" height="${h}">${hud(800, 500, P, 'MAGIC SYSTEM', '[ ACTIVE ]')}${out}${foot}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="${w}" height="${h}">${hud(800, 500, P, 'MAGIC SYSTEM', '[ ACTIVE ]', L.frame)}${out}${foot}</svg>`;
   }
   // one spell as a game's skill window
   function spellSVG(d, s, w = 640) {
@@ -315,7 +324,7 @@
     cs.forEach((c, i) => { out += `<text x="150" y="${y + i * 26}" font-family="${MONO}" font-size="15" fill="${P.ink}">${x((c.name || '').toUpperCase().slice(0, 16))}</text>${bar(350, y + i * 26, c.weight || 1, P)}`; });
     y += Math.max(1, cs.length) * 26 + 10;
     out += what.map((l, i) => `<text x="40" y="${y + i * 24}" font-family="${MONO}" font-size="15" fill="${P.soft}">${x(l)}</text>`).join('');
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 ${H}" width="${w}" height="${Math.round(w * H / 640)}">${hud(640, H, P, 'SKILL', '')}${out}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 ${H}" width="${w}" height="${Math.round(w * H / 640)}">${hud(640, H, P, 'SKILL', '', lookOf(d).frame)}${out}</svg>`;
   }
   // the same as [bracketed] lines, the way LitRPG books print system messages (they show as boxes with LitRPG tools on)
   function spellText(d, s) {

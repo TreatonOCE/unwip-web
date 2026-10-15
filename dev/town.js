@@ -90,7 +90,7 @@ window.UnwipTownFactory = function (M) {
     rg.strokeStyle = P.seaLine; rg.globalAlpha = 0.5; rg.lineWidth = 1; const rr = M.rng(77);
     for (let i = 0; i < 260; i++) { const x = rr() * W, y = rr() * H; rg.beginPath(); rg.moveTo(x, y); rg.quadraticCurveTo(x + 6, y - 3, x + 12, y); rg.quadraticCurveTo(x + 18, y + 3, x + 24, y); rg.stroke(); }
     rg.globalCompositeOperation = 'destination-in'; rg.globalAlpha = 1; rg.drawImage(a, 0, 0); g.drawImage(rip, 0, 0);
-    if (st().grid) { g.strokeStyle = P.ink; g.globalAlpha = 0.1; g.lineWidth = 1; for (let x = 0; x < W; x += 40) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } for (let y = 0; y < H; y += 40) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); } g.globalAlpha = 1; }
+    if (st().grid === true || st().grid === 'square') { g.strokeStyle = P.ink; g.globalAlpha = 0.1; g.lineWidth = 1; for (let x = 0; x < W; x += 40) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } for (let y = 0; y < H; y += 40) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); } g.globalAlpha = 1; }
   }
   function poly(g, pts) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); }
   function drawArea(g, a, P, i, noEdge, mode) {

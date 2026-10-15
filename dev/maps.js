@@ -285,16 +285,19 @@ window.UnwipMaps = (function () {
     const l = pts[pts.length - 1]; g.lineTo(l[0], l[1]);
   }
   // the map is drawn in two cached layers (sea + land, then everything on top) so dragging and painting stay smooth
+  // the grid is one of none / hex / square (maps saved before this have true: hex on world maps, square on towns)
+  const gridMode = () => st.grid === true ? (isTown() ? 'square' : 'hex') : (st.grid === 'hex' || st.grid === 'square' ? st.grid : '');
+  function squareGrid(g, P) { g.save(); g.strokeStyle = P.ink; g.globalAlpha = 0.12; g.lineWidth = 1; g.beginPath(); for (let x = 0; x <= W; x += 40) { g.moveTo(x, 0); g.lineTo(x, H); } for (let y = 0; y <= H; y += 40) { g.moveTo(0, y); g.lineTo(W, y); } g.stroke(); g.restore(); }
   function renderBase(g, P) {
-    if (isTown()) { T.renderBase(g, P); landDirty = false; if (!isDungeon() && st.grid) hexGrid(g, P); return; }
+    if (isTown()) { T.renderBase(g, P); landDirty = false; if (!isDungeon() && gridMode() === 'hex') hexGrid(g, P); return; }
     g.fillStyle = P.sea; g.fillRect(0, 0, W, H);
     g.strokeStyle = P.seaLine; g.globalAlpha = 0.25; g.lineWidth = 1;
     const r = rng(42); for (let i = 0; i < 140; i++) { const x = r() * W, y = r() * H; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 8, y - 5, x + 16, y); g.quadraticCurveTo(x + 24, y + 5, x + 32, y); g.stroke(); }
     g.globalAlpha = 1;
     if (landDirty || !landCache) { landCache = renderLand(P); landDirty = false; }
     g.drawImage(landCache, 0, 0);
-    if (P.mono) { g.strokeStyle = P.seaLine; g.globalAlpha = 0.55; g.lineWidth = 1; g.beginPath(); for (let x = 0; x <= W; x += 50) { g.moveTo(x, 0); g.lineTo(x, H); } for (let y = 0; y <= H; y += 50) { g.moveTo(0, y); g.lineTo(W, y); } g.stroke(); g.globalAlpha = 1; }
-    if (st.grid) hexGrid(g, P);
+    if (P.mono && gridMode() !== 'hex') { g.strokeStyle = P.seaLine; g.globalAlpha = 0.55; g.lineWidth = 1; g.beginPath(); for (let x = 0; x <= W; x += 50) { g.moveTo(x, 0); g.lineTo(x, H); } for (let y = 0; y <= H; y += 50) { g.moveTo(0, y); g.lineTo(W, y); } g.stroke(); g.globalAlpha = 1; }
+    const gm = gridMode(); if (gm === 'hex') hexGrid(g, P); else if (gm === 'square' && !P.mono) squareGrid(g, P);
   }
   function hexGrid(g, P) { g.save(); g.strokeStyle = P.ink; g.globalAlpha = 0.16; g.lineWidth = 1; const s = 40, h = s * Math.sqrt(3); for (let y = 0; y < H + h; y += h / 2) for (let x = ((y / (h / 2)) % 2) * s * 1.5; x < W + s * 3; x += s * 3) { g.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k; g.lineTo(x + s * Math.cos(a), y + s * Math.sin(a)); } g.closePath(); g.stroke(); } g.restore(); }
   function drawPath(g, p, P) {
@@ -690,7 +693,13 @@ window.UnwipMaps = (function () {
     await api.exportBinary(new Uint8Array(await blob.arrayBuffer()), host.title(nodeId) || 'Map', 'png', 'PNG picture');
   }
   // how far out you can zoom: at least to half the size of the whole map on screen (a phone needs further out than a PC)
-  function syncGridBtn() { const b = view && $('#mp-grid', view); if (!b) return; const dg = isDungeon(); b.classList.toggle('on', dg ? !st.noGrid : !!st.grid); b.textContent = dg ? '▦ Grid' : '⬡ Grid'; b.dataset.tip = dg ? 'The square grid on the floor (one square is a room tile)' : 'Hex grid over the map'; }
+  function syncGridBtn() {
+    const b = view && $('#mp-grid', view), sel = view && $('#mp-gridsel', view); if (!b || !sel) return;
+    const dg = isDungeon();
+    b.classList.toggle('hidden', !dg); sel.classList.toggle('hidden', dg);
+    b.classList.toggle('on', !st.noGrid); b.textContent = '▦ Grid'; b.dataset.tip = 'The square grid on the floor (one square is a room tile)';
+    sel.value = gridMode();
+  }
   function minZ() { const st2 = view && view.querySelector('.mp-stage'); if (!st2) return 0.25; const r = st2.getBoundingClientRect(); return Math.min(0.25, Math.min(r.width / W, r.height / H) * 0.5); }
   function fit() { const r = view.querySelector('.mp-stage').getBoundingClientRect(); const z = Math.min(r.width / W, r.height / H) * 0.96; cam = { z, x: (r.width - W * z) / 2, y: (r.height - H * z) / 2 }; }
   function resize() { if (!cv) return; const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; draw(); }
@@ -730,7 +739,8 @@ window.UnwipMaps = (function () {
         ${host.inBook === false ? '<button class="st-proof rec-btn" type="button" title="Proof of writing: record your screen"></button>' : ''}
         <button class="btn small" id="mp-gen" data-tip="Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after">🎲 Random map…</button>
         <select id="mp-style" data-tip="Map style">${Object.entries(STYLES).map(([k, v]) => `<option value="${k}" ${st.style === k ? 'selected' : ''}>${v.name}</option>`).join('')}</select>
-        <button class="btn small ghost ${st.grid ? 'on' : ''}" id="mp-grid" data-tip="Hex grid">⬡ Grid</button>
+        <button class="btn small ghost" id="mp-grid" data-tip="The square grid on the floor">▦ Grid</button>
+        <select id="mp-gridsel" data-tip="A grid over the map: hexagons (for travel and games) or squares"><option value="">No grid</option><option value="hex">⬡ Hex grid</option><option value="square">▦ Square grid</option></select>
         <button class="btn small ghost ${st.compass ? 'on' : ''}" id="mp-compass" data-tip="Compass rose">🧭</button>
         <select id="mp-frame" data-tip="The border around the edge of the map">${Object.entries(FRAMES).map(([k, v]) => `<option value="${k}" ${(st.frame || 'double') === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
         <button class="btn small ghost" id="mp-clear" data-tip="Start this map section again from empty sea">Clear</button>
@@ -798,7 +808,8 @@ window.UnwipMaps = (function () {
     $('#mp-close', view).onclick = () => close();
     $('#mp-style', view).onchange = e => { push(); st.style = e.target.value; landDirty = true; changed(); schedule(); };
     // the Grid button: a hex grid on world and town maps; on a dungeon floor, its square grid on or off
-    $('#mp-grid', view).onclick = e => { push(); if (isDungeon()) st.noGrid = !st.noGrid; else st.grid = !st.grid; syncGridBtn(); baseKey = ''; landDirty = true; changed(); schedule(); };
+    $('#mp-grid', view).onclick = () => { push(); st.noGrid = !st.noGrid; syncGridBtn(); baseKey = ''; landDirty = true; changed(); schedule(); };
+    $('#mp-gridsel', view).onchange = e => { push(); st.grid = e.target.value || false; syncGridBtn(); baseKey = ''; landDirty = true; changed(); schedule(); };
     $('#mp-compass', view).onclick = e => { push(); st.compass = !st.compass; e.currentTarget.classList.toggle('on', st.compass); changed(); schedule(); };
     $('#mp-frame', view).onchange = e => {
       const v = e.target.value, box = sel && sel.type === 'box' && st.boxes[sel.i];

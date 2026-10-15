@@ -2892,10 +2892,18 @@ body.litrpg .editor p.lit-sys, body.litrpg #editor p.lit-sys { margin: .5em auto
 :root[data-skin="infernal"] ::selection { background: #5a1c16; }
 :root[data-skin="terminal"] ::selection { color: #0a0d0a; background: #5fd38a; }
 /* rune alphabets on a dark panel (System / circuit look) */
-.br-dark .br-stage, .br-dark .br-preview { background: #0b1420; }
-.br-dark .br-tile { background: #0e1a2a; color: #cfe9ff; }
+.br-dark .br-stage, .br-dark .br-preview { background: #121418; }
+.br-dark .br-tile { background: #1a1d23; color: #e4e7ec; }
 .br-dark .br-tile span { color: #8fb6d6; }
 .br-dark .br-dot { fill: #2c4a68; }
+/* System window: a game interface while you draw, not only in the finished picture: grid lines, a cyan frame with
+   corner brackets and a readout. (The plain dark panel stays a quiet charcoal.) */
+.br-system .br-stage, .br-system .br-preview { position: relative; background-color: #07101e; background-image: linear-gradient(rgba(95, 208, 255, .06) 1px, transparent 1px), linear-gradient(90deg, rgba(95, 208, 255, .06) 1px, transparent 1px); background-size: 22px 22px; border: 1px solid rgba(95, 208, 255, .45); box-shadow: inset 0 0 30px rgba(95, 208, 255, .12); }
+.br-system .br-stage::before { content: 'SYSTEM // RUNE EDITOR'; position: absolute; top: 8px; left: 12px; font: 600 10px/1 Menlo, Consolas, monospace; letter-spacing: 2px; color: #5fd0ff; opacity: .8; pointer-events: none; }
+.br-system .br-stage::after { content: ''; position: absolute; inset: 4px; pointer-events: none; background: linear-gradient(#5fd0ff, #5fd0ff) top left / 18px 2px, linear-gradient(#5fd0ff, #5fd0ff) top left / 2px 18px, linear-gradient(#5fd0ff, #5fd0ff) top right / 18px 2px, linear-gradient(#5fd0ff, #5fd0ff) top right / 2px 18px, linear-gradient(#5fd0ff, #5fd0ff) bottom left / 18px 2px, linear-gradient(#5fd0ff, #5fd0ff) bottom left / 2px 18px, linear-gradient(#5fd0ff, #5fd0ff) bottom right / 18px 2px, linear-gradient(#5fd0ff, #5fd0ff) bottom right / 2px 18px; background-repeat: no-repeat; }
+.br-system .br-tile { background: #07101e; border-color: rgba(95, 208, 255, .35); color: #cfe9ff; }
+.br-system .br-tile span { color: #5fd0ff; font-family: Menlo, Consolas, monospace; }
+.br-system .br-dot { fill: #1d4466; }
 /* Build › Insignia */
 .in-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px; max-width: 1240px; margin: 0 auto; padding: 18px; }
 .in-left { position: sticky; top: 0; align-self: start; }
