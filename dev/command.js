@@ -45,6 +45,7 @@ window.UnwipCommand = (function () {
     ['Find in this chapter', 'search text', 'Ctrl+F', () => U.openFind(), needDoc],
     ['Search the whole project', 'find replace everywhere', 'Ctrl+Shift+F', () => U.openSearch('search'), inProject],
     ['Find and replace', 'replace all rename', '', () => U.openSearch('replace'), inProject],
+    ['Continuity pass', 'continuity consistency scaling level stats changed rename retcon go through each check every place', '', () => window.UnwipContinuity && window.UnwipContinuity.open(), inProject],
     ['Split this chapter at the cursor', 'divide break', 'Ctrl+Shift+K', () => U.splitAtCursor(), needDoc],
     ['Remove empty lines in this chapter', 'blank lines spacing tidy clean', '', () => U.tidyBlankLines(S.docId), needDoc],
     ['Word frequency & name check', 'overused words analysis repeated', '', () => { U.setRevise(true); setTimeout(click('#rp-analysis'), 200); }, needDoc],

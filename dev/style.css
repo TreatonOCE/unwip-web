@@ -2755,3 +2755,40 @@ body.writer .pf-remind { bottom: 18px; }
 .spr-how { font-size: 12px; }
 .spr-how .spr-tag { display: inline-block; padding: 1px 7px; margin: 1px 4px 1px 0; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
 .spr-how small { display: block; color: var(--muted); }
+/* magic system: the picture */
+.bm-pic-wrap { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.bm-pic { flex: 0 1 380px; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: transparent; cursor: zoom-in; line-height: 0; }
+.bm-pic img { width: 100%; height: auto; display: block; }
+.bm-pic-opts { flex: 1 1 240px; min-width: 0; }
+.bm-pic-opts > label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 6px; }
+.bm-pic-opts > label:first-child { margin-top: 0; }
+.bm-pic-opts .chip-row { flex-wrap: wrap; }
+.bm-sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid; margin-right: 6px; vertical-align: -1px; }
+.bm-pic-show { display: flex; flex-direction: column; gap: 4px; }
+.bm-big img { width: 100%; height: auto; border-radius: 10px; display: block; }
+/* continuity pass */
+.cn-lead { margin: 0 0 14px; color: var(--muted); }
+.cn-facts { display: flex; flex-direction: column; gap: 6px; }
+.cn-row { display: grid; grid-template-columns: 1.2fr 1.2fr 1fr 100px 28px; gap: 8px; align-items: center; }
+.cn-th { font-size: 12px; color: var(--muted); font-weight: 600; }
+.cn-row input { width: 100%; box-sizing: border-box; min-width: 0; }
+.cn-found { font-size: 12.5px; color: var(--muted); }
+.cn-ok { color: #2f7d4a; }
+.cn-acts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 12px 0 6px; }
+.cn-from select { margin-left: 6px; max-width: 220px; }
+@media (max-width: 700px) { .cn-row { grid-template-columns: 1fr 1fr 28px; } .cn-row > :nth-child(3), .cn-row > :nth-child(4) { grid-column: span 1; } .cn-th > :nth-child(3), .cn-th > :nth-child(4) { display: none; } }
+.cn-bar { position: fixed; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 880; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; max-width: min(860px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.cn-info { flex: 1 1 260px; min-width: 0; }
+.cn-what { font-size: 15px; }
+.cn-what small { display: block; color: var(--muted); font-size: 12px; }
+.cn-rw { color: var(--muted); font-size: 13px; }
+.cn-where { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.cn-btns { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+::highlight(cn-hit) { background-color: rgba(238, 96, 56, .3); }
+/* LitRPG: [system messages] look like system boxes while writing (only on screen; the book keeps plain brackets) */
+body.litrpg .editor p.lit-sys, body.litrpg #editor p.lit-sys { margin: .5em auto; padding: .35em .9em; max-width: 92%; border: 1px solid rgba(80, 140, 230, .55); border-left: 4px solid rgba(80, 140, 230, .85); border-radius: 6px; background: rgba(80, 140, 230, .08); text-indent: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .88em; letter-spacing: .01em; }
+.lit-sub { margin: 4px 0 6px 26px; display: flex; flex-direction: column; gap: 4px; }
+.lit-rows { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.lit-row { display: grid; grid-template-columns: 120px 1fr 28px; gap: 8px; }
+.lit-row input { min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+.lit-acts { display: flex; gap: 8px; flex-wrap: wrap; }

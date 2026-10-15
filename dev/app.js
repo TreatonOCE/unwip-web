@@ -2846,6 +2846,8 @@
         <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>`}
         <label class="check full"><input type="checkbox" id="s-dash" ${smartDash() ? 'checked' : ''}> Turn two hyphens (--) into an em dash (—) as I type</label>
         <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
+        <div class="section-label">LitRPG and text shortcuts</div>
+        <div class="field full" id="s-litrpg"></div>
         <div class="section-label">Licence</div>
         <div class="field full" id="s-licence"></div>
         <div class="section-label">Help</div>
@@ -2868,6 +2870,7 @@
     if ($('#s-dict', body)) $('#s-dict', body).onclick = dictionaryDialog;
     if (window.UnwipSync) window.UnwipSync.settingsSection(body);
     if (window.UnwipLicence) window.UnwipLicence.settingsSection(body);
+    if (window.UnwipLitRPG) window.UnwipLitRPG.settingsSection(body);
     $('#g-intro', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.start(); };
     $('#g-tour', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.tour(); };
     $('#g-help', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipHelp && window.UnwipHelp.open(); };

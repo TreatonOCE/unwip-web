@@ -127,9 +127,26 @@
         <div class="bm-find"><select id="bm-book"></select><button class="btn small" id="bm-find">Look</button></div><div id="bm-found"></div>
       </section>
 
+      <section class="bm-card bm-picture"><h2>The picture</h2><p class="bm-help">What Copy picture, Save PNG and Add to book use. Tap the picture to see it bigger.</p>
+        <div class="bm-pic-wrap"><button type="button" class="bm-pic" id="bm-pic" title="See it bigger"></button>
+          <div class="bm-pic-opts">
+            <label>Style</label><div class="chip-row">${Object.entries(LOOKS).map(([k, v]) => `<button type="button" class="chip ${lookOf(d).theme === k ? 'on' : ''}" data-look-theme="${k}"><i class="bm-sw" style="background:${v.bg};border-color:${v.line}"></i>${v.name}</button>`).join('')}</div>
+            <label>Border</label><div class="chip-row">${[['double', 'Double line'], ['ornate', 'Ornate'], ['none', 'None']].map(([k, n]) => `<button type="button" class="chip ${lookOf(d).frame === k ? 'on' : ''}" data-look-frame="${k}">${n}</button>`).join('')}</div>
+            <label>Show</label><div class="bm-pic-show">${[['summary', 'The summary (question 1)'], ['costs', 'Costs'], ['kinds', 'Kinds of magic'], ['count', 'Number of spells']].map(([k, n]) => `<label class="check"><input type="checkbox" data-look-show="${k}" ${lookOf(d)[k] ? 'checked' : ''}> ${n}</label>`).join('')}</div>
+          </div></div>
+      </section>
+
       <section class="bm-card"><h2>Notes</h2><textarea data-notes rows="5" placeholder="Anything else: history, famous casters, what’s secret…">${esc(d.notes || '')}</textarea></section>`;
     box.scrollTop = keepY;
     wire(page);
+    drawPic();
+  }
+  function drawPic() { const b = box && $('#bm-pic', box); if (b) b.innerHTML = `<img alt="" src="${B.svgURL(cardSVG(it, 800, 500))}">`; }
+  async function bigPic() {
+    const body = document.createElement('div'); body.className = 'bm-big';
+    body.innerHTML = `<img alt="${esc(it.title || 'Magic system')}" src="${B.svgURL(cardSVG(it, 1600, 1000))}">`;
+    const v = await U.modal({ title: it.title || 'Magic system', body, wide: true, buttons: [{ label: 'Copy picture', value: 'copy', kind: 'ghost' }, { label: 'Save PNG…', value: 'png', kind: 'ghost' }, { label: 'Close', value: null, kind: 'primary' }] });
+    if (v) { const c = await B.svgCanvas(cardSVG(it), 1600, 1000); if (v === 'copy') B.copyCanvas(c); else B.savePNG(c, it.title); }
   }
   function ruleRow(d, r) {
     const def = RULES[r.type]; if (!def) return '';
@@ -161,15 +178,21 @@
       else if (t.dataset.sp) { const s = d.spells.find(x => x.id === rowId(t)); s[t.dataset.sp] = t.dataset.sp === 'power' ? +t.value : t.value; if (t.dataset.sp === 'power') { save(); return refreshSpell(s); } }
       else if (t.dataset.r) { const r = d.rules.find(x => x.id === rowId(t)); r[t.dataset.r] = t.dataset.r === 'n' ? Math.max(1, +t.value || 1) : t.value; save(); return refreshSpells(); }
       else if (t.hasAttribute('data-r-on')) { d.rules.find(x => x.id === rowId(t)).off = !t.checked; t.closest('.bm-rule').classList.toggle('off', !t.checked); save(); return refreshSpells(); }
+      else if (t.dataset.lookShow) { d.look = Object.assign(lookOf(d), { [t.dataset.lookShow]: t.checked }); save(); return drawPic(); }
       else if (t.hasAttribute('data-notes')) d.notes = t.value;
       else return;
-      save(); refreshHead();
+      save(); refreshHead(); clearTimeout(drawPic.t); drawPic.t = setTimeout(drawPic, 400);
     };
     page.onchange = e => { const t = e.target; if (t.dataset.cost === 'name' || t.dataset.el === 'name') draw(); };   // names show up in rules and spells
     page.onclick = e => {
       if (e.target.closest('[data-howto-show]')) { try { localStorage.removeItem('unwip-bm-howto'); } catch {} draw(); return; }
       if (e.target.closest('[data-howto-hide]')) { try { localStorage.setItem('unwip-bm-howto', '1'); } catch {} draw(); return; }
       const t = e.target.closest('button'); if (!t) return;
+      if (t.id === 'bm-pic') return bigPic();
+      if (t.dataset.lookTheme || t.dataset.lookFrame) {
+        d.look = Object.assign(lookOf(d), t.dataset.lookTheme ? { theme: t.dataset.lookTheme } : { frame: t.dataset.lookFrame });
+        $$(t.dataset.lookTheme ? '[data-look-theme]' : '[data-look-frame]', page).forEach(x => x.classList.toggle('on', x === t)); save(); return drawPic();
+      }
       const id = t.closest('[data-id]') && t.closest('[data-id]').dataset.id;
       const drop = (list, key) => { d[key] = list.filter(x => x.id !== id); save(); draw(); };
       if (t.id === 'bm-add-limit') { d.limits.push({ id: U.uid(), text: '' }); save(); draw(); $$('[data-limit]', page).pop().focus(); }
@@ -241,16 +264,32 @@
     return h;
   }
   // a picture: a card with the name, the one-line summary and the costs
+  const LOOKS = {
+    parchment: { name: 'Parchment', bg: '#f4ecd8', ink: '#3a2a19', soft: '#5b4630', line: '#7a5c2e', accent: '#9a3b2b', disc: '#fffaf0' },
+    clean: { name: 'Clean', bg: '#ffffff', ink: '#1f2430', soft: '#4a5262', line: '#9aa3b2', accent: '#34528a', disc: '#f4f6fa' },
+    night: { name: 'Night', bg: '#141a26', ink: '#ece6d6', soft: '#b9b2a2', line: '#c9a85c', accent: '#e0b65a', disc: '#1f2738' },
+    arcane: { name: 'Arcane', bg: '#24163a', ink: '#f1e9ff', soft: '#cdbbe9', line: '#9b7be0', accent: '#7fd6c8', disc: '#33214f' },
+    blood: { name: 'Blood', bg: '#2a1012', ink: '#f6e6dc', soft: '#d8b4a8', line: '#a8342e', accent: '#ff8a5c', disc: '#3a171a' }
+  };
+  const lookOf = d => Object.assign({ theme: 'parchment', frame: 'double', summary: true, costs: true, kinds: true, count: true }, d.look || {});
+  // a picture: a card with the name, the one-line summary, the costs and the kinds of magic
   function cardSVG(item, w = 800, h = 500) {
-    const d = Object.assign(blank(), item.data || {});
+    const d = Object.assign(blank(), item.data || {}), L = lookOf(d), P = LOOKS[L.theme] || LOOKS.parchment;
     const wrap = (s, n) => { const words = String(s || '').split(/\s+/), lines = []; let l = ''; for (const x of words) { if ((l + ' ' + x).trim().length > n) { lines.push(l.trim()); l = x; } else l += ' ' + x; } if (l.trim()) lines.push(l.trim()); return lines.slice(0, 3); };
     const x = s => esc(s || '');
-    const sum = wrap(d.answers.summary, 52);
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="${w}" height="${h}"><rect width="800" height="500" rx="24" fill="#f4ecd8"/><rect x="18" y="18" width="764" height="464" rx="16" fill="none" stroke="#7a5c2e" stroke-width="3"/><rect x="28" y="28" width="744" height="444" rx="12" fill="none" stroke="#7a5c2e" stroke-width="1"/>
-      <text x="400" y="110" text-anchor="middle" font-family="Georgia, serif" font-size="52" fill="#3a2a19">${x(item.title)}</text>
-      ${sum.map((l, i) => `<text x="400" y="${170 + i * 34}" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="26" fill="#5b4630">${x(l)}</text>`).join('')}
-      ${d.costs.slice(0, 5).map((c, i) => `<g transform="translate(${400 - (Math.min(5, d.costs.length) * 150) / 2 + i * 150 + 75} 360)"><circle r="44" fill="#fffaf0" stroke="#7a5c2e" stroke-width="2"/><text y="-4" text-anchor="middle" font-family="Georgia, serif" font-size="17" fill="#3a2a19">${x((c.name || '').slice(0, 12))}</text><text y="20" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="#9a3b2b">${'●'.repeat(c.weight || 1)}</text></g>`).join('')}
-      <text x="400" y="452" text-anchor="middle" font-family="Georgia, serif" font-size="16" fill="#7a5c2e">${d.spells.length} spell${d.spells.length === 1 ? '' : 's'} · ${d.elements.length} element${d.elements.length === 1 ? '' : 's'}</text></svg>`;
+    const sum = L.summary ? wrap(d.answers.summary, 52) : [];
+    const kinds = L.kinds ? d.elements.filter(e => (e.name || '').trim()).slice(0, 6) : [];
+    const costs = L.costs ? d.costs.slice(0, 5) : [];
+    const frame = L.frame === 'none' ? '' : L.frame === 'ornate'
+      ? `<rect x="18" y="18" width="764" height="464" rx="6" fill="none" stroke="${P.line}" stroke-width="3"/><rect x="30" y="30" width="740" height="440" rx="4" fill="none" stroke="${P.line}" stroke-width="1" stroke-dasharray="2 5"/>${[[30, 30], [770, 30], [30, 470], [770, 470]].map(([cx, cy]) => `<g transform="translate(${cx} ${cy}) rotate(45)"><rect x="-9" y="-9" width="18" height="18" fill="${P.bg}" stroke="${P.line}" stroke-width="2"/><rect x="-4" y="-4" width="8" height="8" fill="${P.accent}"/></g>`).join('')}`
+      : `<rect x="18" y="18" width="764" height="464" rx="16" fill="none" stroke="${P.line}" stroke-width="3"/><rect x="28" y="28" width="744" height="444" rx="12" fill="none" stroke="${P.line}" stroke-width="1"/>`;
+    const costY = kinds.length ? 330 : 360, kindY = costs.length ? 418 : 370;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="${w}" height="${h}"><rect width="800" height="500" rx="24" fill="${P.bg}"/>${frame}
+      <text x="400" y="${sum.length ? 110 : 150}" text-anchor="middle" font-family="Georgia, serif" font-size="52" fill="${P.ink}">${x(item.title)}</text>
+      ${sum.map((l, i) => `<text x="400" y="${170 + i * 34}" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="26" fill="${P.soft}">${x(l)}</text>`).join('')}
+      ${costs.map((c, i) => `<g transform="translate(${400 - (costs.length * 150) / 2 + i * 150 + 75} ${costY})"><circle r="44" fill="${P.disc}" stroke="${P.line}" stroke-width="2"/><text y="-4" text-anchor="middle" font-family="Georgia, serif" font-size="17" fill="${P.ink}">${x((c.name || '').slice(0, 12))}</text><text y="20" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="${P.accent}">${'●'.repeat(c.weight || 1)}</text></g>`).join('')}
+      ${kinds.length ? (() => { const wd = kinds.map(k => Math.max(70, x(k.name).length * 10 + 30)), total = wd.reduce((a, b) => a + b, 0) + (kinds.length - 1) * 12; let at = 400 - total / 2; return kinds.map((k, i) => { const g = `<g transform="translate(${at} ${kindY - 16})"><rect width="${wd[i]}" height="32" rx="16" fill="none" stroke="${P.accent}" stroke-width="1.5"/><text x="${wd[i] / 2}" y="21" text-anchor="middle" font-family="Georgia, serif" font-size="16" fill="${P.ink}">${x(k.name.slice(0, 16))}</text></g>`; at += wd[i] + 12; return g; }).join(''); })() : ''}
+      ${L.count ? `<text x="400" y="458" text-anchor="middle" font-family="Georgia, serif" font-size="16" fill="${P.line}">${d.spells.length} spell${d.spells.length === 1 ? '' : 's'} · ${d.elements.length} kind${d.elements.length === 1 ? '' : 's'} of magic</text>` : ''}</svg>`;
   }
   B.editors.magic = {
     blank, open, check,
