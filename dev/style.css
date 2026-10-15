@@ -3289,3 +3289,8 @@ body.lore .selbar .sb-lore { display: contents; }
 .cs-br-row small { color: var(--muted); }
 .cs-br-ic { display: inline-grid; color: var(--muted); }
 .cs-br-ic svg { width: 18px; height: 18px; }
+
+/* Open World pieces on a phone: the picture, view only */
+.bd-view { display: flex; flex-direction: column; gap: 10px; }
+.bd-view-pic { display: grid; place-items: center; min-height: 160px; background: var(--panel-2); border-radius: 8px; overflow: hidden; }
+.bd-view-pic img { display: block; width: 100%; height: auto; }

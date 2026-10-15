@@ -19,11 +19,17 @@ window.UnwipBuild = (function () {
   const ORDER = ['map', 'magic', 'runes', 'sigil', 'arms', 'insignia', 'stats'];
   // new magic systems, rune alphabets, sigils and insignia are offered at the Lore level; ones you already made always show
   const LORE_KINDS = new Set(['magic', 'runes', 'sigil', 'insignia']);
+  // phones stop at Detail: Open World pieces (Lore) made on an iPad or computer are listed in Build there and open
+  // as a picture, view only; new ones are made on a bigger screen. Only the web version counts as a phone, so a narrow
+  // window on a PC or Mac (the Build window can be 480 px) still edits as normal.
+  const phone = () => document.documentElement.classList.contains('web') && window.matchMedia('(max-width: 720px)').matches;
+  const below = k => !LORE_KINDS.has(k) || phone() || !U.level || U.level() < 2;   // shown in Build (not Open World)
   const NEW_ORDER = () => ORDER.filter(k => !LORE_KINDS.has(k) || !U.level || U.level() >= 2);
   // the main screen's Build tab has maps, coats of arms and stat systems; at Lore, the Open World tab has the
   // deep-end pieces (magic, runes, sigils, insignia). Below Lore, ones you already made still show in Build.
   let scope = 'build';
-  const inScope = k => scope === 'world' ? LORE_KINDS.has(k) : (!LORE_KINDS.has(k) || !U.level || U.level() < 2);
+  const inScope = k => scope === 'world' ? LORE_KINDS.has(k) && !phone() : below(k);
+  const viewOnly = k => LORE_KINDS.has(k) && phone();
   const editors = {};          // filled in by buildmagic.js, buildrunes.js and buildarms.js
   let items = [];
 
@@ -96,15 +102,15 @@ window.UnwipBuild = (function () {
       ${items.some(x => inScope(x.kind)) ? ORDER.filter(k => inScope(k) && by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
         <div class="bd-grid">${by(k).map(x => `<div class="bd-card" data-id="${x.id}" tabindex="0">
           <div class="bd-thumb ${x.thumb ? '' : 'empty'}">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : `<span>${KINDS[k].icon}</span>`}</div>
-          <div class="bd-ct"><b>${esc(x.title || 'Untitled')}</b><span>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</span></div>
-          <button class="icon-btn small bd-more" title="More">⋯</button></div>`).join('')}</div>`).join('')
+          <div class="bd-ct"><b>${esc(x.title || 'Untitled')}</b><span>${esc(KINDS[k].name)} · ${viewOnly(k) ? 'View only' : ago(x.updated || x.created || 0)}</span></div>
+          ${viewOnly(k) ? '' : '<button class="icon-btn small bd-more" title="More">⋯</button>'}</div>`).join('')}</div>`).join('')
         : `<p class="lib-empty">${world ? 'Nothing here yet. Pick something above to start.' : 'Nothing built yet. Pick something above to start: a map is a good first piece.'}</p>`}`;
     $$('[data-new]', box).forEach(b => b.onclick = () => create(b.dataset.new));
     $$('.bd-card', box).forEach(c => {
       const id = c.dataset.id;
       c.onclick = e => { if (e.target.closest('.bd-more')) { const r = e.target.getBoundingClientRect(); return cardMenu(id, r.left, r.bottom); } open(id); };
       c.onkeydown = e => { if (e.key === 'Enter') open(id); };
-      c.oncontextmenu = e => { e.preventDefault(); cardMenu(id, e.clientX, e.clientY); };
+      c.oncontextmenu = e => { e.preventDefault(); const it = items.find(x => x.id === id); if (!(it && viewOnly(it.kind))) cardMenu(id, e.clientX, e.clientY); };
     });
   }
   function cardMenu(id, x, y) {
@@ -187,6 +193,7 @@ window.UnwipBuild = (function () {
     await loadFonts();
     pinReset();
     const it = await get(id); if (!it) { U.toast('Couldn’t open that.', 'warn'); if (!ret && !from) render(); return; }
+    if (viewOnly(it.kind)) { await viewPicture(it); if (!ret && !from) render(); return; }
     await close(true);
     if (from !== undefined) ret = from || null;
     if (ret === 'book' && U.flushSave) await U.flushSave();
@@ -253,17 +260,29 @@ window.UnwipBuild = (function () {
   // ================================================================== FROM INSIDE A BOOK
   // Build without leaving the chapter: pick a piece (or start a new one) and it opens over the book; "Back to the book"
   // returns to the same place. On a PC or Mac it can open in its own window instead, to keep beside the chapter.
+  // view only (Open World pieces on a phone): the piece's own picture, the same one Copy picture makes, and nothing
+  // to change. Editing stays on the iPad and computer.
+  async function viewPicture(it) {
+    const ed = editors[it.kind]; const body = document.createElement('div'); body.className = 'bd-view';
+    body.innerHTML = `<p class="hint">View only on a phone. Change it on an iPad or computer.</p><div class="bd-view-pic"><span class="hint">Drawing…</span></div>`;
+    let shown = null;
+    const draw = (async () => { try { await loadFonts(); const c = ed && ed.picture && await ed.picture(it); if (!c) throw 0;
+      const img = new Image(); img.alt = it.title || ''; img.src = c.toDataURL('image/png'); shown = c; body.querySelector('.bd-view-pic').replaceChildren(img); }
+      catch { body.querySelector('.bd-view-pic').innerHTML = `<p class="lib-empty">${KINDS[it.kind] ? KINDS[it.kind].icon : ''} Open it on an iPad or computer to see it.</p>`; } })();
+    const v = await U.modal({ title: it.title || (KINDS[it.kind] || {}).name || 'Build', body, wide: true, buttons: [{ label: 'Copy picture', value: 'copy', kind: 'ghost' }, { label: 'Close', value: false, kind: 'primary' }] });
+    await draw; if (v === 'copy' && shown) copyCanvas(shown);
+  }
   async function fromBook(sc) {
     await refresh();
     const canWin = !!api.buildWindow, world = sc === 'world' && U.level && U.level() >= 2;
     // same split as the main screen: at Lore, magic, runes, sigils and insignia are under Open World, not Build
-    const want = k => world ? LORE_KINDS.has(k) : (!LORE_KINDS.has(k) || !U.level || U.level() < 2);
+    const want = k => world ? LORE_KINDS.has(k) : below(k);
     const by = k => items.filter(x => x.kind === k && want(k)).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const any = ORDER.some(k => by(k).length);
     const body = document.createElement('div'); body.className = 'bd-pick';
     body.innerHTML = `<p class="hint">${world ? 'Your world’s magic systems, rune alphabets, sigils and insignia.' : (U.level && U.level() >= 2 ? 'Your world’s maps, coats of arms and stat systems.' : 'Your world’s maps, magic, runes, sigils, coats of arms, insignia and stat systems.')} ${canWin ? 'Each opens in its own window, so you can keep it beside your chapter. (↩ opens it in this window instead.)' : 'It opens over your chapter; “Back to the book” returns you to the same place.'}</p>
       ${any ? ORDER.filter(k => by(k).length).map(k => `<h4>${KINDS[k].plural}</h4><div class="bd-pick-list">${by(k).map(x => `<div class="bd-pick-row" data-id="${x.id}">
-          <button type="button" class="bd-pick-open" data-open="${x.id}"><span class="bd-pick-th">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : KINDS[k].icon}</span><span><b>${esc(x.title || 'Untitled')}</b><small>${esc(KINDS[k].name)} · ${ago(x.updated || x.created || 0)}</small></span></button>
+          <button type="button" class="bd-pick-open" data-open="${x.id}"><span class="bd-pick-th">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : KINDS[k].icon}</span><span><b>${esc(x.title || 'Untitled')}</b><small>${esc(KINDS[k].name)} · ${viewOnly(k) ? 'View only' : ago(x.updated || x.created || 0)}</small></span></button>
           ${canWin ? `<button type="button" class="icon-btn bd-pick-win" data-here="${x.id}" title="Open it in this window instead, over the chapter">↩</button>` : ''}</div>`).join('')}</div>`).join('') : '<p class="lib-empty">Nothing built yet.</p>'}
       <h4>Start something new</h4><div class="bd-pick-new">${NEW_ORDER().filter(want).map(k => `<button type="button" class="btn small" data-new="${k}">${KINDS[k].icon} ${esc(KINDS[k].name)}</button>`).join('')}</div>`;
     let go = null, close2 = () => {};
