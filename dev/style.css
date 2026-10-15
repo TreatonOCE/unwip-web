@@ -2832,3 +2832,34 @@ body.litrpg .editor p.lit-sys, body.litrpg #editor p.lit-sys { margin: .5em auto
 .bs-lv input { flex: 1; } .bs-lv b { min-width: 2.5em; color: var(--text); }
 .bs-shot img { width: 100%; height: auto; display: block; border-radius: 10px; margin-bottom: 10px; }
 .bs-lines { white-space: pre-wrap; font-size: 12.5px; background: var(--panel-2, var(--bg)); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 6px 0 8px; }
+/* name ideas */
+.page-names { right: 210px; }
+.ng-opts { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.ng-row2 { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.ng-cols { display: grid; gap: 12px; }
+.ng-cols.n2 { grid-template-columns: 1fr 1fr; } .ng-cols.n3 { grid-template-columns: repeat(3, 1fr); } .ng-cols.n4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 640px) { .ng-cols.n3, .ng-cols.n4 { grid-template-columns: 1fr 1fr; } }
+.ng-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ng-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.ng-name { text-align: left; padding: 5px 9px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text); cursor: pointer; font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ng-name:hover { background: var(--panel-2); } .ng-name.on { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.ng-own { margin-top: 4px; font-size: 13px; min-width: 0; }
+.ng-preview { margin-top: 16px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ng-full { font-family: var(--serif, Georgia, serif); font-size: 24px; }
+.ng-h { margin-left: 12px; color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; }
+.ng-acts { display: flex; gap: 6px; }
+.bs-name { display: flex; gap: 6px; } .bs-name input { flex: 1; min-width: 0; }
+/* system-style letter effects */
+.tw-ghost.decode { animation: tw-decode .28s steps(1) both; color: var(--accent) !important; }
+.tw-ghost.scan { animation: tw-scan .32s linear both; }
+.tw-ghost.glitch { animation: tw-glitch .3s steps(2, end) both; }
+@keyframes tw-decode { 0% { opacity: .55; } 100% { opacity: 1; } }
+@keyframes tw-scan { 0% { clip-path: inset(0 0 100% 0); filter: drop-shadow(0 1px 0 var(--accent)); } 85% { clip-path: inset(0 0 0 0); filter: drop-shadow(0 1px 0 var(--accent)); } 100% { clip-path: inset(0 0 0 0); filter: none; } }
+@keyframes tw-glitch { 0% { opacity: .2; transform: translateX(.08em); text-shadow: -.08em 0 rgba(255, 60, 120, .75), .08em 0 rgba(60, 200, 255, .75); } 40% { opacity: 1; transform: translateX(-.05em); text-shadow: .05em 0 rgba(255, 60, 120, .6), -.05em 0 rgba(60, 200, 255, .6); } 100% { transform: none; text-shadow: none; } }
+/* cursors */
+.tw-caret.under { border-radius: 0; }
+.tw-caret.glow { box-shadow: 0 0 6px var(--accent), 0 0 14px var(--accent); }
+/* the game-system themes: a thin edge of light round the page, nothing more */
+:root[data-skin="sysblue"] .page, :root[data-skin="terminal"] .page, :root[data-skin="neon"] .page { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent), 0 0 28px color-mix(in srgb, var(--accent) 9%, transparent); }
+:root[data-skin="status"] .page { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 6px 22px rgba(30, 60, 110, .08); }
+:root[data-skin="terminal"] ::selection { color: #0a0d0a; background: #5fd38a; }

@@ -70,7 +70,7 @@ window.UnwipCalendar = (function () {
       body.innerHTML = `
         <p class="hint">Name the months, the week, seasons and moons of your world. Your events stay on their story days; this only changes what each day is called. <span class="cal-pre">Start from: <button type="button" class="link-btn" data-pre="fantasy">Fantasy</button> · <button type="button" class="link-btn" data-pre="earth">Earth</button> · <button type="button" class="link-btn" data-pre="two">Two moons</button></span></p>
         <div class="form-grid">
-          <div class="field"><label>Calendar name</label><input type="text" id="cal-name" value="${esc(c.name || '')}" placeholder="e.g. Shire Reckoning"></div>
+          <div class="field"><label>Calendar name</label><input type="text" id="cal-name" value="${esc(c.name || '')}" placeholder="e.g. The Harbour Count"></div>
           <div class="field"><label>After the year (optional)</label><input type="text" id="cal-era" value="${esc(c.era || '')}" placeholder="e.g. AR, Third Age"></div>
         </div>
         <div class="cal-cols">

@@ -75,7 +75,7 @@
     box.innerHTML = `<div class="bs-page">
       <div class="bs-left">
         <section class="bm-card"><h2>Who</h2>
-          <div class="bs-grid"><label>Name<input data-d="name" value="${esc(d.name)}" placeholder="e.g. Ace"></label><label>Class<input data-d="cls" value="${esc(d.cls)}" placeholder="e.g. Dungeon Keeper"></label><label>Race<input data-d="race" value="${esc(d.race)}" placeholder="optional"></label></div></section>
+          <div class="bs-grid"><label>Name<span class="bs-name"><input data-d="name" value="${esc(d.name)}" placeholder="e.g. Jory Pell"><button type="button" class="btn small ghost" id="bs-names" title="Name ideas (no AI)">🎲</button></span></label><label>Class<input data-d="cls" value="${esc(d.cls)}" placeholder="e.g. Dungeon Keeper"></label><label>Race<input data-d="race" value="${esc(d.race)}" placeholder="optional"></label></div></section>
         <section class="bm-card"><h2>Stats</h2><p class="bm-help">Each stat’s value at level 1, and how much it goes up every level.</p>
           <div class="bs-row bs-th"><span>Bars (HP, MP…)</span><span>At level 1</span><span>Per level</span><span></span></div>${rowsOf(d.res, 'res')}<button class="btn small ghost" data-add="res">+ Add a bar</button>
           <div class="bs-row bs-th" style="margin-top:12px"><span>Stats</span><span>At level 1</span><span>Per level</span><span></span></div>${rowsOf(d.stats, 'stats')}<button class="btn small ghost" data-add="stats">+ Add a stat</button></section>
@@ -121,6 +121,7 @@
       else if (t.hasAttribute('data-del')) { const row = t.closest('.bs-row'); d[row.dataset.k] = d[row.dataset.k].filter(x => x.id !== row.dataset.id); save(); draw(); }
       else if (t.dataset.curve) { d.xp.curve = t.dataset.curve; save(); draw(); }
       else if (t.dataset.look) { d.look = t.dataset.look; $$('[data-look]', box).forEach(x => x.classList.toggle('on', x === t)); save(); shot(); }
+      else if (t.id === 'bs-names') { window.UnwipNames && window.UnwipNames.open({ onUse: n => { d.name = n.name; if (!it.title || it.title === 'Untitled') { it.title = n.name; const ti = document.getElementById('bd-title'); if (ti) ti.value = n.name; } save(); draw(); } }); }
       else if (t.id === 'bs-copy') { const txt = bracketLines(it, d, Math.max(1, +d.show || 1)).join('\n'); try { await navigator.clipboard.writeText(txt); U.toast('Copied. Paste them into a chapter.'); } catch { U.toast('Couldn’t copy here. Select the lines and copy them.', 'warn'); } }
     };
   }

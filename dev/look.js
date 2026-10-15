@@ -26,6 +26,15 @@ window.UnwipLook = (function () {
       v: { bg: '#14151f', panel: '#191a26', 'panel-2': '#222332', paper: '#1c1d2b', text: '#e6e4f2', muted: '#9a97b2', faint: '#66637d', line: '#2b2c3d', accent: '#a99bf0', sel: '#373463' } },
     ember:    { name: 'Ember',     base: 'dark',  sw: ['#1f1a17', '#29221e', '#e39a5a'],
       v: { bg: '#1f1a17', panel: '#241e1a', 'panel-2': '#2e2621', paper: '#29221e', text: '#f0e6dc', muted: '#ab9b8d', faint: '#76685c', line: '#3a302a', accent: '#e39a5a', sel: '#4e3826' } },
+    // game-system looks, for LitRPG and sci-fi
+    sysblue:  { name: 'System',    base: 'dark',  sw: ['#0b1322', '#101b2e', '#5fb4ff'],
+      v: { bg: '#0b1322', panel: '#0f1a2c', 'panel-2': '#152238', paper: '#101b2e', text: '#dce8f8', muted: '#8ea3c0', faint: '#5b6e8a', line: '#1f3150', accent: '#5fb4ff', sel: '#1d3a62' } },
+    terminal: { name: 'Terminal',  base: 'dark',  sw: ['#0a0d0a', '#0f140f', '#5fd38a'],
+      v: { bg: '#0a0d0a', panel: '#0d120d', 'panel-2': '#131a13', paper: '#0f140f', text: '#c9f2d4', muted: '#7fae8b', faint: '#4e6e57', line: '#1c2a1f', accent: '#5fd38a', sel: '#1f4a2c' } },
+    neon:     { name: 'Neon',      base: 'dark',  sw: ['#120f1a', '#1a1624', '#ff5fa2'],
+      v: { bg: '#120f1a', panel: '#161220', 'panel-2': '#1f1a2c', paper: '#1a1624', text: '#efe6f7', muted: '#a597b8', faint: '#6d6182', line: '#2c2340', accent: '#ff5fa2', sel: '#4a2346' } },
+    status:   { name: 'Status',    base: 'light', sw: ['#eef2f7', '#fbfcfe', '#2f6fd0'],
+      v: { bg: '#eef2f7', panel: '#e6ebf2', 'panel-2': '#dbe2ec', paper: '#fbfcfe', text: '#1a2433', muted: '#5f6d82', faint: '#93a0b3', line: '#d3dbe6', accent: '#2f6fd0', sel: '#cfdcf2' } },
     contrast: { name: 'High contrast', base: 'light', sw: ['#ffffff', '#ffffff', '#0033cc'],
       v: { bg: '#ffffff', panel: '#f2f2f2', 'panel-2': '#e6e6e6', paper: '#ffffff', text: '#000000', muted: '#333333', faint: '#555555', line: '#8a8a8a', accent: '#0033cc', sel: '#b3c6ff' } }
   };
@@ -153,6 +162,13 @@ window.UnwipLook = (function () {
   // ---- custom caret (thick, block, smooth glide)
   const caret = document.createElement('div'); caret.className = 'tw-caret hidden'; document.body.appendChild(caret);
   let caretTimer = null;
+  // where the custom cursor goes and how big it is: a line, a thick line, a block, or a terminal underscore
+  function caretGeo(rc, z) {
+    const h = rc.height / z, c = typing.caret;
+    if (c === 'under') { const w = Math.max(7, h * 0.5); return { w, h: Math.max(2, h * 0.09), x: rc.left / z, y: rc.top / z + h * 0.86 }; }
+    const w = c === 'thick' || c === 'glow' ? 3 : c === 'block' ? Math.max(6, h * 0.5) : 2;
+    return { w, h, x: rc.left / z - (c === 'block' ? 0 : w / 2), y: rc.top / z };
+  }
   function placeCaret() {
     const custom = typing.caret !== 'normal';
     document.body.classList.toggle('custom-caret', custom);
@@ -162,10 +178,9 @@ window.UnwipLook = (function () {
     const rc = caretRect(sel); if (!rc) { caret.classList.add('hidden'); return; }
     const z = parseFloat(document.body.style.zoom) || 1;
     caret.className = `tw-caret ${typing.caret}${typing.blink ? '' : ' still'}`;
-    const h = rc.height / z;
-    let w = typing.caret === 'thick' ? 3 : typing.caret === 'block' ? Math.max(6, h * 0.5) : 2;
-    caret.style.height = h + 'px'; caret.style.width = w + 'px';
-    caret.style.transform = `translate(${rc.left / z - (typing.caret === 'block' ? 0 : w / 2)}px, ${rc.top / z}px)`;
+    const G = caretGeo(rc, z);
+    caret.style.height = G.h + 'px'; caret.style.width = G.w + 'px';
+    caret.style.transform = `translate(${G.x}px, ${G.y}px)`;
     // restart the blink so the caret is solid while you type
     caret.classList.add('solid'); clearTimeout(caretTimer); caretTimer = setTimeout(() => caret.classList.remove('solid'), 500);
   }
@@ -216,6 +231,11 @@ window.UnwipLook = (function () {
     if (typing.anim === 'strike') g.style.setProperty('--tilt', (Math.random() * 6 - 3).toFixed(1) + 'deg');
     if (typing.anim === 'scatter') { const a = Math.random() * Math.PI * 2; g.style.setProperty('--dx', (Math.cos(a) * 1.6).toFixed(2) + 'em'); g.style.setProperty('--dy', (Math.sin(a) * 1.6).toFixed(2) + 'em'); g.style.setProperty('--rot', (Math.random() * 120 - 60).toFixed(0) + 'deg'); }
     g.textContent = e.data;
+    if (typing.anim === 'decode') {   // the letter flickers through a few symbols, then settles on the real one
+      const real = e.data, CH = '01#%&*+=<>/\\|?ABCDEFXZ'; let k = 0;
+      const iv = setInterval(() => { if (++k > 5 || !g.isConnected) { clearInterval(iv); g.textContent = real; return; } g.textContent = CH[Math.floor(Math.random() * CH.length)]; }, 38);
+      g.textContent = CH[Math.floor(Math.random() * CH.length)];
+    }
     g.style.cssText = `left:${rc.left / z}px; top:${rc.top / z}px; height:${rc.height / z}px; line-height:${rc.height / z}px; font:${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}; color:${cs.color}; letter-spacing:${cs.letterSpacing};`;
     layer.appendChild(g);
     hidden.add(r);
@@ -298,6 +318,13 @@ window.UnwipLook = (function () {
       if (big) { burst(t + 0.03, { filters: [['highpass', 3000]], decay: 0.006, gain: 0.25 }); burst(t + 0.045, { filters: [['highpass', 3000]], decay: 0.005, gain: 0.18 }); }   // stabiliser rattle
       if (!big) burst(t + 0.09, { filters: [['highpass', 4500], ['bandpass', 5600, 3]], decay: 0.003, gain: 0.25 });   // release click
     },
+    // a quiet interface blip: a short soft tone, a lower one for Space, two rising notes for Enter
+    blip(kind, t) {
+      if (kind === 'enter') { tone(t, { f: 660, decay: 0.08, gain: 0.18, type: 'sine' }); tone(t + 0.07, { f: 990, decay: 0.12, gain: 0.16, type: 'sine' }); return; }
+      if (kind === 'back') { tone(t, { f: 420, to: 300, decay: 0.05, gain: 0.14, type: 'sine' }); return; }
+      if (kind === 'space') { tone(t, { f: 520, decay: 0.035, gain: 0.12, type: 'sine' }); return; }
+      tone(t, { f: jit(1180, 0.06), decay: 0.022, gain: 0.1, type: 'sine' }); tone(t, { f: 2360, decay: 0.012, gain: 0.025, type: 'triangle' });
+    },
     soft(kind, t) {
       const big = kind === 'space' || kind === 'enter';
       burst(t, { filters: [['lowpass', big ? 500 : 750, 0.7]], decay: big ? 0.03 : 0.018, gain: big ? 0.7 : 0.5 });
@@ -378,11 +405,16 @@ window.UnwipLook = (function () {
         ['strike', 'Typewriter strike', 'Each letter slams onto the page, dark and slightly crooked, like a typewriter key hitting the ribbon.'],
         ['glow', 'Glow', 'Each letter lights up warm and bright, then cools to the normal colour, like an ember.'],
         ['spin', 'Spin', 'Each letter spins in from small and settles into place.'],
-        ['scatter', 'Scatter', 'Each letter flies in from a random direction and lands in its place.']])}
+        ['scatter', 'Scatter', 'Each letter flies in from a random direction and lands in its place.'],
+        ['decode', 'Decode', 'Each letter flickers through a few symbols before it settles, like a system decoding text.'],
+        ['scan', 'Scan in', 'Each letter is drawn top to bottom by a thin bright line, like a screen printing it.'],
+        ['glitch', 'Glitch', 'Each letter arrives with a quick colour-split jitter, like a signal settling.']])}
       <div class="ip-label">Cursor ${q('The flashing line that shows where your next letter goes.')}</div>${chips('caret', [
         ['normal', 'Normal', 'The standard thin line.'],
         ['thick', 'Thick', 'A wider line that’s easier to spot on a big screen.'],
         ['block', 'Block', 'A see-through block over the next letter, like an old computer terminal.'],
+        ['under', 'Underscore', 'A flat line under the next letter, like a command prompt.'],
+        ['glow', 'Glow', 'A line with a soft glow in your accent colour, like a game interface.'],
         ['glide', 'Smooth glide', 'Instead of jumping, the cursor slides smoothly to each new spot as you type or click.']])}
       <label class="check" style="margin:6px 0 4px" data-tip="On: the cursor flashes on and off. Off: it stays solid, so it never vanishes while you look for it."><input type="checkbox" id="ty-blink" ${d.blink ? 'checked' : ''}> Blink ${q('On: the cursor flashes on and off. Off: it stays solid, so it never vanishes while you look for it.')}</label>
       <div class="ip-label">Sounds ${q('A sound for every key you press. They’re made by Unwip as you type, so no sound files are needed.')}</div>${chips('sound', [
@@ -390,6 +422,7 @@ window.UnwipLook = (function () {
         ['typewriter', 'Typewriter', 'A manual typewriter: a sharp clack on each letter, a deep thunk on Space, and the bell and carriage return on Enter.'],
         ['mechanical', 'Mechanical keyboard', 'A clicky gaming keyboard: a crisp double click and a plastic thock. Space and Enter sound deeper.'],
         ['soft', 'Soft keys', 'A quiet laptop keyboard. Just a gentle, muffled tap.'],
+        ['blip', 'Interface blip', 'A quiet game-menu blip on each key, a lower one for Space and two rising notes on Enter.'],
         ['pencil', 'Pencil', 'Graphite scratching on paper. Space taps the pencil, Enter draws a line, and Backspace rubs with an eraser.']])}
       <div class="form-grid" style="margin-top:8px">
         <div class="field"><label>Volume ${q('How loud the typing sounds are. Your Windows volume still applies on top.')}</label><input type="range" id="ty-vol" min="0.05" max="1" step="0.05" value="${d.volume}"></div>
@@ -445,11 +478,11 @@ window.UnwipLook = (function () {
       const sel = getSelection(); const own = document.querySelector('.ty-caret') || (() => { const c = document.createElement('div'); c.className = 'tw-caret ty-caret'; document.body.appendChild(c); return c; })();
       if (typing.caret === 'normal' || !sel.rangeCount || !pad.contains(sel.anchorNode) || !sel.isCollapsed) { own.style.display = 'none'; pad.classList.remove('no-caret'); return; }
       const rc = caretRect(sel); if (!rc) return;
-      const z = parseFloat(document.body.style.zoom) || 1, h = rc.height / z, w = typing.caret === 'thick' ? 3 : typing.caret === 'block' ? Math.max(6, h * 0.5) : 2;
+      const z = parseFloat(document.body.style.zoom) || 1, G = caretGeo(rc, z);
       pad.classList.add('no-caret'); own.style.display = '';
       own.className = `tw-caret ty-caret ${typing.caret}${typing.blink ? '' : ' still'}`;
-      own.style.position = 'fixed'; own.style.height = h + 'px'; own.style.width = w + 'px';
-      own.style.transform = `translate(${rc.left / z - (typing.caret === 'block' ? 0 : w / 2)}px, ${rc.top / z}px)`;
+      own.style.position = 'fixed'; own.style.height = G.h + 'px'; own.style.width = G.w + 'px';
+      own.style.transform = `translate(${G.x}px, ${G.y}px)`;
     };
     const selWatch = () => padCaret(); document.addEventListener('selectionchange', selWatch);
     const ok = await U.modal({ title: 'Typewriter & animations', body, wide: true, buttons: [{ label: 'Reset', value: 'reset', kind: 'ghost' }, { label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }],

@@ -94,9 +94,12 @@ window.UnwipMaps = (function () {
       return a + (b - a) * xf + (c - a) * yf + (a - b - c + d) * xf * yf; };
   }
   function fbm(n, x, y, oct = 5) { let v = 0, a = 1, f = 1, t = 0; for (let o = 0; o < oct; o++) { v += n(x * f, y * f) * a; t += a; a *= 0.5; f *= 2; } return v / t; }
-  const SYL = ['ash', 'bel', 'cor', 'dun', 'el', 'fen', 'gar', 'hal', 'ith', 'kar', 'lor', 'mar', 'nor', 'or', 'pel', 'quen', 'ros', 'sel', 'tor', 'ul', 'vel', 'wyn', 'yr', 'zan', 'bri', 'dra', 'ka', 'mo', 'thal', 'eth'];
-  const END = ['', 'a', 'ia', 'or', 'en', 'heim', 'mere', 'ford', 'hold', 'wick', 'mouth', 'reach', 'vale', 'gate', 'spire'];
-  function name(r) { const n = SYL[Math.floor(r() * SYL.length)] + SYL[Math.floor(r() * SYL.length)] + END[Math.floor(r() * END.length)]; return n[0].toUpperCase() + n.slice(1); }
+  // place names built the way real ones are: an old word for a person, a tree, a river or the land, plus an ending
+  // that says what the place was (a farm, a ford, a hill, a harbour). No stock fantasy words (no "Vale", no "Ash-").
+  const SYL = ['brack', 'hol', 'kes', 'dun', 'tav', 'lin', 'mor', 'cal', 'pen', 'tre', 'gol', 'wex', 'sund', 'hart', 'bar', 'rud', 'olm', 'stav', 'cor', 'mel', 'farn', 'tor', 'abb', 'quarr', 'lod', 'nan', 'pol', 'skel', 'hask', 'wend', 'blen', 'cran', 'eg', 'hun', 'inch', 'kil', 'mar', 'ross', 'sel', 'bran'];
+  const MID = ['', '', '', 'e', 'er', 'ing', 'ley', 'en', 'is'];
+  const END = ['ham', 'by', 'ton', 'wick', 'stead', 'ford', 'dale', 'mouth', 'sey', 'thorp', 'kirk', 'bury', 'avon', 'ness', 'holm', 'garth', 'well', 'field', 'more', 'combe', 'den', 'haven', 'ey', 'low', 'stow', 'ach', 'ard', 'ock'];
+  function name(r) { const pick = a => a[Math.floor(r() * a.length)]; let n = pick(SYL) + pick(MID) + pick(END); n = n.replace(/([aeiou])\1/g, '$1').replace(/(.)\1\1/g, '$1$1'); return n[0].toUpperCase() + n.slice(1); }
   // kind: island | continent | archipelago ; add: keep what's there and put new land in the emptiest stretch of sea
   function generate(kind, add = false) {
     push();
@@ -508,7 +511,7 @@ window.UnwipMaps = (function () {
   async function addPin(p, existing) {
     const pl = places();
     const body = document.createElement('div');
-    body.innerHTML = `<div class="field"><label>Name on the map</label><input type="text" id="pn-name" value="${esc(existing ? existing.label || '' : '')}" placeholder="e.g. Ashfall Keep"></div>
+    body.innerHTML = `<div class="field"><label>Name on the map</label><input type="text" id="pn-name" value="${esc(existing ? existing.label || '' : '')}" placeholder="e.g. Hollin Keep"></div>
       <div class="field" style="margin-top:10px"><label>Link to a Places sheet (optional)</label><select id="pn-link"><option value="">— none —</option>${pl.map(n => `<option value="${n.id}" ${existing && existing.placeId === n.id ? 'selected' : ''}>${esc(n.title)}</option>`).join('')}</select></div>`;
     $('#pn-link', body).onchange = e => { const n = pl.find(x => x.id === e.target.value); if (n && !$('#pn-name', body).value) $('#pn-name', body).value = n.title; };
     const ok = await U.modal({ title: existing ? 'Edit pin' : 'New pin', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: existing ? 'Save' : 'Add pin', value: true, kind: 'primary' }] });
@@ -519,7 +522,7 @@ window.UnwipMaps = (function () {
   }
   async function addLabel(p, existing) {
     const body = document.createElement('div');
-    body.innerHTML = `<div class="field"><label>Text</label><input type="text" id="lb-t" value="${esc(existing ? existing.text : '')}" placeholder="e.g. The Ashen Coast"></div>
+    body.innerHTML = `<div class="field"><label>Text</label><input type="text" id="lb-t" value="${esc(existing ? existing.text : '')}" placeholder="e.g. The Salt Flats"></div>
       <div class="field" style="margin-top:10px"><label>Kind</label><div class="chip-row" id="lb-k">${[['region', 'Region (big, spaced capitals)'], ['place', 'Place'], ['sea', 'Sea or river (italic)']].map(([v, l]) => `<button type="button" class="chip ${(existing ? existing.k : 'place') === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div></div>
       <div class="field" style="margin-top:10px"><label>Size</label><input type="range" id="lb-s" min="12" max="80" value="${existing ? existing.size || (existing.k === 'region' ? 44 : existing.k === 'sea' ? 30 : 20) : 20}"></div>`;
     let k = existing ? existing.k : 'place';
@@ -790,7 +793,7 @@ window.UnwipMaps = (function () {
       if (!kind) kind = await U.modal({ title: 'New map section', body: '<p>What kind of map?</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: '🏘️ Town or city', value: 'town', kind: 'ghost' }, { label: '🗺️ World or region', value: 'world', kind: 'primary' }] });
       if (!kind) return;
       how = await U.modal({ title: kind === 'town' ? 'New town map' : 'New map section', onOpen: x => { el = x; if (opts.name) x.querySelector('#ms-name').value = opts.name; },
-        body: `<div class="field"><label>Name</label><input id="ms-name" placeholder="${kind === 'town' ? 'e.g. Kael, Ashford, the Old Port' : 'e.g. The Northern Reach'}"></div><p class="hint" style="margin-top:8px">${kind === 'town' ? 'Start it empty, or roll a village, town or city to work from (🎲 no AI).' : 'Start it empty, or generate land to work from.'}</p>`,
+        body: `<div class="field"><label>Name</label><input id="ms-name" placeholder="${kind === 'town' ? 'e.g. Brackwell, Saltby, the Old Port' : 'e.g. The North Downs'}"></div><p class="hint" style="margin-top:8px">${kind === 'town' ? 'Start it empty, or roll a village, town or city to work from (🎲 no AI).' : 'Start it empty, or generate land to work from.'}</p>`,
         buttons: kind === 'town' ? [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Empty', value: 'tblank', kind: 'ghost' }, { label: 'Village', value: 'village', kind: 'ghost' }, { label: 'Town', value: 'town', kind: 'ghost' }, { label: 'City', value: 'city', kind: 'primary' }]
           : [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Empty', value: 'blank', kind: 'ghost' }, { label: 'Islands', value: 'archipelago', kind: 'ghost' }, { label: 'Continent', value: 'continent', kind: 'ghost' }, { label: 'One island', value: 'island', kind: 'primary' }] });
       if (!how) return;
@@ -852,5 +855,5 @@ window.UnwipMaps = (function () {
   });
   const bookOnly = () => { if (host.inBook) close(true); };
   U.on('leave', bookOnly); U.on('doc', bookOnly); U.on('view', bookOnly);
-  return { open, create, thumb, blank: (style, kind) => blank(style, kind), close, pictures, townGen: k => T && T.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
+  return { open, create, thumb, placeName: () => name(Math.random), blank: (style, kind) => blank(style, kind), close, pictures, townGen: k => T && T.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
 })();

@@ -268,7 +268,7 @@
     parchment: { name: 'Parchment', bg: '#f4ecd8', ink: '#3a2a19', soft: '#5b4630', line: '#7a5c2e', accent: '#9a3b2b', disc: '#fffaf0' },
     clean: { name: 'Clean', bg: '#ffffff', ink: '#1f2430', soft: '#4a5262', line: '#9aa3b2', accent: '#34528a', disc: '#f4f6fa' },
     night: { name: 'Night', bg: '#141a26', ink: '#ece6d6', soft: '#b9b2a2', line: '#c9a85c', accent: '#e0b65a', disc: '#1f2738' },
-    arcane: { name: 'Arcane', bg: '#24163a', ink: '#f1e9ff', soft: '#cdbbe9', line: '#9b7be0', accent: '#7fd6c8', disc: '#33214f' },
+    arcane: { name: 'Violet', bg: '#24163a', ink: '#f1e9ff', soft: '#cdbbe9', line: '#9b7be0', accent: '#7fd6c8', disc: '#33214f' },
     blood: { name: 'Blood', bg: '#2a1012', ink: '#f6e6dc', soft: '#d8b4a8', line: '#a8342e', accent: '#ff8a5c', disc: '#3a171a' }
   };
   const lookOf = d => Object.assign({ theme: 'parchment', frame: 'double', summary: true, costs: true, kinds: true, count: true }, d.look || {});
