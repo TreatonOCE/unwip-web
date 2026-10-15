@@ -166,8 +166,8 @@ window.UnwipCharSheet = (function () {
         <div class="cs-tabs" role="tablist">${[['char', 'Character'], ['stats', 'Stats'], ['inv', 'Inventory'], ['skills', 'Skills']].map(([k, l]) => `<button type="button" role="tab" class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
         <div class="cs-body">${tabBody}</div>
         ${statTiles.length ? `<div class="cs-tiles">${statTiles.slice(0, 6).map(x => `<div class="cs-tile"><span>${esc(x.s.label)}</span><b>${fmtV(x.v)}</b><small>${x.p && x.v.v > x.p.v ? '+' + U.fmt(x.v.v - x.p.v) : ''}</small></div>`).join('')}</div>` : ''}
-        ${ro ? `<div class="cs-foot"><span class="hint">View only on a phone. Change gear on an iPad or computer.${w !== null ? ` Stats from ${esc(w || 'the main character')}.` : ''}</span></div>`
-          : `<div class="cs-foot"><label>Stats from <select class="cs-who">${whoOptions(w)}</select></label><label>Stat system <select class="cs-sys"><option value="">None</option>${systems.map(x => `<option value="${esc(x.id)}" ${x.id === sh.sys ? 'selected' : ''}>${esc(x.title || 'Untitled')}</option>`).join('')}</select></label><span class="hint">Read from the [system messages] in your chapters. Nothing in the book changes.</span></div>`}`;
+        ${ro ? `<div class="cs-foot"><span class="hint">View only on a phone. Change gear on an iPad or computer.${w !== null ? ` Stats of ${esc(w || 'status blocks with no name')}.` : ''}</span></div>`
+          : `<div class="cs-foot"><label title="Stats come from the [Status] blocks in your chapters. Pick whose numbers this sheet shows.">Show stats of <select class="cs-who">${whoOptions(w)}</select></label><label>Stat system <select class="cs-sys"><option value="">None</option>${systems.map(x => `<option value="${esc(x.id)}" ${x.id === sh.sys ? 'selected' : ''}>${esc(x.title || 'Untitled')}</option>`).join('')}</select></label><span class="hint">Read from the [system messages] in your chapters. Nothing in the book changes.</span></div>`}`;
       wire();
     }
     // the Stats tab's check against a stat system: one line when all is well, the mismatches when not
@@ -185,7 +185,9 @@ window.UnwipCharSheet = (function () {
     }
     function whoOptions(w) {
       const opts = ledgerNames.length ? ledgerNames : [];
-      const o = [`<option value="__none" ${w === null ? 'selected' : ''}>Nobody (gear only)</option>`].concat(opts.map(n => `<option value="${esc(n)}" ${n === w ? 'selected' : ''}>${esc(n || 'The main character')}</option>`));
+      // whose [Status] numbers to show: a name from the chapters, the blocks that name nobody, or none at all
+      const o = opts.map(n => `<option value="${esc(n)}" ${n === w ? 'selected' : ''}>${n ? esc(n) : 'Status blocks with no name'}</option>`)
+        .concat([`<option value="__none" ${w === null ? 'selected' : ''}>Don’t show stats, just gear</option>`]);
       return o.join('');
     }
     function emptyStats(w) {
