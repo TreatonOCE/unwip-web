@@ -253,6 +253,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
 <li>Try <b>Revise</b> on a scene to see repeated words and long sentences (Stoker has plenty).</li>
 <li>Press <b>Read aloud</b> to hear a letter read out.</li>
 <li>Click <b>Record</b> at the bottom, write a few lines in “The Demeter’s log”, then play them back.</li>
+<li>Click <b>Build</b> at the top and paint a map of the road to the Borgo Pass, or draw a rune alphabet for the Count’s old books.</li>
 <li>Export the book as a PDF or e-book to see the chapter titles come out properly.</li>
 </ul>
 <p>Settings › Help runs the setup and the tour again.</p>`;
@@ -372,6 +373,8 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     ['#btn-new', 'New', 'Add a scene, chapter, folder or map, or a template section like Factions, Magic or Monsters where every entry starts from the same sheet.'],
     ['#btn-cmdk', 'Find anything', 'Press Ctrl+K (or this magnifying glass) and type what you want: “snapshot”, “epub”, “timeline”, a chapter name. Every feature is in there.'],
     ['#btn-stuck', 'Spark and Sprints', 'Spark has five little tools for a blank page or a slow day. Sprint, next to it, is a timed burst of writing with a word target.'],
+    ['#btn-build-book', 'Build', 'Maps, magic systems, rune alphabets, sigils, coats of arms, insignia and LitRPG character sheets, open beside your chapter. Anything you make can go straight into the book.',
+      null, 'Try a map: paint the land yourself, or roll a random world, town or dungeon floor to start from.'],
     ['#btn-revise', 'Revise', 'Highlights repeated words, adverbs, long sentences and filler for you to look at, without AI. It never changes anything by itself.',
       { hemingway: 'This is the readability checker, without any AI.' }],
     ['#btn-listen', 'Read aloud', 'Hear the chapter read out from where your cursor is. Clunky sentences are easier to hear than to see. F8 starts and stops it.'],
@@ -380,8 +383,13 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     ['#btn-copy-docs', 'Copy for Docs', 'Copies the chapter (or the whole book) ready to paste into Google Docs or Word with the formatting right. The arrow beside it exports a print-ready PDF, an e-book, Word, Markdown or Scrivener.'],
     ['#st-proof', 'Record', 'Proof of writing. Turn on Replay and Unwip notes how the words went in, so you can play your writing back or share a report showing it’s your own work. It stays on your device.'],
     ['#btn-help', 'Help', 'What every button does, and all the keyboard shortcuts. Press F1 any time.'],
-    ['#btn-library', 'All your books', 'Back to the main screen. The Play tab there has story starters and exercises that don’t touch your book.'],
-    ['#btn-settings', 'Settings', 'Themes, fonts, typing sounds, syncing through Dropbox, OneDrive, Google Drive or iCloud Drive, backups and updates. Help in here runs this tour again.']
+    ['#btn-settings', 'Settings', 'Themes (from plain paper to Witch, Infernal and game-system looks), fonts, typing sounds, LitRPG tools, syncing, backups and updates. Help in here runs this tour again.'],
+    ['#btn-library', 'All your books', 'Back to the main screen. That’s where the tour goes next.'],
+    // on the main screen (the tour takes you there, and back again if you go Back)
+    ['#lib-tabs [data-tab="write"]', 'Your books', 'Every book, today’s words and your goal. Import… brings in a Scrivener project, a Word file or a folder of chapters.', null, null, { lib: 'write' }],
+    ['#lib-tabs [data-tab="play"]', 'Play', 'Warm-ups, story dice, a style mimic, and exercises with rules Unwip checks as you write (no adverbs, only dialogue…). Nothing here touches your books.', null, null, { lib: 'play' }],
+    ['#lib-tabs [data-tab="build"]', 'Build', 'Everything you build lives here, for all your books: maps, magic systems, runes, sigils, coats of arms, insignia and character sheets. Link any of them into any book.', null, null, { lib: 'build' }],
+    ['#library .dbx-pill', 'Sync', 'Connect Dropbox to have the same books on your PC, Mac, iPhone and iPad. Changes go both ways, and nothing is saved over: if two devices change the same chapter, both versions are kept.', null, null, { lib: 'write' }]
   ];
   let tEls = null;
   // really on screen: has a size, isn't hidden, and isn't tucked under something else (e.g. a squeezed toolbar)
@@ -417,8 +425,13 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     tEls = { shade: document.createElement('div'), card: document.createElement('div') };
     tEls.shade.className = 'tour-spot'; tEls.card.className = 'tour-card';
     document.body.append(tEls.shade, tEls.card);
-    curIdx = -1; showStep(1);
-    clearInterval(tourWatch); tourWatch = setInterval(() => { const lib = document.getElementById('library'); if (!S.slug || (lib && !lib.classList.contains('hidden'))) { endTour(); curIdx = -1; } }, 300);
+    curIdx = -1; tourSlug = S.slug; bookShown = TOUR.filter(x => !isLib(x) && target(x[0])); showStep(1);
+    // the person left the screen the tour is on (opened another book, went home): the tour ends
+    clearInterval(tourWatch); tourWatch = setInterval(() => {
+      if (moving || curIdx < 0) return;
+      const lib = document.getElementById('library'), onLib = !!lib && !lib.classList.contains('hidden');
+      if (isLib(TOUR[curIdx]) ? !onLib : (!S.slug || onLib)) { endTour(); curIdx = -1; }
+    }, 300);
     document.addEventListener('keydown', tourKey, true);
     window.addEventListener('resize', placeStep);
   }
@@ -427,7 +440,14 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); showStep(1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); showStep(-1); }
   }
-  let tourWatch = null, writerAfterTour = false;
+  let tourWatch = null, writerAfterTour = false, tourSlug = null, bookShown = [], moving = false;
+  const isLib = st => !!(st && st[5] && st[5].lib);
+  // between the book and the main screen: go there, or back to the book the tour started in
+  async function moveTo(lib) {
+    if (lib) { await U.leaveProject(); await U.showLibrary(); }
+    else if (tourSlug) await U.openProject(tourSlug, { skipCheck: true });
+    await new Promise(r => setTimeout(r, 450));
+  }
   function endTour() {
     clearInterval(tourWatch);
     if (!tEls) return;
@@ -438,16 +458,34 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     window.removeEventListener('resize', placeStep);
   }
   let curIdx = -1;
-  function showStep(dir) {
+  async function showStep(dir) {
+    if (moving || !tEls) return;
+    moving = true;   // the tour's own screen changes mustn't count as the person leaving
+    try { await stepTo(dir); } finally { moving = false; }
+  }
+  async function stepTo(dir) {
     let i = curIdx < 0 ? 0 : curIdx + dir;
-    while (i >= 0 && i < TOUR.length && !target(TOUR[i][0])) i += dir || 1;
-    if (i < 0) return;
-    if (i >= TOUR.length) { endTour(); curIdx = -1; U.toast('That’s the tour. Happy writing!'); return; }
+    const here = () => { const lib = document.getElementById('library'); return !!lib && !lib.classList.contains('hidden'); };
+    for (;;) {
+      if (i < 0) return;
+      if (i >= TOUR.length) { endTour(); curIdx = -1; U.toast('That’s the tour. Happy writing!'); return; }
+      const st = TOUR[i];
+      if (isLib(st) !== here()) {   // this step is on the other screen: go there first
+        if (tEls) { tEls.card.style.visibility = 'hidden'; tEls.shade.style.visibility = 'hidden'; }
+        await moveTo(isLib(st));
+        if (!tEls) return;
+        tEls.card.style.visibility = ''; tEls.shade.style.visibility = '';
+      }
+      if (isLib(st)) { if (window.UnwipPlay) window.UnwipPlay.setTab(st[5].lib); await new Promise(r => setTimeout(r, 120)); }
+      if (target(st[0])) break;
+      i += dir || 1;
+    }
     curIdx = i;
     const [sel, title, text, alt, inExample] = TOUR[i];
-    const extra = (inExample && /\(example\)$/.test((S.project && S.project.title) || '')) ? inExample : alt && alt[S.settings.from];
-    const shown = TOUR.filter(x => target(x[0]));
-    const n = shown.indexOf(TOUR[i]) + 1;
+    const isEx = /\(example\)$/.test((S.project && S.project.title) || '') || (isLib(TOUR[i]) && tourSlug);
+    const extra = (inExample && isEx) ? inExample : alt && alt[S.settings.from];
+    const shown = bookShown.concat(TOUR.filter(x => isLib(x) && document.querySelector(x[0])));
+    const n = Math.max(1, shown.indexOf(TOUR[i]) + 1);
     tEls.card.innerHTML = `<div class="tour-n">${n} of ${shown.length}</div><h3>${esc(title)}</h3><p>${esc(text)}</p>${extra ? `<p class="tour-alt">${esc(extra)}</p>` : ''}
       <div class="tour-foot"><button class="btn ghost small" data-t="end">End tour</button><span></span>${n > 1 ? '<button class="btn small" data-t="back">Back</button>' : ''}<button class="btn primary small" data-t="next">${n === shown.length ? 'Finish' : 'Next'}</button></div>`;
     tEls.card.onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; if (b.dataset.t === 'end') { endTour(); curIdx = -1; } else showStep(b.dataset.t === 'next' ? 1 : -1); };
