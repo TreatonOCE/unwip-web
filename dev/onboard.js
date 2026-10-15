@@ -13,7 +13,7 @@ window.UnwipIntro = (function () {
       name: 'Scrivener', icon: '📚', blurb: 'Binder, corkboard, compile',
       layout: 'desk', structure: 'scenes', font: 'Times New Roman', para: 'book',
       map: [['Binder', 'Binder (left side)'], ['Corkboard & Outliner', 'Detailed mode › Corkboard and Outline'], ['Labels & Status', 'Status (right-click a document)'],
-        ['Compile', 'Export (PDF, e-book, Word)'], ['Snapshots', 'Snapshots (camera button)'], ['Composition mode', 'Writer mode'], ['Project targets', 'Goals & sprints']],
+        ['Compile', 'Export (PDF, e-book, Word)'], ['Snapshots', 'Snapshots (camera button)'], ['Composition mode', 'Writer mode'], ['Book targets', 'Goals & sprints']],
       tip: 'Your Scrivener projects can come straight across, with folders, synopses, labels, icons and pictures.'
     },
     docs: {
@@ -54,7 +54,7 @@ window.UnwipIntro = (function () {
   };
   const LAYOUTS = {
     page: { name: 'Clean page', like: 'Feels like Google Docs or Word', desc: 'A list of chapters and a page. Everything else stays out of the way until you want it.', mode: 'focused' },
-    desk: { name: 'Writer’s desk', like: 'Feels like Scrivener', desc: 'Binder, corkboard, outline, statuses and timeline: the whole project laid out.', mode: 'detailed' },
+    desk: { name: 'Writer’s desk', like: 'Feels like Scrivener', desc: 'Binder, corkboard, outline, statuses and timeline: the whole book laid out.', mode: 'detailed' },
     calm: { name: 'Distraction-free', like: 'Feels like a distraction-free writing app', desc: 'Just your words, full screen, with the current line kept in the middle.', mode: 'focused', writer: true }
   };
   const STRUCT = {
@@ -130,7 +130,7 @@ window.UnwipIntro = (function () {
       <div class="in-row"><label>Your name, as it goes on title pages and exports</label><input id="in-author" class="in-input" placeholder="e.g. Ima Novelist" value="${esc(ans.author)}"></div>`;
     else if (name === 'ready') {
       const actions = [];
-      if (ans.from === 'scrivener') actions.push(['scriv', '📚 Bring in my Scrivener project', 'Pick the .scriv folder. Everything comes across as a new project.']);
+      if (ans.from === 'scrivener') actions.push(['scriv', '📚 Bring in my Scrivener project', 'Pick the .scriv folder. Everything comes across as a new book.']);
       if (ans.from === 'docs') actions.push(['paste', '📋 Paste my book from Google Docs', 'Select all in Docs, copy, paste. Unwip finds the chapters for you.']);
       if (ans.from === 'obsidian') actions.push(['vault', '🗂️ Bring in my Obsidian vault', 'Pick the vault folder (or any folder of chapter files). Sub-folders come too.']);
       if (ans.from !== 'scrivener') actions.push(['files', ans.from === 'word' ? '📝 Bring in my Word files' : '📁 Bring in my book from files', 'One file or one per chapter: Word, LibreOffice, RTF, text or Markdown. Chapters are found automatically.']);
@@ -193,7 +193,7 @@ window.UnwipIntro = (function () {
     S.settings = await api.setSettings({ onboarded: true });   // skipped: the main screen keeps offering it
     close(); settleButton();
     const list = await api.listProjects();
-    if (!list.length) U.toast('Click “New project” to start your first book. Settings › Help has the setup and a tour.', '', 7000);
+    if (!list.length) U.toast('Click “New book” to start your first one. Settings › Help has the setup and a tour.', '', 7000);
   }
 
   async function finish(withTour) {

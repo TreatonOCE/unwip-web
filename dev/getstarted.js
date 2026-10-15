@@ -10,7 +10,7 @@ window.UnwipStart = (function () {
 
   const ITEMS = [
     ['wrote', 'Write your first words', 'Open a book and type. It saves itself every few seconds.'],
-    ['sync', 'Keep your books safe', 'Sync with Dropbox or OneDrive, or move your books to a backed-up folder. Settings › Where your projects live.'],
+    ['sync', 'Keep your books safe', 'Sync with Dropbox or OneDrive, or move your books to a backed-up folder. Settings › Where your books live.'],
     ['detailed', 'Try Detailed', 'The corkboard, outline and timeline. Click Detailed at the top of a book.'],
     ['snapshot', 'Take a snapshot', 'Saves a copy of a chapter before a big rewrite. Ctrl+Shift+S, or the clock button.'],
     ['export', 'Export your book', 'A PDF, Word file or e-book, from the arrow next to Copy for Docs.']

@@ -156,7 +156,7 @@
         <h3>Write in runes</h3>
         <textarea id="br-sample" rows="3" placeholder="Type a name, a motto, an inscription…"></textarea>
         <div class="br-preview" id="br-preview"></div>
-        <p class="bm-help">Letters without a rune show faintly, so you can see what’s missing. Copy picture and Save PNG at the top use this writing (or the whole alphabet when it’s empty).</p>
+        <p class="bm-help">Letters without a rune show faintly, so you can see what’s missing. Copy picture and Save PNG at the top (under ⋯ on a phone) use this writing (or the whole alphabet when it’s empty).</p>
         <h3>Style</h3>
         <div class="field"><label>Stroke</label><input type="range" id="br-w" min="1.2" max="7" step="0.2"></div>
         <div class="field"><label>Ends</label><select id="br-cap"><option value="round">Ink (round)</option><option value="square">Carved (square)</option><option value="circuit">System (circuit traces)</option></select></div>

@@ -203,7 +203,7 @@ window.UnwipStuck = (function () {
     await toEnd();
     U.insertCleanHTML(`<p>[TK: ${esc(what || 'fill this in later')}]</p><p><br></p>`);
     U.scheduleSave();
-    U.toast('Left a TK note. Search the project for “TK” (Ctrl+Shift+F) to find every gap later. Now keep going with what you do know.', '', 7000);
+    U.toast('Left a TK note. Search the book for “TK” (Ctrl+Shift+F) to find every gap later. Now keep going with what you do know.', '', 7000);
   }
   function sectionId(kind) { const r = S.project.binder.find(n => n.root && n.kind === kind); return r ? r.id : 'root-manuscript'; }
   async function makeDoc(parentId, title, html, afterId) {
@@ -391,7 +391,7 @@ window.UnwipStuck = (function () {
       .filter(Boolean).filter(d => d.m >= 5).sort((a, b) => b.m - a.m).slice(0, 3);
     const enough = total >= 300;
     body.innerHTML = `${backLink()}<h3 class="st-h">Your patterns</h3>
-      ${!on ? '<p>Tracking is off, so there’s nothing new to show.</p>' : !enough ? `<p>Not enough to go on yet (${fmt(total)} words tracked so far). Keep writing in this project and check back in a few days.</p>` : `
+      ${!on ? '<p>Tracking is off, so there’s nothing new to show.</p>' : !enough ? `<p>Not enough to go on yet (${fmt(total)} words tracked so far). Keep writing in this book and check back in a few days.</p>` : `
       <p class="st-sum">You write the most in the <b>${bestPart[0].toLowerCase()}</b>${bestDay[1] ? `, and <b>${bestDay[0]}</b> is your best day` : ''}. Try booking that slot for the hard chapters.</p>
       <div class="st-cols">
         <div><div class="ip-label">Time of day</div>${partW.map(([l, v]) => `<div class="st-bar"><span>${l}</span><i style="width:${Math.round(v / maxP * 100)}%"></i><b>${fmt(v)}</b></div>`).join('')}</div>

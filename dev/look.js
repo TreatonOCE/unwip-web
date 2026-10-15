@@ -7,6 +7,10 @@ window.UnwipLook = (function () {
 
   // ================================================================== THEMES
   // Each theme sets the interface colours. "base" picks light or dark controls (scrollbars, inputs).
+  // "Match Windows" / "Match Mac" / "Match iPhone": the theme follows the device's light or dark setting
+  const SYS_NAME = () => { const ua = navigator.userAgent, api = window.__unwip && window.__unwip.api;
+    if (/iPhone|iPod/.test(ua)) return 'Match iPhone'; if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'Match iPad';
+    if ((api && api.platform === 'darwin') || /Macintosh/.test(ua)) return 'Match Mac'; if (/Windows/.test(ua)) return 'Match Windows'; return 'Match device'; };
   const THEMES = {
     paper:    { name: 'Paper',     base: 'light', sw: ['#f4f2ed', '#fffefb', '#34528a'], v: {} },
     night:    { name: 'Night',     base: 'dark',  sw: ['#1b1c1f', '#25262a', '#8aa6dc'], v: {} },
@@ -107,7 +111,7 @@ window.UnwipLook = (function () {
       const lights = Object.entries(THEMES).filter(([, t]) => t.base === 'light'), darks = Object.entries(THEMES).filter(([, t]) => t.base === 'dark');
       const card = ([id, t]) => `<button type="button" class="th-card ${draft.theme === id ? 'on' : ''}" data-t="${id}">${swatch(t)}<span>${esc(t.name)}</span></button>`;
       body.innerHTML = `
-        <div class="th-row"><button type="button" class="th-card sys ${draft.theme === 'system' ? 'on' : ''}" data-t="system">${swatch(THEMES[draft.light])}${swatch(THEMES[draft.dark])}<span>Match Windows</span></button>
+        <div class="th-row"><button type="button" class="th-card sys ${draft.theme === 'system' ? 'on' : ''}" data-t="system">${swatch(THEMES[draft.light])}${swatch(THEMES[draft.dark])}<span>${SYS_NAME()}</span></button>
           <div class="th-sys-pick ${draft.theme === 'system' ? '' : 'dim'}"><label>Daytime <select id="th-light">${opt(Object.fromEntries(lights.map(([id, t]) => [id, t.name])), draft.light)}</select></label>
           <label>Night-time <select id="th-dark">${opt(Object.fromEntries(darks.map(([id, t]) => [id, t.name])), draft.dark)}</select></label></div></div>
         <div class="ip-label">Light</div><div class="th-grid">${lights.map(card).join('')}</div>

@@ -223,7 +223,7 @@
         e.stopPropagation();
         showMenu(e.clientX, e.clientY, [
           { label: 'Open', action: () => openBook(p) },
-          { label: 'Show in folder', action: () => api.revealProject(p.slug) },
+          ...(api.web ? [] : [{ label: 'Show in folder', action: () => api.revealProject(p.slug) }]),
           { label: 'Backups…', action: () => window.UnwipSync && window.UnwipSync.backupsDialog(p.slug, p.title) },
           { label: 'Save a full backup file…', action: async () => { const f = await api.backupExport(p.slug); if (f) toast('Full backup saved, including images and snapshots.'); } },
           ...(api.moveProject ? [{ label: 'Move to…', action: () => moveBook(p) }] : []),
@@ -321,6 +321,7 @@
     openProject(slug);
   };
   $('#btn-open-folder').onclick = () => api.revealProject(null);
+  if (api.web) $('#btn-open-folder').classList.add('hidden');   // the web keeps books inside the browser: there's no folder to show
 
   function newProjectTemplate() {
     const firstChapter = { id: uid(), type: 'doc', title: 'Chapter 1', words: 0 };
@@ -703,6 +704,7 @@
       }
       items.push({ label: 'Rename', hint: 'Double-click', action: () => startRename($(`.tree-row[data-id="${n.id}"]`), n) });
       if (n.type === 'doc') items.push({ label: 'Copy for Docs', action: () => copyDocForDocs(n.id) });
+      if (n.type === 'doc' && window.UnwipRR) items.push({ label: 'Copy for Royal Road…', action: () => window.UnwipRR.open(n.id) });
       if (n.type === 'doc' && !n.map && window.UnwipSeries && ['characters', 'places', 'items'].concat(S.project.binder.filter(r => r.custom).map(r => r.kind)).includes(root.kind)) {
         if (n.series && S.project.series) items.push({ label: 'Stop sharing with the series…', action: async () => { if (await confirmBox('Stop sharing?', `“${esc(n.title)}” stays in every book, but the copies stop updating each other.`, 'Stop sharing')) window.UnwipSeries.unshare(n); } });
         else items.push({ label: 'Share with the series…', action: async () => { if (!S.project.series) return window.UnwipSeries.open(); await flushSave(); await window.UnwipSeries.share([n]); toast(`“${esc(n.title)}” is shared with the series “${esc(S.project.series)}”.`); } });
@@ -973,7 +975,7 @@
       { ic: '📄', label: sheet ? `New ${newTitleFor(root).replace(/^New /i, '').toLowerCase()}` : 'New document', sub: sheet ? `A fresh sheet ${where}` : `A blank page ${where}`, key: 'Ctrl+N',
         prev: sheet ? sheetPreviewHTML(root.icon && !/^[a-z]+$/i.test(root.icon) ? root.icon : '', newTitleFor(root).replace(/^New /i, ''), sheet.fields, sheet.sections) : '<div class="np-page"><i></i><i></i><i></i><i class="s"></i><i></i><i></i><i class="s"></i></div>', run: () => addHere('doc') },
       { ic: '📁', label: 'New folder', sub: `To group chapters or notes, ${where}`, prev: '<div class="np-tree"><div>📁 Part One</div><div class="in">📄 Chapter 1</div><div class="in">📄 Chapter 2</div><div>📁 Part Two</div></div>', run: () => addHere('folder') },
-      { ic: '🗺️', label: 'New map', sub: 'Paint or generate a map of your world', prev: '<svg viewBox="0 0 120 80" class="np-map"><rect width="120" height="80" fill="#d8c59c"/><path d="M22 40 C20 18 52 12 64 22 C80 8 104 22 96 42 C108 58 82 72 62 62 C44 74 18 64 22 40Z" fill="#f1e5c9" stroke="#4e3b26" stroke-width="1.6"/><path d="M40 34 l6 -9 l6 9z M52 38 l6 -10 l6 10z" fill="#b59a72" stroke="#3a2a19" stroke-width="1"/><circle cx="74" cy="44" r="2.6" fill="#c0492b"/><rect x="3" y="3" width="114" height="74" fill="none" stroke="#3a2a19" stroke-width="1.4"/></svg>', run: () => $('#btn-add-map').click() },
+      { ic: '🗺️', label: 'New map', sub: 'A map kept in this book. For one map several books share, make it in Build', prev: '<svg viewBox="0 0 120 80" class="np-map"><rect width="120" height="80" fill="#d8c59c"/><path d="M22 40 C20 18 52 12 64 22 C80 8 104 22 96 42 C108 58 82 72 62 62 C44 74 18 64 22 40Z" fill="#f1e5c9" stroke="#4e3b26" stroke-width="1.6"/><path d="M40 34 l6 -9 l6 9z M52 38 l6 -10 l6 10z" fill="#b59a72" stroke="#3a2a19" stroke-width="1"/><circle cx="74" cy="44" r="2.6" fill="#c0492b"/><rect x="3" y="3" width="114" height="74" fill="none" stroke="#3a2a19" stroke-width="1.4"/></svg>', run: () => $('#btn-add-map').click() },
       { ic: '🗂️', label: 'New template section…', sub: 'Factions, magic, creatures, monsters, quests… every entry starts from the same sheet', prev: sheetPreviewHTML('🛡️', 'Faction', TEMPLATES[0][3], TEMPLATES[0][4]), run: () => templateGallery() },
       { ic: '📥', label: 'Bring in chapters…', sub: 'From Word, Google Docs, text or a whole folder', prev: '<div class="np-tree"><div>📄 Chapter 1.docx</div><div>📄 Chapter 2.docx</div><div>📄 Chapter 3.docx</div><div style="margin-top:6px;color:var(--accent)">→ 3 chapters</div></div>', run: () => { if (window.UnwipBookImport) { const r = anchor.getBoundingClientRect(); showMenu(r.left, r.top - 120, window.UnwipBookImport.menuItems({ parentId: t ? t.id : 'root-manuscript' })); } } }
     ];
@@ -1021,7 +1023,7 @@
       const mineList = (S.settings.myTemplates || []).filter(t => t.title.toLowerCase() !== r.title.toLowerCase());
       mineList.unshift({ id: uid(), title: r.title, singular: r.singular, fields: r.fields, sections: r.sections, icon: r.icon || '' });
       S.settings = await api.setSettings({ myTemplates: mineList });
-      toast(`Saved “${esc(r.title)}” to your templates. It’s in + New › New template section in every project.`, '', 5000);
+      toast(`Saved “${esc(r.title)}” to your templates. It’s in + New › New template section in every book.`, '', 5000);
     }
     return r;
   }
@@ -1299,7 +1301,7 @@
     scheduleMeta(); renderBinder();
   }
   async function emptyTrash() {
-    if (!(await confirmBox('Empty Trash?', 'Everything in the Trash will be removed from this project. Your automatic backups still keep a copy.', 'Empty Trash', true))) return;
+    if (!(await confirmBox('Empty Trash?', 'Everything in the Trash will be removed from this book. Your automatic backups still keep a copy.', 'Empty Trash', true))) return;
     const t = findNode('root-trash').node;
     if (S.docId && isInside(S.docId, t)) { await flushSave(); S.docId = null; showEmpty(true); }
     await api.backup(S.slug).catch(() => {});   // the automatic backups keep what was in the Trash, as the message promises
@@ -2770,6 +2772,7 @@
     const open = document.querySelector('.export-pop'); if (open) { open.remove(); return; }
     const items = [
       ['copy', 'Copy for Docs', 'This chapter, ready to paste into Google Docs or Word', 'Ctrl+Shift+C', () => copyDocForDocs()],
+      ['copy', 'Copy for Royal Road…', 'This chapter, with [system messages] as boxes Royal Road keeps', '', () => window.UnwipRR && window.UnwipRR.open()],
       ['preview', 'Preview & page counts', 'See it as a paperback, Kindle or Word page', '', () => openPreview()],
       null,
       ['doc', 'Print-ready PDF', 'Paperback interior with page numbers and chapter openers', '', () => openPreview('paperback')],
@@ -2904,6 +2907,7 @@
     const theme = localStorage.getItem('folio-theme') || 'system';
     const body = document.createElement('div');
     body.innerHTML = `
+      <nav class="set-jump" aria-label="Settings sections"></nav>
       <div class="form-grid">
         <div class="section-label">You</div>
         <div class="field"><label>Author name (used on title pages and e-books)</label><input type="text" id="g-author" value="${esc(cfg.author || '')}" placeholder="e.g. Ima Novelist"></div>
@@ -2912,8 +2916,8 @@
         <div class="section-label">Appearance</div>
         <div class="field"><label>Theme and colours</label><button class="btn" id="s-themes" type="button">Themes &amp; colours…</button></div>
         <div class="field"><label>Typing feel</label><button class="btn" id="s-typing" type="button">Typewriter &amp; animations…</button></div>
-        <div class="field"><label>Fonts</label><button class="btn" id="s-import" type="button">Import font files…</button></div>
-        <div class="field"><label>One font for a whole book (or all of them)</label><button class="btn" id="s-bookfont" type="button">Font for the whole book…</button></div>
+        <div class="field full"><label>Fonts</label><div class="set-row"><button class="btn" id="s-bookfont" type="button">Font for the whole book…</button><button class="btn" id="s-import" type="button">Import font files…</button></div>
+          <div class="hint">The font while you write: side panel › Style (or the font box in the toolbar). Fonts for print: Export › Preview › Paperback (Book design).</div></div>
         <div class="section-label">Name suggestions</div>
         <label class="check"><input type="checkbox" id="s-ac" ${acPrefs().on ? 'checked' : ''}> Suggest character, place and item names as I type</label>
         <div class="field"><label>Start suggesting after</label><select id="s-acmin">${opt([[2, '2 letters'], [3, '3 letters'], [4, '4 letters']], acPrefs().min)}</select></div>
@@ -2922,9 +2926,9 @@
         <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>`}
         <label class="check full"><input type="checkbox" id="s-dash" ${smartDash() ? 'checked' : ''}> Turn two hyphens (--) into an em dash (—) as I type</label>
         <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
-        <div class="section-label">LitRPG and text shortcuts</div>
+        <div class="section-label">LitRPG and text shortcuts <span class="sl-now">· applies straight away</span></div>
         <div class="field full" id="s-litrpg"></div>
-        <div class="section-label">Licence</div>
+        <div class="section-label">Licence <span class="sl-now">· applies straight away</span></div>
         <div class="field full" id="s-licence"></div>
         <div class="section-label">Help</div>
         <div class="field"><label>New here, or showing someone?</label><button class="btn" id="g-intro" type="button">Welcome setup…</button></div>
@@ -2934,11 +2938,17 @@
         <label class="check"><input type="checkbox" id="g-autoup" ${cfg.autoUpdate !== false ? 'checked' : ''}> Install updates automatically</label>
         <div class="field"><label id="g-version">Unwip</label><button class="btn" id="g-checkup" type="button">Check for updates now</button></div>
 </div>
-        <div class="section-label">Where your projects live</div>
+        <div class="section-label">Where your books live <span class="sl-now">· applies straight away</span></div>
         <div class="field full" id="s-lib"><label>Loading…</label></div>
-        <div class="section-label">Extra backup copy</div>
+        <div class="section-label">Extra backup copy <span class="sl-now">· applies straight away</span></div>
         <div class="field full" id="s-extra"></div>
       </div>`;
+    // a row of section names at the top: every setting stays on the one page, this only jumps to it
+    const jump = $('.set-jump', body);
+    $$('.form-grid > .section-label, .form-grid > .pc-only > .section-label', body).filter(l => l.offsetParent !== null || !l.closest('.pc-only') || !api.web).forEach(l => {
+      const name = l.firstChild.textContent.trim(), b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = name;
+      b.onclick = () => l.scrollIntoView({ behavior: 'smooth', block: 'start' }); jump.appendChild(b);
+    });
     $('#s-import', body).onclick = importFonts;
     $('#s-bookfont', body).onclick = () => { if (!S.project) return toast('Open a book first, then choose its font here (you can apply it to every book from there).'); body.closest('.modal-back').remove(); window.UnwipBookFont && window.UnwipBookFont.open(); };
     $('#s-themes', body).onclick = () => window.UnwipLook && window.UnwipLook.openThemes();
@@ -3198,7 +3208,7 @@
           ${is.fixes.map((f, j) => `<button class="rc-btn primary" data-i="${i}" data-fix="${j}">${esc(f.label)}</button>`).join('')}
           ${is.prev ? `<button class="rc-btn" data-i="${i}" data-act="prev">Show earlier use</button>` : ''}
           <button class="rc-btn ghost" data-i="${i}" data-act="ignore" title="Hide this one">Ignore</button>
-          ${is.canIgnoreAll ? `<button class="rc-btn ghost" data-i="${i}" data-act="ignoreall" title="Never flag this word for this reason in this project">Ignore “${esc(is.word.length > 18 ? is.word.slice(0, 18) + '…' : is.word)}” everywhere</button>` : ''}
+          ${is.canIgnoreAll ? `<button class="rc-btn ghost" data-i="${i}" data-act="ignoreall" title="Never flag this word for this reason in this book">Ignore “${esc(is.word.length > 18 ? is.word.slice(0, 18) + '…' : is.word)}” everywhere</button>` : ''}
         </div>
       </div>`).join('');
     tip.classList.remove('hidden');
@@ -3629,8 +3639,8 @@
       ${paceText(g, total) ? `<div class="pace">${paceText(g, total)}</div>` : ''}
       <div class="chart-wrap"><div class="chart-cap"><span>Words written, last 14 days (all projects)</span><span>${fmt(week)} this week${window.UnwipHistory ? ` · <button class="link-btn" id="g-history">Full history ›</button>` : ''}</span></div>${historyChart(null, daily)}</div>
       <div class="form-grid" style="margin-top:16px">
-        <div class="field"><label>Daily goal (all projects)</label><input type="number" id="g-daily" min="0" step="50" value="${daily || ''}" placeholder="e.g. 1000"></div>
-        <div class="field"><label>Manuscript goal for this project</label><input type="number" id="g-total" min="0" step="1000" value="${g.total || ''}" placeholder="e.g. 90000"></div>
+        <div class="field"><label>Daily goal (all books)</label><input type="number" id="g-daily" min="0" step="50" value="${daily || ''}" placeholder="e.g. 1000"></div>
+        <div class="field"><label>Manuscript goal for this book</label><input type="number" id="g-total" min="0" step="1000" value="${g.total || ''}" placeholder="e.g. 90000"></div>
         <div class="field"><label>Deadline (optional)</label><input type="date" id="g-deadline" value="${g.deadline || ''}" class="date-input"></div>
       </div>
       <p style="margin-top:10px">Only words you type count towards daily goals and streaks. Pasting and big deletions are left out so the numbers stay honest.</p>`;
@@ -4027,11 +4037,11 @@
     showMenu(r.left, r.bottom + 4, [
       ...(window.UnwipBookImport ? window.UnwipBookImport.menuItems() : []), { sep: true },
       { label: 'Scrivener project (.scriv)…', action: importScrivener },
-      { label: 'Restore from a backup file (.unwip)…', action: async () => { try { const slug = await api.backupImportFile(); if (slug) { try { await Fonts.loadImported(await api.importedFonts()); } catch {} toast('Backup restored as a new project.'); showLibrary(); } } catch (e) { toast(esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 7000); } } }
+      { label: 'Restore from a backup file (.unwip)…', action: async () => { try { const slug = await api.backupImportFile(); if (slug) { try { await Fonts.loadImported(await api.importedFonts()); } catch {} toast('Backup restored as a new book.'); showLibrary(); } } catch (e) { toast(esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 7000); } } }
     ]);
   };
   async function importWordProject() {
-    const title = await promptText('New project from a Word file', 'Project title', '');
+    const title = await promptText('New book from a Word file', 'Book title', '');
     if (!title) return;
     const slug = await api.createProject(title, (() => { const t = newProjectTemplate(); t.binder[0].children = []; return t; })());
     await openProject(slug); await importDocxInto('root-manuscript');

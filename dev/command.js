@@ -16,7 +16,7 @@ window.UnwipCommand = (function () {
   const ACTIONS = () => [
     ['Take a snapshot', 'save version backup copy', 'Ctrl+Shift+S', () => U.takeSnapshot(''), needDoc],
     ['Build: maps, magic, runes, sigils, arms, insignia and sheets (without leaving this book)', 'build world map dungeon magic system rune runes sigil arms coat heraldry insignia emblem logo character sheet worldbuilding', '', () => window.UnwipBuild && window.UnwipBuild.fromBook(), inProject],
-    ['Proof of writing', 'record replay screen video recording timelapse proof human written no ai authorship creator', '', () => window.UnwipProof && window.UnwipProof.open(), inProject],
+    ['Record (proof of writing)', 'record replay screen video recording timelapse proof human written no ai authorship creator', '', () => window.UnwipProof && window.UnwipProof.open(), inProject],
     ['Screen video: pause or resume', 'pause resume screen video recording recorder stop break', '', () => { const P = window.UnwipProof; if (!P) return; if (P._V.rec) P.pauseVideo(!P._V.paused); else P.open(); }, inProject],
     ['Replay: watch how this book was written', 'replay playback recording proof timelapse report', '', () => window.UnwipProof && window.UnwipProof.recordings(), inProject],
     ['Snapshots of this chapter', 'versions history compare restore', '', side('snapshots'), needDoc],
@@ -36,6 +36,7 @@ window.UnwipCommand = (function () {
     ['Start a writing sprint', 'timer timed session pomodoro', '', click('#btn-sprint'), desk(inProject)],
     ['Spark: ideas to get going', 'stuck writers block blank procrastinating prompts story starters help', '', click('#btn-stuck'), inProject],
     ['Copy for Docs', 'clipboard google docs word paste', 'Ctrl+Shift+C', click('#btn-copy-docs'), needDoc],
+    ['Copy for Royal Road', 'royal road rr web serial litrpg blue box system messages tables html paste chapter', '', () => window.UnwipRR && window.UnwipRR.open(), needDoc],
     ['Preview & page counts', 'pages paperback kindle', '', () => U.openPreview(), desk(inProject)],
     ['Export a print-ready PDF', 'paperback print kdp interior', '', () => U.openPreview('paperback'), desk(inProject)],
     ['Export an EPUB e-book', 'kindle kdp apple books kobo ebook', '', () => U.openPreview('ebook'), desk(inProject)],
@@ -43,7 +44,7 @@ window.UnwipCommand = (function () {
     ['Split view', 'side by side two documents', 'Ctrl+\\', click('#btn-split'), desk(needDoc)],
     ['Writer mode', 'full screen distraction free focus', 'F11', () => U.setWriter(true), needDoc],
     ['Find in this chapter', 'search text', 'Ctrl+F', () => U.openFind(), needDoc],
-    ['Search the whole project', 'find replace everywhere', 'Ctrl+Shift+F', () => U.openSearch('search'), inProject],
+    ['Search the whole book', 'find replace everywhere', 'Ctrl+Shift+F', () => U.openSearch('search'), inProject],
     ['Find and replace', 'replace all rename', '', () => U.openSearch('replace'), inProject],
     ['LitRPG ledger: stats, skills and items', 'litrpg gamelit stats stat sheet level skills items quests titles system messages drift check', '', () => window.UnwipLedger && window.UnwipLedger.open(), inProject],
     ['Name ideas (name generator)', 'name generator names random character first middle last surname handle no ai', '', () => window.UnwipNames && window.UnwipNames.open(window.__unwip.S.docId ? { onUse: n => window.UnwipNames.useOnSheet(n), useLabel: 'Use on this sheet' } : {}), () => true],
@@ -92,7 +93,7 @@ window.UnwipCommand = (function () {
     ['Help', 'how to guide shortcuts keys', 'F1', () => window.UnwipHelp && window.UnwipHelp.open(), () => true],
     ['Keyboard shortcuts', 'keys hotkeys', '', () => window.UnwipHelp && window.UnwipHelp.open('shortcut'), () => true],
     ['Take the tour', 'tutorial walkthrough', '', () => window.UnwipIntro && window.UnwipIntro.tour(), inProject],
-    ['Back to your projects', 'library home main screen', '', () => U.showLibrary(), inProject]
+    ['Back to your books', 'library home main screen', '', () => U.showLibrary(), inProject]
   ];
 
   // ---------------------------------------------------------------- matching

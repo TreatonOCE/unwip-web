@@ -1,7 +1,7 @@
 // Unwip - importers: Word (.docx) and Scrivener (.scriv) projects.
 window.FolioImport = (function () {
   'use strict';
-  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');   // also used inside attributes (comments)
   const qf = f => /^[\w-]+$/.test(f) ? f : `'${f.replace(/'/g, '')}'`;
 
   // ---------------------------------------------------------------- unzip (for .docx)

@@ -194,7 +194,7 @@
     const pj = files.find(f => f.name === 'project.json');
     if (!pj) throw new Error('This isn’t an Unwip backup.');
     const project = JSON.parse(new TextDecoder().decode(enc(pj.data)));
-    project.title = (project.title || 'Restored project') + (suffix || '');
+    project.title = (project.title || 'Restored book') + (suffix || '');
     const slug = await uniqueSlug(project.title);
     for (const f of files) {
       if (f.name.includes('..') || f.name.startsWith('/')) continue;
@@ -337,7 +337,7 @@
       await FS.write(`${pdir(slug)}/project.json`, JSON.stringify({ ...template, title, created: Date.now(), modified: Date.now() }, null, 2));
       return slug;
     },
-    async openProject(slug) { const t = await FS.text(`${pdir(slug)}/project.json`); let p = null; try { p = JSON.parse(t); } catch {} if (!p) throw new Error('Could not open project'); seen.set(`${pdir(slug)}/project.json`, t); return p; },
+    async openProject(slug) { const t = await FS.text(`${pdir(slug)}/project.json`); let p = null; try { p = JSON.parse(t); } catch {} if (!p) throw new Error('Could not open the book'); seen.set(`${pdir(slug)}/project.json`, t); return p; },
     async saveProjectMeta(slug, project) {
       // never save over a project a newer Unwip stored in a way this one doesn't know (main.js does the same)
       const onDisk = await FS.json(`${pdir(slug)}/project.json`, null);

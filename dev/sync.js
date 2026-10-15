@@ -45,7 +45,7 @@ window.UnwipSync = (function () {
     await api.requestTakeover(slug, false);
     if (result === 'closed') { U.toast(`Closed safely on ${esc(o.device)}. Opening here.`); return true; }
     if (result === 'now') return true;
-    if (result === 'timeout') return !!(await U.confirmBox('No answer', `${esc(o.device)} didn’t reply. It may be asleep or offline, in which case it can’t change anything. Open the project here anyway?`, 'Open here'));
+    if (result === 'timeout') return !!(await U.confirmBox('No answer', `${esc(o.device)} didn’t reply. It may be asleep or offline, in which case it can’t change anything. Open the book here anyway?`, 'Open here'));
     return false;
   }
   // the other side: this computer is asked to let go
@@ -57,7 +57,7 @@ window.UnwipSync = (function () {
     await U.flushSave(); await U.saveMetaNow();
     await U.showLibrary();
     await api.presence(slug, false);
-    U.modal({ title: 'Closed to keep your work safe', body: `<p>You opened this project on <b>${esc(t.by)}</b>, so Unwip saved everything here and closed it, so the two computers can’t overwrite each other.</p><p>Everything you wrote here is saved and on its way to ${esc(t.by)} through Dropbox.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
+    U.modal({ title: 'Closed to keep your work safe', body: `<p>You opened this book on <b>${esc(t.by)}</b>, so Unwip saved everything here and closed it, so the two computers can’t overwrite each other.</p><p>Everything you wrote here is saved and on its way to ${esc(t.by)} through Dropbox.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
   }
   U.on('project', async () => {
     current = S.slug;
@@ -287,7 +287,7 @@ window.UnwipSync = (function () {
     const docs = list.filter(c => c.kind === 'doc'); if (docs.length) await quarantine(docs);
     list = list.filter(c => c.kind !== 'doc');
     if (!list.length) return;
-    const titleOf = c => { if (c.kind !== 'doc') return 'The binder (project file)'; const id = c.original.replace(/\.html$/, ''); const f = U.findNode(id); return f ? f.node.title : 'A deleted document'; };
+    const titleOf = c => { if (c.kind !== 'doc') return 'The binder (book file)'; const id = c.original.replace(/\.html$/, ''); const f = U.findNode(id); return f ? f.node.title : 'A deleted document'; };
     const body = document.createElement('div');
     body.innerHTML = `<p>Dropbox found ${list.length === 1 ? 'a document that was' : 'documents that were'} changed on two devices at once, so it kept both versions. Nothing is lost. Choose what to do with each one.</p>
       <div class="sy-list">${list.map((c, i) => `<div class="sy-row" data-i="${i}"><div><b>${esc(titleOf(c))}</b><span>Other version from ${esc(c.device)}</span></div>
@@ -382,17 +382,17 @@ window.UnwipSync = (function () {
     U.toastAction('Your phone and iPad can’t see your books: they’re in Dropbox › Unwip, and Dropbox only lets the phone and iPad use Dropbox › Apps › Unwip.', 'Move them there…', () => move(shared.path, 'Dropbox (shared with the phone and iPad)'), 30000);
   }, 6000);
   async function move(target, label) {
-    const ok = await U.confirmBox(`Move your projects to ${label}?`, `Unwip will copy every project (and your Play pieces) to:<br><b>${esc(target)}</b><br><br>If projects are already there from another device, both are kept. Your current folder isn’t deleted. It’s renamed “… (old copy)” so you can check everything arrived before removing it yourself.`, 'Move projects');
+    const ok = await U.confirmBox(`Move your books to ${label}?`, `Unwip will copy every book (and your Play pieces) to:<br><b>${esc(target)}</b><br><br>If books are already there from another device, both are kept. Your current folder isn’t deleted. It’s renamed “… (old copy)” so you can check everything arrived before removing it yourself.`, 'Move books');
     if (!ok) return;
     const back = document.querySelector('.modal-back'); if (back) back.remove();
     if (S.slug) await U.showLibrary();
-    U.toast('Moving your projects…', '', 2500);
+    U.toast('Moving your books…', '', 2500);
     try {
       const r = await api.libraryMove(target);
       await U.showLibrary();
       U.modal({ title: 'Done', body: `<p>${r.moved ? `${r.moved} item${r.moved > 1 ? 's' : ''} copied` : 'Nothing needed copying'}${r.kept ? `, and ${r.kept} project${r.kept > 1 ? 's were' : ' was'} already there and up to date` : ''}.</p><p>Your projects now live in <b>${esc(r.path)}</b>.</p>${r.old && r.old !== r.path ? `<p class="rp-note">Your old folder is kept as <b>${esc(r.old)}</b>. Once you’ve checked everything opens fine, you can delete it.</p>` : ''}
-        <p class="rp-note">On your other device: install Unwip, then Settings → Where your projects live → Sync with Dropbox. It will find these projects.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
-    } catch (e) { U.toast('Couldn’t move the projects: ' + esc(e.message || e), 'warn', 8000); }
+        <p class="rp-note">On your other device: install Unwip, then Settings → Where your books live → Sync with Dropbox. It will find these projects.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
+    } catch (e) { U.toast('Couldn’t move the books: ' + esc(e.message || e), 'warn', 8000); }
   }
 
   // ================================================================== BACKUPS DIALOG (from a project card)
@@ -406,7 +406,7 @@ window.UnwipSync = (function () {
     U.modal({ title: 'Backups', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'primary' }],
       onOpen: back => $$('[data-stamp]', back).forEach(b => b.onclick = async () => {
         b.disabled = true;
-        try { await api.backupRestore(slug, b.dataset.stamp); U.toast('Restored as a new project in your library.'); back.querySelector('.m-foot .btn').click(); U.showLibrary(); }
+        try { await api.backupRestore(slug, b.dataset.stamp); U.toast('Restored as a new book on your main screen.'); back.querySelector('.m-foot .btn').click(); U.showLibrary(); }
         catch (e) { U.toast('Couldn’t restore: ' + esc(e.message || e), 'warn'); b.disabled = false; }
       }) });
   }

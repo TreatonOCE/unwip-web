@@ -1,4 +1,4 @@
-// Unwip - one side panel with labelled tabs: Revise · Comments · Snapshots · Style.
+// Unwip - one side panel with labelled tabs: Revise · Insights · Comments · Changes · Snapshots · Style.
 // They all share the same slot on the right, so panels never stack, and each is one click from the others.
 // The panel button at the top right opens the tab you used last; Revise and F7 still go straight to Revise.
 window.UnwipSide = (function () {
@@ -117,7 +117,8 @@ window.UnwipSide = (function () {
   // new chapter open: refresh what the panel shows
   U.on('doc', () => { if (visible(P.snapshots)) renderSnaps(); sync(); });
   U.on('leave', () => close());
-  U.on('input', () => sync());
+  let syncT = null;   // typing: refresh the comment count and panel button a moment after, not on every key
+  U.on('input', () => { clearTimeout(syncT); syncT = setTimeout(sync, 300); });
 
   // buttons
   const pb = $('#btn-panel'); if (pb) pb.onclick = toggle;

@@ -251,17 +251,17 @@ window.UnwipProof = (function () {
     document.querySelectorAll('.rec-btn').forEach(b => {
       b.classList.toggle('on', !!V.rec); b.classList.toggle('paused', !!V.paused);
       b.innerHTML = V.rec ? `<i class="pf-dot${V.paused ? ' off' : ''}"></i>${V.paused ? 'Paused · ' : ''}${clock(recorded())}` : '<i class="pf-dot off"></i><span class="rb-label">Record</span>';
-      b.title = V.rec ? (V.paused ? 'The screen video is paused. Click to resume or stop.' : 'Recording a screen video. Click to pause or stop.') : 'Proof of writing: record a video of your screen (also works in Build and Play)';
+      b.title = V.rec ? (V.paused ? 'The screen video is paused. Click to resume or stop.' : 'Recording a screen video. Click to pause or stop.') : 'Record: a video of your screen, as proof of writing (also works in Build and Play)';
     });
     // phones: a small Record button at the bottom of the book's list (the status bar it normally sits in is hidden)
     const bf = document.getElementById('bf-proof');
-    if (bf) { bf.classList.toggle('on', R.on || !!V.rec); bf.innerHTML = `<i class="pf-dot${R.on || V.rec ? '' : ' off'}"></i>`; bf.title = R.on ? 'Replay is recording this book. Tap to change.' : 'Proof of writing: record a replay of this book'; }
+    if (bf) { bf.classList.toggle('on', R.on || !!V.rec); bf.innerHTML = `<i class="pf-dot${R.on || V.rec ? '' : ' off'}"></i>`; bf.title = R.on ? 'Replay is recording this book. Tap to change.' : 'Record: a replay of this book (proof of writing)'; }
     btn = btn || document.getElementById('st-proof'); if (!btn) return;
     btn.classList.toggle('on', R.on || !!V.rec);
     btn.classList.toggle('paused', !!V.paused);
     if (V.rec) btn.innerHTML = `<i class="pf-dot${V.paused ? ' off' : ''}"></i>${V.paused ? 'Paused · ' : ''}${clock(recorded())} · ${size(V.bytes)}`;
     else btn.innerHTML = R.on ? '<i class="pf-dot"></i>Replay on' : '<i class="pf-dot off"></i>Record';
-    btn.title = V.rec ? (V.paused ? 'The screen video is paused. Click to resume or stop.' : 'Recording a screen video. Click to pause or stop.') : R.on ? 'Replay is recording your writing in this book. Click for Proof of writing.' : 'Proof of writing: record a replay or a screen video';
+    btn.title = V.rec ? (V.paused ? 'The screen video is paused. Click to resume or stop.' : 'Recording a screen video. Click to pause or stop.') : R.on ? 'Replay is recording your writing in this book. Click for Record.' : 'Record: a replay of your writing, or a screen video (proof of writing)';
     renderRemind();
   }
   // time actually recorded (pauses left out)
@@ -371,7 +371,7 @@ window.UnwipProof = (function () {
     };
     let closeDlg = () => {};
     draw();
-    await U.modal({ title: 'Proof of writing', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'ghost' }], onOpen: back => { closeDlg = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });
+    await U.modal({ title: 'Record: proof of writing', body, wide: true, buttons: [{ label: 'Close', value: true, kind: 'ghost' }], onOpen: back => { closeDlg = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });
   }
 
   // ---- the recordings: one row a session, totals at the top

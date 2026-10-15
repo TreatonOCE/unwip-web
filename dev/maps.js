@@ -736,7 +736,7 @@ window.UnwipMaps = (function () {
     view.innerHTML = `<div class="mp-top">
         <button class="icon-btn" id="mp-close" data-tip="Close the map">${I.back}</button><b class="mp-title">${esc(host.title(id) || 'Map')}</b><span class="mp-saved" id="mp-saved">Saved</span>
         <span class="mp-sp"></span>
-        ${host.inBook === false ? '<button class="st-proof rec-btn" type="button" title="Proof of writing: record your screen"></button>' : ''}
+        ${host.inBook === false ? '<button class="st-proof rec-btn" type="button" title="Record: a replay of your writing, or a screen video (proof of writing)"></button>' : ''}
         <button class="btn small" id="mp-gen" data-tip="Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after">🎲 Random map…</button>
         <select id="mp-style" data-tip="Map style">${Object.entries(STYLES).map(([k, v]) => `<option value="${k}" ${st.style === k ? 'selected' : ''}>${v.name}</option>`).join('')}</select>
         <button class="btn small ghost" id="mp-grid" data-tip="The square grid on the floor">▦ Grid</button>
@@ -745,8 +745,9 @@ window.UnwipMaps = (function () {
         <select id="mp-frame" data-tip="The border around the edge of the map">${Object.entries(FRAMES).map(([k, v]) => `<option value="${k}" ${(st.frame || 'double') === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
         <button class="btn small ghost" id="mp-clear" data-tip="Start this map section again from empty sea">Clear</button>
         <button class="icon-btn small" id="mp-undo" data-tip="Undo (Ctrl+Z)">↶</button><button class="icon-btn small" id="mp-redo" data-tip="Redo (Ctrl+Y)">↷</button>
-        <button class="btn small" id="mp-copy" data-tip="Copy the map as a picture, ready to paste into a chapter">Copy picture</button>
-        <button class="btn small" id="mp-png" data-tip="Save as a PNG picture (high resolution)">Save PNG…</button>
+        <button class="btn small ghost" id="mp-copy" data-tip="Copy the map as a picture, ready to paste into a chapter">Copy picture</button>
+        <button class="btn small ghost" id="mp-png" data-tip="Save as a PNG picture (high resolution)">Save PNG…</button>
+        <button class="btn primary small mp-end" id="mp-done" data-tip="${host.inBook === false ? 'Save and go back to Build' : 'Save and go back to your chapter'}">Done</button>
       </div>
       <div class="mp-tabs" id="mp-tabs"></div>
       <div class="mp-body"><div class="mp-tools"><div class="mp-toollist"></div>
@@ -806,6 +807,7 @@ window.UnwipMaps = (function () {
     buildTools();
     $('#mp-size', view).oninput = e => { brush = +e.target.value; $('#mp-size-n', view).textContent = brush; redraw(); };
     $('#mp-close', view).onclick = () => close();
+    $('#mp-done', view).onclick = () => close();   // the same as ‹, where the other Build editors have Done
     $('#mp-style', view).onchange = e => { push(); st.style = e.target.value; landDirty = true; changed(); schedule(); };
     // the Grid button: a hex grid on world and town maps; on a dungeon floor, its square grid on or off
     $('#mp-grid', view).onclick = () => { push(); st.noGrid = !st.noGrid; syncGridBtn(); baseKey = ''; landDirty = true; changed(); schedule(); };

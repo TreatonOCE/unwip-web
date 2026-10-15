@@ -2,7 +2,7 @@
 //  1. Scan: read the project (nothing in it is changed, ever).
 //  2. Preview and map: Scrivener's folders on the left, where each will land in Unwip on the right, with a tick
 //     box and a choice for each, a before-and-after look at a chapter, and what isn't brought across.
-//  3. Import into a new project, then a short report. Your choices for folder names are remembered.
+//  3. Import into a new book, then a short report. Your choices for folder names are remembered.
 window.UnwipScriv = (function () {
   'use strict';
   const U = window.__unwip; if (!U) return;
@@ -83,7 +83,7 @@ window.UnwipScriv = (function () {
       <p class="sim-not"><b>Not imported:</b> ${esc(scan.notImported.join(', '))}.</p>
       ${titleHits.length && window.UnwipTitles ? window.UnwipTitles.choiceHTML(titleHits, titleTotal, 'sim-tt') : titleTotal ? `<p class="sim-small"><b>Chapter titles:</b> ${titleTotal === 1 ? 'your chapter doesn’t start with its title' : `none of the ${titleTotal} chapters start with their title`} typed into the text, so there’s nothing to tidy. Unwip shows each chapter’s binder name as its heading.</p>` : ''}
       <div class="sim-foot">
-        <div class="field"><label>New project name</label><input type="text" id="sim-name" value="${esc(data.name)}"></div>${pf.html}
+        <div class="field"><label>New book name</label><input type="text" id="sim-name" value="${esc(data.name)}"></div>${pf.html}
         <div class="field"><label>Empty lines between paragraphs</label><select id="sim-blank"><option value="keep">Keep them where they are, as in Scrivener</option><option value="tidy">Take them out (Unwip spaces paragraphs itself; two or more in a row become a scene break)</option></select></div>
         <label class="check"><input type="checkbox" id="sim-mem" checked><span>Remember these choices for folders with the same names</span></label>
         <p class="sim-small">Comes across: text with its formatting, folders and order, synopses, document notes, ${scan.labels.length ? 'labels, ' : ''}${scan.statuses.length ? 'status, ' : ''}icons and pictures${conv.docFont ? `, and your main font (${esc(conv.docFont)}${conv.docSize ? ' ' + conv.docSize + 'pt' : ''})` : ''}.</p>
@@ -96,7 +96,7 @@ window.UnwipScriv = (function () {
     const v = await U.modal({ title: 'Import from Scrivener', body, wide: true, buttons: [
       { label: 'Cancel', value: false, kind: 'ghost' },
       ...(hasDraft ? [{ label: 'Show a chapter before and after…', value: 'preview', kind: 'ghost' }] : []),
-      { label: 'Import into a new project', value: 'go', kind: 'primary' }] });
+      { label: 'Import into a new book', value: 'go', kind: 'primary' }] });
     if (!v) return null;
     const name = $('#sim-name', body).value.trim() || data.name, mem = $('#sim-mem', body).checked;
     const tt = body.querySelector('[name="sim-tt"]:checked'); rows.titles = tt ? tt.value : 'leave';

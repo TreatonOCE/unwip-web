@@ -472,12 +472,12 @@ window.UnwipPlay = (function () {
     if (!cur) return;
     await savePiece();
     const list = await api.listProjects();
-    if (!list.length) { U.toast('Create a project first.'); return; }
+    if (!list.length) { U.toast('Make a book first.'); return; }
     const body = document.createElement('div');
     body.innerHTML = `<p>Copies this piece into a project. The original stays here in Play.</p>
-      <div class="field"><label>Project</label><select id="sd-p">${list.map(p => `<option value="${esc(p.slug)}">${esc(p.title)}</option>`).join('')}</select></div>
+      <div class="field"><label>Book</label><select id="sd-p">${list.map(p => `<option value="${esc(p.slug)}">${esc(p.title)}</option>`).join('')}</select></div>
       <div class="field" style="margin-top:10px"><label>Put it in</label><select id="sd-s"><option value="notes">Notes</option><option value="manuscript">Manuscript (at the end)</option><option value="research">Research</option></select></div>`;
-    const ok = await U.modal({ title: 'Send to project', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Send', value: true, kind: 'primary' }] });
+    const ok = await U.modal({ title: 'Send to a book', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Send', value: true, kind: 'primary' }] });
     if (!ok) return;
     const slug = $('#sd-p', body).value, kind = $('#sd-s', body).value;
     const project = await api.openProject(slug);

@@ -144,10 +144,13 @@ window.UnwipBuild = (function () {
     $('#bd-acts').innerHTML = `<span class="bd-extra"></span>
       <button class="btn small ghost" id="bd-copy" title="Copy a picture of it, ready to paste into a chapter">Copy picture</button>
       <button class="btn small ghost" id="bd-png" title="Save a picture of it as a PNG file">Save PNG…</button>
+      <button class="icon-btn small" id="bd-pmenu" title="Picture: copy or save" aria-label="Copy or save a picture">⋯</button>
       ${ret === 'window' ? '' : '<button class="btn small" id="bd-add" title="Put it into one of your books">Add to book…</button>'}
       <button class="btn primary small" id="bd-done" title="${ret === 'book' ? 'Save and go back to your chapter' : ret === 'window' ? 'Save and close this window' : 'Save and go back to Build'}">${ret === 'book' ? 'Back to the book' : 'Done'}</button>`;
     $('#bd-copy').onclick = async () => { const c = ed.picture && await ed.picture(cur); if (c) copyCanvas(c); };
     $('#bd-png').onclick = async () => { const c = ed.picture && await ed.picture(cur); if (c) savePNG(c, cur.title); };
+    // on a phone Copy picture, Save PNG and Add to book fold into ⋯, so the name has room next to Record
+    $('#bd-pmenu').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); U.showMenu(r.left, r.bottom, [{ label: 'Copy picture', action: () => $('#bd-copy').click() }, { label: 'Save PNG…', action: () => $('#bd-png').click() }, ...($('#bd-add') ? [{ label: 'Add to book…', action: () => $('#bd-add').click() }] : [])]); };
     if ($('#bd-add')) $('#bd-add').onclick = async () => { await saveNow(); addToBook(cur); };
     $('#bd-done').onclick = () => close();
     active = ed;
@@ -167,9 +170,9 @@ window.UnwipBuild = (function () {
       mount: v => {
         main.appendChild(v);
         const gen = v.querySelector('#mp-gen');
-        const b = document.createElement('button'); b.className = 'btn small'; b.textContent = 'Add to book…'; b.dataset.tip = 'Put this map into one of your books: linked (fix it here, every book sees it) or as a copy';
+        const b = document.createElement('button'); b.className = 'btn small mp-end'; b.textContent = 'Add to book…'; b.dataset.tip = 'Put this map into one of your books: linked (fix it here, every book sees it) or as a copy';
         b.onclick = async () => { await M.close(true).catch(() => {}); addToBook(it); };
-        if (gen) gen.before(b);
+        const done = v.querySelector('#mp-done'); if (done) { done.classList.remove('mp-end'); done.before(b); } else if (gen) gen.before(b);   // same order as the other Build editors: …, Add to book, Done
         const t = v.querySelector('.mp-title'); if (t) { t.title = 'Double-click to rename'; t.ondblclick = async () => { const n = await U.promptText('Rename map', 'Name', it.title); if (n) { it.title = n; t.textContent = n; await put(it); } }; }
       },
       unmount: () => { cur = null; top.classList.remove('hidden'); const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r !== 'book') render(); },

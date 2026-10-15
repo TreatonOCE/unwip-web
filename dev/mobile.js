@@ -23,7 +23,7 @@ window.UnwipMobile = (function () {
   // ------------------------------------------------------------------ screen 1: chapters (the binder, full screen)
   const binder = $('#binder');
   const bhead = document.createElement('div'); bhead.className = 'm-bhead';
-  bhead.innerHTML = `<button class="m-icon" id="m-lib" aria-label="Back to your projects">${IC.back}</button><div class="m-btitle" id="m-btitle"></div><button class="m-link" id="m-continue" hidden>Continue</button>`;
+  bhead.innerHTML = `<button class="m-icon" id="m-lib" aria-label="Back to your books">${IC.back}</button><div class="m-btitle" id="m-btitle"></div><button class="m-link" id="m-continue" hidden>Continue</button>`;
   binder.insertBefore(bhead, binder.firstChild);
   $('#m-lib').onclick = () => $('#btn-library').click();
   $('#m-continue').onclick = () => showPage();
@@ -69,7 +69,7 @@ window.UnwipMobile = (function () {
       { label: 'Dialogue view', action: () => window.UnwipDialogue && window.UnwipDialogue.toggle('dialogue') },
       { label: 'Find in this chapter', action: () => click('#m-find') },
       { label: 'Writer mode', action: () => click('#btn-writer') },
-      { label: window.UnwipProof && window.UnwipProof.isOn() ? 'Proof of writing (Replay on)' : 'Proof of writing', action: () => window.UnwipProof && window.UnwipProof.open() },
+      { label: window.UnwipProof && window.UnwipProof.isOn() ? 'Record (Replay is on)' : 'Record (proof of writing)', action: () => window.UnwipProof && window.UnwipProof.open() },
       { sep: true },
       { label: 'Help', action: () => window.UnwipHelp && window.UnwipHelp.open() }
     ], { up: true });
@@ -219,7 +219,8 @@ window.UnwipMobile = (function () {
   editor.addEventListener('pointerup', () => { if (document.activeElement === editor) startEditing(); });
   editor.addEventListener('keydown', startEditing);
   editor.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== editor) { mark('m-editing', false); toggleFontSheet(false); } }, 120));
-  editor.addEventListener('input', () => { if (phone.matches) refreshWords(); });
+  let wordsT = null;   // counting a long chapter on every key is slow on a phone: count once typing pauses
+  editor.addEventListener('input', () => { if (phone.matches) { clearTimeout(wordsT); wordsT = setTimeout(refreshWords, 250); } });
 
   // ------------------------------------------------------------------ moving between screens
   function refreshWords() { const n = U.countWords(editor.innerText || ''); $('#m-wc').textContent = `${n.toLocaleString()} word${n === 1 ? '' : 's'}`; }
@@ -283,7 +284,8 @@ window.UnwipMobile = (function () {
 
   // ------------------------------------------------------------------ a way out of every full-screen view
   // On a phone some views' own close buttons sit under the system bars or off the edge, so while one is open
-  // a round ✕ floats in the top corner. It uses the view's own close, so nothing is lost.
+  // a round ✕ floats in the top corner. It uses the view's own close, so nothing is lost. Not in Build: its top bar
+  // already has ‹ and Done on screen, and the ✕ would sit on top of Done.
   const OUT = [
     ['.pv-back', '#pv-close'], ['.help-back', '#help-x'], ['.mp-view', '#mp-close'], ['#bi', '#bi [data-x]'],
     ['body.writer', null], ['.messy-pill', '.messy-pill button']
@@ -291,7 +293,7 @@ window.UnwipMobile = (function () {
   const xbtn = document.createElement('button');
   xbtn.className = 'm-escape'; xbtn.setAttribute('aria-label', 'Close'); xbtn.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   document.body.appendChild(xbtn);
-  const topOpen = () => { for (let i = OUT.length - 1; i >= 0; i--) { const [sel, btn] = OUT[i]; if (sel === 'body.writer' ? document.body.classList.contains('writer') : [...document.querySelectorAll(sel)].some(el => el.getClientRects().length > 0)) return OUT[i]; } return null; };
+  const topOpen = () => { for (let i = OUT.length - 1; i >= 0; i--) { const [sel, btn] = OUT[i]; if (sel === 'body.writer' ? document.body.classList.contains('writer') : [...document.querySelectorAll(sel)].some(el => el.getClientRects().length > 0 && !el.closest('#build-screen'))) return OUT[i]; } return null; };
   function closeTop() {
     const t = topOpen(); if (!t) return;
     const [sel, btn] = t;
