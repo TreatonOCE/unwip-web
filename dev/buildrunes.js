@@ -23,10 +23,28 @@
   }
   const glyphW = A => (A.cols - 1) * CELL, glyphH = A => (A.rows - 1) * CELL;
   // the rune's strokes as an SVG group in grid units (0..glyphW, 0..glyphH), drawn in colour col
+  // System (circuit) ends: strokes run like traces on a board, straight and at 45°, with a ring where a trace ends and
+  // a dot where three or more meet. On a dark panel they glow.
+  const PANEL = { dark: '#0b1420', light: '#f4ecd8' };
+  const panelBG = A => A.panel === 'dark' ? PANEL.dark : PANEL.light;
+  function tracePath(A, s) {
+    const [x1, y1] = dotXY(A, s.a), [x2, y2] = dotXY(A, s.b);
+    if (s.a === s.b) return `M${x1} ${y1}h0.01`;
+    const dx = x2 - x1, dy = y2 - y1, m = Math.min(Math.abs(dx), Math.abs(dy));
+    if (!s.c || !m || Math.abs(dx) === Math.abs(dy)) return `M${x1} ${y1}L${x2} ${y2}`;
+    const d = [Math.sign(dx) * m, Math.sign(dy) * m];
+    return s.c > 0 ? `M${x1} ${y1}l${d[0]} ${d[1]}L${x2} ${y2}` : `M${x1} ${y1}L${x2 - d[0]} ${y2 - d[1]}L${x2} ${y2}`;
+  }
   function glyphG(A, g, col, extraW) {
-    const sw = (A.width || 3.2) * (extraW || 1), cap = A.cap === 'square' ? 'square' : 'round', join = A.cap === 'square' ? 'miter' : 'round';
+    const sw = (A.width || 3.2) * (extraW || 1), circuit = A.cap === 'circuit', cap = A.cap === 'square' ? 'square' : circuit ? 'butt' : 'round', join = A.cap === 'square' || circuit ? 'miter' : 'round';
     const skew = A.slant ? ` transform="translate(${-Math.tan(A.slant * Math.PI / 180) * glyphH(A) / 2} 0) skewX(${-A.slant})"` : '';
-    return `<g${skew} fill="none" stroke="${col || A.color}" stroke-width="${sw}" stroke-linecap="${cap}" stroke-linejoin="${join}">${(g.strokes || []).map(s => `<path d="${strokePath(A, s)}"/>`).join('')}</g>`;
+    const c = col || A.color, list = g.strokes || [];
+    if (!circuit) return `<g${skew} fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="${cap}" stroke-linejoin="${join}">${list.map(s => `<path d="${strokePath(A, s)}"/>`).join('')}</g>`;
+    const deg = {}; for (const s of list) { deg[s.a] = (deg[s.a] || 0) + 1; if (s.b !== s.a) deg[s.b] = (deg[s.b] || 0) + 1; }
+    const paths = list.map(s => `<path d="${tracePath(A, s)}"/>`).join('');
+    const nodes = Object.entries(deg).map(([i, n]) => { const [x, y] = dotXY(A, +i); return n === 1 ? `<circle cx="${x}" cy="${y}" r="${sw * 1.15}" fill="${panelBG(A)}" stroke-width="${sw * 0.75}"/>` : n >= 3 ? `<circle cx="${x}" cy="${y}" r="${sw * 0.95}" fill="${c}" stroke="none"/>` : ''; }).join('');
+    const glow = A.panel === 'dark' ? `<g stroke-width="${sw * 3.2}" opacity=".18" stroke-linecap="round">${paths}</g>` : '';
+    return `<g${skew} fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="${cap}" stroke-linejoin="${join}">${glow}${paths}${nodes}</g>`;
   }
   function glyphSVG(A, g, size, col) {
     const pad = (A.width || 3) + 4, w = glyphW(A) + pad * 2, h = glyphH(A) + pad * 2;
@@ -62,7 +80,7 @@
         wd.forEach((t, ti) => {
           if (ti) x += gap;
           if (t.g) { parts += `<g transform="translate(${x} ${y})">${glyphG(A, t.g, col)}</g>`; x += gw; }
-          else { parts += `<text x="${x + 5}" y="${y + gh * 0.75}" font-family="Georgia, serif" font-size="${gh * 0.8}" fill="${col}" opacity=".35">${esc(t.ch)}</text>`; x += 14; }
+          else { parts += `<text x="${x + 5}" y="${y + gh * 0.75}" font-family="${A.cap === 'circuit' ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${gh * 0.8}" fill="${col}" opacity=".35">${esc(t.ch)}</text>`; x += 14; }
         });
       });
       maxW = Math.max(maxW, x);
@@ -76,8 +94,8 @@
     const list = A.glyphs.filter(g => (g.strokes || []).length), per = opts.per || 6, cw = Math.max(glyphW(A), CELL * 2) + CELL * 2.4, ch = glyphH(A) + CELL * 3.2;
     const rows = Math.max(1, Math.ceil(list.length / per)), W = Math.min(per, Math.max(1, list.length)) * cw + CELL * 2, H = rows * ch + CELL * 2;
     const cells = list.map((g, i) => { const x = CELL + (i % per) * cw + (cw - glyphW(A)) / 2, y = CELL * 1.4 + Math.floor(i / per) * ch;
-      return `<g transform="translate(${x} ${y})">${glyphG(A, g)}</g><text x="${CELL + (i % per) * cw + cw / 2}" y="${y + glyphH(A) + CELL * 1.25}" text-anchor="middle" font-family="Georgia, serif" font-size="${CELL * 0.62}" fill="${A.color}">${esc((g.key || '').toUpperCase())}${g.name ? ' · ' + esc(g.name) : ''}</text>`; }).join('');
-    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * (opts.scale || 1)}" height="${H * (opts.scale || 1)}"><rect width="${W}" height="${H}" fill="${opts.bg || '#f4ecd8'}"/>${cells || `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Georgia" font-size="12" fill="#999">No runes yet</text>`}</svg>`, w: W, h: H };
+      return `<g transform="translate(${x} ${y})">${glyphG(A, g)}</g><text x="${CELL + (i % per) * cw + cw / 2}" y="${y + glyphH(A) + CELL * 1.25}" text-anchor="middle" font-family="${A.cap === 'circuit' ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${CELL * 0.62}" fill="${A.color}">${esc((g.key || '').toUpperCase())}${g.name ? ' · ' + esc(g.name) : ''}</text>`; }).join('');
+    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * (opts.scale || 1)}" height="${H * (opts.scale || 1)}"><rect width="${W}" height="${H}" fill="${opts.bg || panelBG(A)}"/>${cells || `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Georgia" font-size="12" fill="#999">No runes yet</text>`}</svg>`, w: W, h: H };
   }
   // a random rune: a few joined strokes, not a copy of one already in the set (dice, not AI)
   function randomRune(A) {
@@ -110,7 +128,7 @@
         <div class="br-tools"><div class="chip-row" id="br-mode">${[['line', 'Line'], ['curve', 'Curve'], ['rub', 'Rub out']].map(([v, l]) => `<button type="button" class="chip ${mode === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
           <span class="mp-sp"></span><button class="btn small ghost" id="br-undo" title="Undo">↶</button><button class="btn small ghost" id="br-clear">Clear</button><button class="btn small" id="br-rand" title="Roll a random rune to start from, made by dice-style rules, not AI">🎲 Random</button></div>
         <div class="br-stage"><svg id="br-svg" class="br-svg"></svg></div>
-        <p class="br-hint">Drag from dot to dot to draw a stroke. Tap a dot for a single mark. In Curve, tap a stroke to bend it the other way. In Rub out, tap a stroke to remove it.</p>
+        <p class="br-hint">Drag from dot to dot to draw a stroke. Tap a dot for a single mark. In Curve, tap a stroke to bend it the other way (with System ends, Curve gives a trace a 45° bend). In Rub out, tap a stroke to remove it.</p>
         <div class="br-fields"><div class="field"><label>Letter or sound</label><input id="br-key" maxlength="4" placeholder="a, th, sh…"></div>
           <div class="field"><label>Name</label><input id="br-name" placeholder="e.g. Ansuz"></div>
           <div class="field br-wide"><label>Meaning</label><input id="br-mean" placeholder="e.g. a god, a mouth, a message"></div>
@@ -123,7 +141,8 @@
         <p class="bm-help">Letters without a rune show faintly, so you can see what’s missing. Copy picture and Save PNG at the top use this writing (or the whole alphabet when it’s empty).</p>
         <h3>Style</h3>
         <div class="field"><label>Stroke</label><input type="range" id="br-w" min="1.2" max="7" step="0.2"></div>
-        <div class="field"><label>Ends</label><select id="br-cap"><option value="round">Ink (round)</option><option value="square">Carved (square)</option></select></div>
+        <div class="field"><label>Ends</label><select id="br-cap"><option value="round">Ink (round)</option><option value="square">Carved (square)</option><option value="circuit">System (circuit traces)</option></select></div>
+        <div class="field"><label>Background</label><select id="br-panel"><option value="">Parchment</option><option value="dark">Dark panel (glows)</option></select></div>
         <div class="field"><label>Slant</label><input type="range" id="br-slant" min="-20" max="20" step="1"></div>
         <div class="field"><label>Colour</label><input type="color" id="br-col"></div>
         <div class="field"><label>Dot grid</label><select id="br-grid"></select></div>
@@ -137,8 +156,13 @@
       grid.value = `${A.cols}x${A.rows}`;
     };
     gridOpts();
-    W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; col.value = A.color;
-    W.oninput = () => { A.width = +W.value; all(); }; cap.onchange = () => { A.cap = cap.value; all(); }; sl.oninput = () => { A.slant = +sl.value; all(); }; col.oninput = () => { A.color = col.value; all(); };
+    const panel = $('#br-panel', box);
+    const dark = () => box.querySelector('.br-wrap').classList.toggle('br-dark', A.panel === 'dark');
+    W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; col.value = A.color; panel.value = A.panel || ''; dark();
+    W.oninput = () => { A.width = +W.value; all(); };
+    // picking circuit traces the first time: a dark panel and a cyan line, like a game's interface (change either after)
+    cap.onchange = () => { A.cap = cap.value; if (A.cap === 'circuit' && !A.panel && /^#2b2118$/i.test(A.color)) { A.panel = 'dark'; A.color = '#5fd0ff'; col.value = A.color; panel.value = 'dark'; dark(); } all(); };
+    panel.onchange = () => { A.panel = panel.value; if (A.panel === 'dark' && /^#2b2118$/i.test(A.color)) { A.color = '#5fd0ff'; col.value = A.color; } else if (!A.panel && /^#5fd0ff$/i.test(A.color)) { A.color = '#2b2118'; col.value = A.color; } dark(); all(); }; sl.oninput = () => { A.slant = +sl.value; all(); }; col.oninput = () => { A.color = col.value; all(); };
     grid.onchange = async () => {
       let v = grid.value;
       if (v === 'custom') {
@@ -189,14 +213,14 @@
   }
   function preview() {
     const p = $('#br-preview', box); if (!p) return;
-    p.innerHTML = (A.sample || '').trim() ? textSVG(A, A.sample, { scale: 0.9 }).svg : '<span class="bm-help">Your writing shows here.</span>';
+    p.innerHTML = (A.sample || '').trim() ? textSVG(A, A.sample, { scale: 0.9, bg: A.panel ? panelBG(A) : '' }).svg : '<span class="bm-help">Your writing shows here.</span>';
   }
   function drawEdit(hover) {
     const svg = $('#br-svg', box); if (!svg) return;
     const pad = CELL * 0.9, w = glyphW(A), h = glyphH(A);
     svg.setAttribute('viewBox', `${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}`);
     let dots = ''; for (let i = 0; i < A.cols * A.rows; i++) { const [x, y] = dotXY(A, i); dots += `<circle class="br-dot" cx="${x}" cy="${y}" r="1.6"/>`; }
-    const strokes = curG.strokes.map((s, i) => `<path class="br-hit" data-i="${i}" d="${strokePath(A, s)}"/>`).join('');
+    const strokes = curG.strokes.map((s, i) => `<path class="br-hit" data-i="${i}" d="${A.cap === 'circuit' ? tracePath(A, s) : strokePath(A, s)}"/>`).join('');
     const pv = drag && drag.to ? `<path class="br-pv" d="M${dotXY(A, drag.a).join(' ')}L${drag.to[0]} ${drag.to[1]}"/>` : '';
     svg.innerHTML = `${dots}${glyphG(A, curG)}${pv}<g class="br-hits">${strokes}</g>`;
   }
@@ -229,7 +253,7 @@
   }
   async function runesPicture(item) {
     const a = Object.assign(runesBlank(), item.data || {});
-    const r = (a.sample || '').trim() ? textSVG(a, a.sample, { bg: '#f4ecd8', scale: 4 }) : chartSVG(a, { scale: 4 });
+    const r = (a.sample || '').trim() ? textSVG(a, a.sample, { bg: panelBG(a), scale: 4 }) : chartSVG(a, { scale: 4 });
     return B.svgCanvas(r.svg, Math.round(r.w * 4), Math.round(r.h * 4));
   }
   async function runesToBook(item) {

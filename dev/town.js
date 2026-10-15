@@ -16,6 +16,8 @@ window.UnwipTownFactory = function (M) {
     ['land', '🟫', 'Land: paint ground over water, for a coast, a riverbank or an island town. To start from open sea, use “Flood the map with water” above'],
     ['area', ICON('<path d="M4 8 L10 4 L20 7 L18 18 L7 19 Z" fill="#b9c48a"/>'), 'Area: paint a park, market square, fields or a graveyard with the brush (or switch to “Draw around”)'],
     ['landmark', '🏰', 'Landmark: castle, temple, tower, gate, well, market stalls, statue or bridge. Pick one above, then click'],
+    ['mark', ICON('<path d="M12 3 20 12 12 21 4 12z" fill="#ffd36b"/><circle cx="12" cy="12" r="2.5" fill="#3a3a3a" stroke="none"/>'), 'Markers: waypoint, quest, dungeon, safe zone, boss, shop, respawn. Pick one above, then click'],
+    ['fog', ICON('<path d="M3 10c3-3 6-3 9 0s6 3 9 0M3 15c3-3 6-3 9 0s6 3 9 0" stroke-width="2.2"/>'), 'Fog of war: cover what hasn’t been explored yet, or reveal it again. Brush size below'],
     ['frame', ICON('<rect x="3" y="5" width="18" height="14"/><rect x="6" y="8" width="12" height="8" stroke-width="1"/>'), 'Frame: drag out a box for your map edge, an inset or a title box'],
     ['pin', '📍', 'Pin: mark a place. You can link it to a Places sheet'],
     ['label', '🔤', 'Label: name a district, street, river or place']
@@ -35,6 +37,7 @@ window.UnwipTownFactory = function (M) {
     parchment: { ground: '#efe2c4', street: '#e2cfa6', bld: '#b98a5e', bld2: '#9c6b45', park: '#b9c48a', field: '#dccd95', plaza: '#e9dcbc', grave: '#c9caa6', wall: '#5a4632', water: '#a9bcb8' },
     atlas: { ground: '#ece7d6', street: '#fbf8f1', bld: '#c98f6d', bld2: '#a96d4e', park: '#a8cf8e', field: '#e5dca2', plaza: '#f3eee2', grave: '#c4d1b0', wall: '#4b4b4b', water: '#a9cfe0' },
     night: { ground: '#262d3b', street: '#3c4559', bld: '#5d6780', bld2: '#727c96', park: '#3a5845', field: '#4b4a3a', plaza: '#343c4e', grave: '#3d4a44', wall: '#c9b98f', water: '#1c2433' },
+    holo: { ground: '#081426', street: '#0f2a45', bld: '#123a5e', bld2: '#1a4d78', park: '#0f3a3a', field: '#1a2f3a', plaza: '#0c2036', grave: '#123030', wall: '#5fd0ff', water: '#07101e' },
     ink: { ground: '#ffffff', street: '#ffffff', bld: '#ffffff', bld2: '#ffffff', park: '#ffffff', field: '#ffffff', plaza: '#ffffff', grave: '#ffffff', wall: '#111111', water: '#ffffff' }
   };
   const C = P => COL[Object.keys(M.STYLES).find(k => M.STYLES[k] === P)] || COL.parchment;

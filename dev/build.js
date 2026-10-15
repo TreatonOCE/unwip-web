@@ -13,9 +13,10 @@ window.UnwipBuild = (function () {
     runes: { icon: 'ᚱ', name: 'Rune alphabet', plural: 'Rune alphabets', blurb: 'Draw runes on a dot grid, then write words, names and inscriptions in them.' },
     sigil: { icon: '✴️', name: 'Sigil', plural: 'Sigils', blurb: 'Draw in one slice and it repeats around the circle. Add a ring of runes.' },
     arms: { icon: '🛡️', name: 'Coat of arms', plural: 'Coats of arms', blurb: 'Shield, colours, symbols and a motto, with the herald’s description written for you.' },
-    stats: { icon: '📊', name: 'Character sheet', plural: 'Character sheets', blurb: 'LitRPG stats and how they grow each level, an XP curve, and a status screen at any level.' }
+    stats: { icon: '📊', name: 'Character sheet', plural: 'Character sheets', blurb: 'LitRPG stats and how they grow each level, an XP curve, and a status screen at any level.' },
+    insignia: { icon: '⬢', name: 'Insignia', plural: 'Insignia', blurb: 'Emblems for corporations, gangs and units: a hard frame, a line symbol, flat colours and a name.' }
   };
-  const ORDER = ['map', 'magic', 'runes', 'sigil', 'arms', 'stats'];
+  const ORDER = ['map', 'magic', 'runes', 'sigil', 'arms', 'insignia', 'stats'];
   const editors = {};          // filled in by buildmagic.js, buildrunes.js and buildarms.js
   let items = [];
 

@@ -12,11 +12,17 @@ window.UnwipMaps = (function () {
     parchment: { name: 'Parchment', paper: '#eadcbf', sea: '#d8c59c', seaLine: '#b9a477', land: '#f1e5c9', coast: '#4e3b26', ink: '#3a2a19', forest: '#8a9a5b', mountain: '#b59a72', river: '#5f7f96', road: '#5c4630', border: '#9a3b2b', label: '#3a2a19', pin: '#c0492b' },
     atlas: { name: 'Atlas', paper: '#f4f1ea', sea: '#a9cfe0', seaLine: '#7fb3cc', land: '#dfe7c0', coast: '#3f5f47', ink: '#2c2f2a', forest: '#5f8f4e', mountain: '#a58c6a', river: '#3c7fb0', road: '#6b5640', border: '#b0413e', label: '#23262a', pin: '#d2462b' },
     night: { name: 'Night', paper: '#151a24', sea: '#1c2433', seaLine: '#2c3a52', land: '#2a3242', coast: '#c9b98f', ink: '#d8cfb4', forest: '#56705a', mountain: '#7d7262', river: '#6d9cc7', road: '#bfae86', border: '#d0675a', label: '#efe6c8', pin: '#ef7b57' },
-    ink: { name: 'Ink sketch', paper: '#ffffff', sea: '#ffffff', seaLine: '#9a9a9a', land: '#ffffff', coast: '#111111', ink: '#111111', forest: '#ffffff', mountain: '#ffffff', river: '#111111', road: '#111111', border: '#111111', label: '#111111', pin: '#111111' }
+    ink: { name: 'Ink sketch', paper: '#ffffff', sea: '#ffffff', seaLine: '#9a9a9a', land: '#ffffff', coast: '#111111', ink: '#111111', forest: '#ffffff', mountain: '#ffffff', river: '#111111', road: '#111111', border: '#111111', label: '#111111', pin: '#111111' },
+    // a game's map screen: dark glass, glowing coastlines, a grid always on and plain typeface labels
+    holo: { name: 'Holo map', paper: '#050a14', sea: '#07101e', seaLine: '#14385c', land: '#0d2238', coast: '#5fd0ff', ink: '#8fdcff', forest: '#2f8f8a', mountain: '#4f7ea8', river: '#5fd0ff', road: '#8fdcff', border: '#ff6b9a', label: '#d6f3ff', pin: '#ffd36b', mono: true }
   };
+  const FONT = (P, w, size) => P.mono ? `${w === 'italic' ? '' : w} ${size}px "JetBrains Mono", "Cascadia Mono", Consolas, Menlo, monospace` : `${w} ${size}px Georgia, serif`;
   const BORDER_ICON = '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 17 C8 5, 14 21, 21 7" fill="none" stroke="#b0413e" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="1 4.5"/></svg>';
   const FRAMES = { double: 'Double line', simple: 'Single line', thick: 'Thick line', ornate: 'Ornate corners', none: 'No frame' };
   const FRAME_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3a3a3a"><rect x="3" y="5" width="18" height="14" stroke-width="2"/><rect x="6" y="8" width="12" height="8" stroke-width="1"/></svg>';
+  const MARK_ICON = '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3 20 12 12 21 4 12z" fill="#ffd36b" stroke="#3a3a3a" stroke-width="1.6"/><circle cx="12" cy="12" r="2.5" fill="#3a3a3a"/></svg>';
+  const FOG_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3a3a3a" stroke-linecap="round"><path d="M3 10c3-3 6-3 9 0s6 3 9 0M3 15c3-3 6-3 9 0s6 3 9 0" stroke-width="2.2"/></svg>';
+  const MARKS = [['waypoint', 'Waypoint'], ['quest', 'Quest'], ['dungeon', 'Dungeon'], ['safe', 'Safe zone'], ['boss', 'Boss'], ['shop', 'Shop'], ['respawn', 'Respawn']];
   const TOOLS = [
     ['select', '✋', 'Move & select: drag things around, double-click a label or pin to edit it, Delete removes it. To turn a landmark or label, drag the round handle that appears when it’s selected (it turns in small steps; hold Shift to turn it freely), or press R and Shift+R. To make one bigger or smaller, drag the square corner handle, or press + and −. Drag a bridge’s end to turn and stretch it. Drag empty space to pan; scroll to zoom'],
     ['land', '🟫', 'Paint land'], ['water', '🌊', 'Water: paint over land to make lakes, bays and rivers (the sea around the land is already water)'],
@@ -24,6 +30,8 @@ window.UnwipMaps = (function () {
     ['town', '🏠', 'Town: click to place'], ['city', '🏰', 'City or castle: click to place'], ['tower', '🗼', 'Tower: click to place'], ['ruin', '🏚️', 'Ruins: click to place'],
     ['road', '〰️', 'Road or path: drag to draw'], ['border', BORDER_ICON, 'Border: drag to draw a dotted border between lands or kingdoms. (For rivers and lakes, paint with 🌊 water)'],
     ['frame', FRAME_ICON, 'Frame: drag out a rectangle to draw a border box, for your own map edge, an inset or a title box. Pick its line style (double, single, thick, ornate) in the list at the top. Drag the corner to resize'],
+    ['mark', MARK_ICON, 'Markers: waypoint, quest, dungeon, safe zone, boss, shop, respawn (for LitRPG and game maps). Pick one above, then click'],
+    ['fog', FOG_ICON, 'Fog of war: cover what hasn’t been explored yet, and reveal it again as the story goes. Brush size below'],
     ['pin', '📍', 'Pin: click to mark a place. You can link it to a Places sheet'], ['label', '🔤', 'Label: click to name a region, sea or place']
   ];
 
@@ -46,9 +54,14 @@ window.UnwipMaps = (function () {
   let mask = null, mctx = null, landCache = null, landDirty = true, saveT = null, view = null, cv = null, ctx = null, drawing = null;
 
   // ================================================================== DATA
-  function blank(style = 'parchment', kind = 'world') { const b = { v: 1, kind, style, land: null, stamps: [], paths: [], labels: [], pins: [], grid: false, compass: true, frame: 'double', boxes: [], seed: 1 }; return kind === 'town' && T ? Object.assign(b, T.blank()) : b; }
-  let T = null;                               // town and city maps (town.js)
-  const isTown = () => !!(st && st.kind === 'town' && T);
+  function blank(style = 'parchment', kind = 'world') { const b = { v: 1, kind, style, land: null, stamps: [], paths: [], labels: [], pins: [], grid: false, compass: true, frame: 'double', boxes: [], seed: 1 }; const m = modFor(kind); return m ? Object.assign(b, m.blank()) : b; }
+  // town and city maps (town.js) and dungeon floors (dungeon.js) draw and edit their own way; T is the one in use
+  let TW = null, DG = null, T = null;
+  const modFor = k => k === 'town' ? TW : k === 'dungeon' ? DG : null;
+  const fillKind = s => { const m = modFor(s.kind); if (m) { const b = m.blank(); for (const k of Object.keys(b)) if (s[k] == null || (k !== 'compass' && !s[k])) s[k] = s[k] || b[k]; } };
+  const syncT = () => { T = (st && modFor(st.kind)) || TW; };
+  const isTown = () => !!(st && modFor(st.kind) && T === modFor(st.kind));
+  const isDungeon = () => !!(st && st.kind === 'dungeon' && DG);
   // a map document holds one or more sections (the whole world, a region, a city…), each a full map of its own
   let docData = null;
   async function load(id) {
@@ -64,8 +77,8 @@ window.UnwipMaps = (function () {
   }
   async function useSection(i) {
     if (st && mask) st.land = maskData();
-    docData.active = i; st = docData.sections[i]; st.boxes = st.boxes || [];
-    if (st.kind === 'town' && T) { const b = T.blank(); for (const k of Object.keys(b)) st[k] = st[k] || b[k]; }
+    docData.active = i; st = docData.sections[i]; st.boxes = st.boxes || []; st.fog = st.fog || [];
+    fillKind(st); syncT(); fogDirty = true;
     mctx.clearRect(0, 0, MW, MH);
     if (st.land) { const im = new Image(); im.src = st.land; await im.decode().catch(() => {}); mctx.drawImage(im, 0, 0); }
     landDirty = true; itemsDirty = true; undo = []; redo = []; sel = null;
@@ -74,7 +87,7 @@ window.UnwipMaps = (function () {
   function snapshot() { return JSON.stringify({ ...st, land: mask.toDataURL('image/png') }); }
   let itemsDirty = true;
   function push() { undo.push(snapshot()); if (undo.length > 40) undo.shift(); redo = []; }
-  async function restore(json) { const d = JSON.parse(json); Object.keys(st).forEach(k => delete st[k]); Object.assign(st, d); itemsDirty = true; const im = new Image(); im.src = d.land; await im.decode().catch(() => {}); mctx.clearRect(0, 0, MW, MH); mctx.drawImage(im, 0, 0); landDirty = true; itemsDirty = true; sel = null; baseKey = ''; redraw(); schedule(); }
+  async function restore(json) { const d = JSON.parse(json); Object.keys(st).forEach(k => delete st[k]); Object.assign(st, d); itemsDirty = true; fogDirty = true; const im = new Image(); im.src = d.land; await im.decode().catch(() => {}); mctx.clearRect(0, 0, MW, MH); mctx.drawImage(im, 0, 0); landDirty = true; itemsDirty = true; sel = null; baseKey = ''; redraw(); schedule(); }
   function schedule() { clearTimeout(saveT); saveT = setTimeout(saveNow, 700); $('#mp-saved') && ($('#mp-saved').textContent = 'Saving…'); }
   async function saveNow() {
     clearTimeout(saveT); if (!st || !nodeId) return;
@@ -206,7 +219,7 @@ window.UnwipMaps = (function () {
     return out;
   }
   function stamp(g, s, P) {
-    if (T && T.stamp(g, s, P)) return;
+    if (s.k[1] === '-') { const m = s.k[0] === 't' ? TW : s.k[0] === 'd' ? DG : null; if (m && m.stamp(g, s, P)) return; if (s.k[0] === 'm') return drawMark(g, s, P); }
     const z = s.s || 1; g.save(); g.translate(s.x, s.y); g.rotate(s.rot || 0); g.scale(z, z); g.lineWidth = 1.6; g.strokeStyle = P.ink; g.lineJoin = 'round';
     if (s.k === 'tree') { g.fillStyle = P.forest; g.beginPath(); g.moveTo(0, -12); g.quadraticCurveTo(9, -9, 7, 0); g.quadraticCurveTo(0, 4, -7, 0); g.quadraticCurveTo(-9, -9, 0, -12); g.fill(); g.stroke(); g.beginPath(); g.moveTo(0, 1); g.lineTo(0, 6); g.stroke(); }
     else if (s.k === 'mountain') { g.fillStyle = P.mountain; g.beginPath(); g.moveTo(-18, 8); g.lineTo(-2, -20); g.lineTo(18, 8); g.closePath(); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-2, -20); g.lineTo(3, -6); g.lineTo(0, 8); g.stroke(); g.globalAlpha = 0.35; g.fillStyle = P.ink; g.beginPath(); g.moveTo(-2, -20); g.lineTo(18, 8); g.lineTo(3, 8); g.lineTo(3, -6); g.closePath(); g.fill(); }
@@ -216,6 +229,54 @@ window.UnwipMaps = (function () {
     else if (s.k === 'tower') { g.fillStyle = P.land; g.beginPath(); g.moveTo(-6, 8); g.lineTo(-4, -18); g.lineTo(4, -18); g.lineTo(6, 8); g.closePath(); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-6, -18); g.lineTo(0, -28); g.lineTo(6, -18); g.closePath(); g.fillStyle = P.pin; g.fill(); g.stroke(); }
     else if (s.k === 'ruin') { g.beginPath(); g.moveTo(-12, 6); g.lineTo(-12, -8); g.lineTo(-8, -12); g.lineTo(-6, -2); g.moveTo(-2, 6); g.lineTo(-2, -14); g.lineTo(3, -10); g.moveTo(6, 6); g.lineTo(6, -4); g.lineTo(11, -6); g.lineTo(12, 6); g.moveTo(-14, 6); g.lineTo(14, 6); g.stroke(); }
     g.restore();
+  }
+  // ---- LitRPG and game markers: a shape with a glyph, the way a game's map screen shows them
+  const MARK_COL = { waypoint: '#4fb3ff', quest: '#ffc93c', dungeon: '#a77bff', safe: '#4fd18b', boss: '#ff4f6d', shop: '#ffa24f', respawn: '#7fe3ff' };
+  function drawMark(g, s, P) {
+    const k = s.k.slice(2), z = s.s || 1, col = MARK_COL[k] || P.pin, dark = P.mono || P.paper === '#151a24';
+    g.save(); g.translate(s.x, s.y); g.rotate(s.rot || 0); g.scale(z, z); g.lineJoin = 'round'; g.lineCap = 'round';
+    if (P.mono) { g.shadowColor = col; g.shadowBlur = 10; }
+    g.fillStyle = dark ? 'rgba(5,10,20,0.85)' : 'rgba(255,255,255,0.9)'; g.strokeStyle = col; g.lineWidth = 2.4;
+    g.beginPath();
+    if (k === 'waypoint') { g.moveTo(0, -15); g.lineTo(12, 0); g.lineTo(0, 15); g.lineTo(-12, 0); g.closePath(); }
+    else if (k === 'safe') { g.moveTo(0, -15); g.lineTo(12, -9); g.lineTo(11, 3); g.quadraticCurveTo(8, 11, 0, 15); g.quadraticCurveTo(-8, 11, -11, 3); g.lineTo(-12, -9); g.closePath(); }
+    else if (k === 'boss') { for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + i * Math.PI / 3; g.lineTo(Math.cos(a) * 14, Math.sin(a) * 14); } g.closePath(); }
+    else g.arc(0, 0, 13, 0, 7);
+    g.fill(); g.stroke(); g.shadowBlur = 0;
+    g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 2;
+    if (k === 'waypoint') { g.beginPath(); g.arc(0, 0, 3.5, 0, 7); g.fill(); }
+    else if (k === 'quest') { g.font = 'bold 18px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('!', 0, 1); }
+    else if (k === 'dungeon') { g.beginPath(); g.moveTo(-6, 7); g.lineTo(-6, -2); g.arc(0, -2, 6, Math.PI, 0); g.lineTo(6, 7); g.closePath(); g.fill(); }
+    else if (k === 'safe') { g.beginPath(); g.moveTo(-5, 0); g.lineTo(-1, 5); g.lineTo(6, -5); g.stroke(); }
+    else if (k === 'boss') { g.beginPath(); g.arc(0, -1, 5.5, 0, 7); g.fill(); g.fillRect(-3.5, 3, 7, 4); g.fillStyle = dark ? '#050a14' : '#fff'; g.beginPath(); g.arc(-2.2, -1.5, 1.6, 0, 7); g.arc(2.2, -1.5, 1.6, 0, 7); g.fill(); }
+    else if (k === 'shop') { g.beginPath(); g.rect(-6, -2, 12, 8); g.stroke(); g.beginPath(); g.moveTo(-3, -2); g.lineTo(-3, -5); g.arc(0, -5, 3, Math.PI, 0); g.lineTo(3, -2); g.stroke(); }
+    else if (k === 'respawn') { g.beginPath(); g.arc(0, 0, 6, -0.3, Math.PI * 1.55); g.stroke(); g.beginPath(); g.moveTo(5.8, -5); g.lineTo(5.8, -0.5); g.lineTo(1.6, -1.6); g.closePath(); g.fill(); }
+    if (s.label) { g.rotate(-(s.rot || 0)); g.font = FONT(P, '600', 15); g.textAlign = 'center'; g.textBaseline = 'top'; g.lineWidth = 4; g.strokeStyle = dark ? '#050a14' : P.land; g.strokeText(s.label, 0, 18); g.fillStyle = P.label; g.fillText(s.label, 0, 18); }
+    g.restore();
+  }
+  // ---- fog of war: strokes that cover or reveal, kept with the map, drawn over everything but the frame
+  let fogCache = null, fogDirty = true;
+  const FS = 4;   // the fog is worked out at a quarter size and drawn soft, so its edges look like cloud, not a brush
+  function fogStroke(g, f) {
+    if (f.all) { g.globalCompositeOperation = f.on ? 'source-over' : 'destination-out'; g.fillRect(0, 0, W / FS, H / FS); return; }
+    g.globalCompositeOperation = f.on ? 'source-over' : 'destination-out'; g.lineWidth = f.w / FS; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(f.pts[0][0] / FS, f.pts[0][1] / FS); for (const q of f.pts) g.lineTo(q[0] / FS, q[1] / FS); if (f.pts.length === 1) g.lineTo(f.pts[0][0] / FS + 0.01, f.pts[0][1] / FS); g.stroke();
+  }
+  function drawFog(g, P, live) {
+    const list = (st.fog || []).concat(live ? [live] : []);
+    if (!list.length || st.fogHide) return;
+    if (!fogCache) { fogCache = document.createElement('canvas'); fogCache.width = W / FS; fogCache.height = H / FS; }
+    if (fogDirty || live) { const f = fogCache.getContext('2d'); f.globalCompositeOperation = 'source-over'; f.clearRect(0, 0, W / FS, H / FS); f.fillStyle = '#000'; f.strokeStyle = '#000'; for (const x of list) fogStroke(f, x); f.globalCompositeOperation = 'source-over'; fogDirty = !!live; }
+    const c = document.createElement('canvas'); c.width = W / FS; c.height = H / FS; const cg = c.getContext('2d');
+    cg.drawImage(fogCache, 0, 0); cg.globalCompositeOperation = 'source-in';
+    const dark = P.mono || P.paper === '#151a24', base = P.mono ? '#10233b' : dark ? '#2a3141' : '#6d6a64';
+    cg.fillStyle = base; cg.fillRect(0, 0, c.width, c.height);
+    // a little cloud texture so it reads as fog, not paint (source-atop: only on the fog itself)
+    cg.globalCompositeOperation = 'source-atop';
+    const r = rng(77); cg.globalAlpha = 0.22; cg.fillStyle = P.mono ? '#24507a' : dark ? '#45506a' : '#9a968f';
+    for (let i = 0; i < 160; i++) { cg.beginPath(); cg.arc(r() * c.width, r() * c.height, 6 + r() * 18, 0, 7); cg.fill(); }
+    if (P.mono) { cg.globalAlpha = 0.25; cg.strokeStyle = P.coast; cg.lineWidth = 0.5; cg.beginPath(); for (let x = -c.height; x < c.width; x += 6) { cg.moveTo(x, c.height); cg.lineTo(x + c.height, 0); } cg.stroke(); }
+    g.save(); g.filter = 'blur(6px)'; g.globalAlpha = 0.97; g.imageSmoothingEnabled = true; g.drawImage(c, 0, 0, W, H); g.restore();
   }
   function smoothPath(g, pts) {
     g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
@@ -231,6 +292,7 @@ window.UnwipMaps = (function () {
     g.globalAlpha = 1;
     if (landDirty || !landCache) { landCache = renderLand(P); landDirty = false; }
     g.drawImage(landCache, 0, 0);
+    if (P.mono) { g.strokeStyle = P.seaLine; g.globalAlpha = 0.55; g.lineWidth = 1; g.beginPath(); for (let x = 0; x <= W; x += 50) { g.moveTo(x, 0); g.lineTo(x, H); } for (let y = 0; y <= H; y += 50) { g.moveTo(0, y); g.lineTo(W, y); } g.stroke(); g.globalAlpha = 1; }
     if (st.grid) { g.strokeStyle = P.ink; g.globalAlpha = 0.12; g.lineWidth = 1; const s = 40, h = s * Math.sqrt(3); for (let y = 0; y < H + h; y += h / 2) for (let x = ((y / (h / 2)) % 2) * s * 1.5; x < W + s * 3; x += s * 3) { g.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k; g.lineTo(x + s * Math.cos(a), y + s * Math.sin(a)); } g.closePath(); g.stroke(); } g.globalAlpha = 1; }
   }
   function drawPath(g, p, P) {
@@ -243,17 +305,18 @@ window.UnwipMaps = (function () {
   }
   function drawLabel(g, l, P) {
     g.save(); g.fillStyle = P.label; g.textAlign = 'center'; g.textBaseline = 'middle';
-    if (l.k === 'region') { g.font = `600 ${l.size || 44}px Georgia, serif`; g.letterSpacing = '10px'; }
-    else if (l.k === 'sea') { g.font = `italic ${l.size || 30}px Georgia, serif`; g.letterSpacing = '3px'; g.fillStyle = P.seaLine === P.sea ? P.label : P.coast; }
-    else { g.font = `${l.size || 20}px Georgia, serif`; }
+    if (l.k === 'region') { g.font = FONT(P, '600', l.size || 44); g.letterSpacing = P.mono ? '6px' : '10px'; }
+    else if (l.k === 'sea') { g.font = FONT(P, 'italic', l.size || 30); g.letterSpacing = '3px'; g.fillStyle = P.seaLine === P.sea ? P.label : P.coast; }
+    else { g.font = FONT(P, '', l.size || 20); }
+    if (P.mono) { g.shadowColor = P.coast; g.shadowBlur = 6; }
     let x = l.x, y = l.y; if (l.rot) { g.translate(x, y); g.rotate(l.rot); x = 0; y = 0; }
-    g.lineWidth = 4; g.strokeStyle = P.land; g.globalAlpha = 0.85; if (l.k !== 'sea') g.strokeText(l.text, x, y); g.globalAlpha = 1; g.fillText(l.text, x, y); g.restore();
+    g.lineWidth = 4; g.strokeStyle = P.mono ? P.paper : P.land; g.globalAlpha = 0.85; if (l.k !== 'sea') g.strokeText(l.text, x, y); g.globalAlpha = 1; g.fillText(l.text, x, y); g.restore();
   }
   function drawPin(g, p, P) {
     g.save(); g.translate(p.x, p.y); g.fillStyle = P.pin; g.strokeStyle = P.ink; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(0, 0); g.bezierCurveTo(-10, -14, -10, -26, 0, -28); g.bezierCurveTo(10, -26, 10, -14, 0, 0); g.fill(); g.stroke();
     g.fillStyle = P.land; g.beginPath(); g.arc(0, -19, 4, 0, 7); g.fill();
-    if (p.label) { g.font = '600 17px Georgia, serif'; g.textAlign = 'center'; g.lineWidth = 4; g.strokeStyle = P.land; g.strokeText(p.label, 0, 18); g.fillStyle = P.label; g.fillText(p.label, 0, 18); }
+    if (p.label) { g.font = FONT(P, '600', 17); g.textAlign = 'center'; g.lineWidth = 4; g.strokeStyle = P.land; g.strokeText(p.label, 0, 18); g.fillStyle = P.label; g.fillText(p.label, 0, 18); }
     g.restore();
   }
   // a border box at x,y,w,h in the given style; used for the map edge and for frames you draw yourself
@@ -295,6 +358,7 @@ window.UnwipMaps = (function () {
     (st.boxes || []).forEach((b, i) => { if (!(skip && skip.type === 'box' && skip.i === i)) drawRectFrame(g, P, b.x, b.y, b.w, b.h, b.f); });
     st.labels.forEach((l, i) => { if (!(skip && skip.type === 'label' && skip.i === i)) drawLabel(g, l, P); });
     st.pins.forEach((p, i) => { if (!(skip && skip.type === 'pin' && skip.i === i)) drawPin(g, p, P); });
+    drawFog(g, P);
     if (st.compass) { g.save(); g.translate(W - 110, H - 120); g.strokeStyle = P.ink; g.fillStyle = P.ink; g.lineWidth = 1.5; g.beginPath(); g.arc(0, 0, 44, 0, 7); g.stroke(); for (let k = 0; k < 4; k++) { g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, -58); g.lineTo(9, 0); g.lineTo(0, 9); g.lineTo(-9, 0); g.closePath(); k % 2 ? g.stroke() : g.fill(); } g.font = 'bold 18px Georgia, serif'; g.textAlign = 'center'; g.fillText('N', 0, -64); g.restore(); }
     drawFrame(g, P);
   }
@@ -352,10 +416,11 @@ window.UnwipMaps = (function () {
     }
     if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i], hs = 12 / cam.z; ctx.save(); ctx.fillStyle = '#3d7bd9'; ctx.fillRect(b.x + b.w - hs / 2, b.y + b.h - hs / 2, hs, hs); ctx.restore(); }
     if (drawing && drawing.path) drawPath(ctx, drawing.path, P);
+    if (drawing && drawing.fog) { ctx.save(); ctx.globalAlpha = drawing.fog.on ? 0.45 : 0.6; ctx.strokeStyle = drawing.fog.on ? '#5d5a55' : '#3d7bd9'; ctx.lineWidth = drawing.fog.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); drawing.fog.pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); if (drawing.fog.pts.length === 1) ctx.lineTo(drawing.fog.pts[0][0] + 0.1, drawing.fog.pts[0][1]); ctx.stroke(); ctx.restore(); }
     if (drawing && drawing.box) { const b = norm(drawing.box); drawRectFrame(ctx, P, b.x, b.y, b.w, b.h, b.f); }
     if (isTown()) T.drawPreview(ctx, P);
     syncFrameSelect(); renderSelBar();
-    if ((BRUSHY.includes(tool) || (isTown() && T.brushy(tool))) && hover) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 1.5 / cam.z; ctx.beginPath(); ctx.arc(hover.x, hover.y, brush * K / 2, 0, 7); ctx.stroke(); ctx.restore(); }
+    if ((BRUSHY.includes(tool) || tool === 'fog' || (isTown() && T.brushy(tool))) && hover) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 1.5 / cam.z; ctx.beginPath(); ctx.arc(hover.x, hover.y, brush * K / 2, 0, 7); ctx.stroke(); ctx.restore(); }
   }
   let itemsSkip = null, raf = 0;
   const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
@@ -396,7 +461,8 @@ window.UnwipMaps = (function () {
   }
   // ================================================================== HIT TESTING
   function bounds(s) {
-    if (s.type === 'stamp' && st.stamps[s.i] && T && /^t-/.test(st.stamps[s.i].k)) return T.stampBounds(st.stamps[s.i]);
+    if (s.type === 'stamp' && st.stamps[s.i] && /^[td]-/.test(st.stamps[s.i].k)) { const o = st.stamps[s.i], m = o.k[0] === 't' ? TW : DG; if (m) return m.stampBounds(o); }
+    if (s.type === 'stamp' && st.stamps[s.i] && /^m-/.test(st.stamps[s.i].k)) { const o = st.stamps[s.i], z = 16 * (o.s || 1); return { x: o.x - z, y: o.y - z, w: z * 2, h: z * 2 }; }
     if (T && T.LISTS[s.type]) return T.bounds(s);
     if (s.type === 'stamp') { const o = st.stamps[s.i]; if (!o) return null; const z = (o.s || 1) * (o.k === 'city' ? 26 : 18); return { x: o.x - z, y: o.y - z * 1.4, w: z * 2, h: z * 1.8 }; }
     if (s.type === 'pin') { const o = st.pins[s.i]; if (!o) return null; return { x: o.x - 12, y: o.y - 30, w: 24, h: 52 }; }
@@ -432,7 +498,7 @@ window.UnwipMaps = (function () {
     mctx.beginPath(); mctx.arc(x / K, y / K, brush / 2, 0, 7); mctx.fill();
     mctx.globalCompositeOperation = 'source-over';
   }
-  const changed = () => { itemsDirty = true; redraw(); };
+  const changed = () => { itemsDirty = true; fogDirty = true; redraw(); };
   function pointerDown(e) {
     if (e.button !== 0 && e.button !== 1) return;
     const p = world(e);
@@ -444,6 +510,8 @@ window.UnwipMaps = (function () {
     if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i]; if (Math.abs(p.x - b.x - b.w) < 14 / cam.z && Math.abs(p.y - b.y - b.h) < 14 / cam.z) { push(); drawing = { resize: b }; return; } }
     if (tool === 'select') { sel = hit(p.x, p.y); push(); drawing = { move: true, last: p }; itemsDirty = true; redraw(); return; }
     push();
+    if (tool === 'mark') { st.stamps.push({ k: 'm-' + markK, x: p.x, y: p.y, s: 1 }); sel = { type: 'stamp', i: st.stamps.length - 1 }; changed(); schedule(); return; }
+    if (tool === 'fog') { drawing = { fog: { on: fogOn, w: brush * K, pts: [[p.x, p.y]] } }; if (st.fogHide) { st.fogHide = false; syncFogBar(); } changed(); return; }
     if (isTown() && T.pointerDown(p, tool)) return;
     if (tool === 'land' || tool === 'water') { drawing = { brush: true, on: tool === 'land', last: p, before: landCount() }; paint(p.x, p.y, drawing.on); redraw(); return; }
     if (['forest', 'mountain', 'hill'].includes(tool)) { drawing = { scatter: tool === 'forest' ? 'tree' : tool, last: p }; scatter(p); changed(); return; }
@@ -469,7 +537,7 @@ window.UnwipMaps = (function () {
   function pointerMove(e) {
     const p = world(e); hover = p;
     if (T && T.busy) { T.pointerMove(p); return; }
-    if (!drawing) { if (BRUSHY.includes(tool)) redraw(); else if (tool === 'select') { const hd = handle(), sz = sizeHandle(); cv.style.cursor = sz && Math.hypot(p.x - sz.x, p.y - sz.y) < 12 / cam.z ? 'nwse-resize' : hd && Math.hypot(p.x - hd.x, p.y - hd.y) < 12 / cam.z ? 'grab' : 'default'; } return; }
+    if (!drawing) { if (BRUSHY.includes(tool) || tool === 'fog') redraw(); else if (tool === 'select') { const hd = handle(), sz = sizeHandle(); cv.style.cursor = sz && Math.hypot(p.x - sz.x, p.y - sz.y) < 12 / cam.z ? 'nwse-resize' : hd && Math.hypot(p.x - hd.x, p.y - hd.y) < 12 / cam.z ? 'grab' : 'default'; } return; }
     if (drawing.pan) { cam.x = drawing.cx + e.clientX - drawing.sx; cam.y = drawing.cy + e.clientY - drawing.sy; redraw(); return; }
     if (drawing.move && sel) {
       const dx = p.x - drawing.last.x, dy = p.y - drawing.last.y; drawing.last = p;
@@ -479,6 +547,7 @@ window.UnwipMaps = (function () {
       redraw(); return;                      // the dragged item is drawn on its own layer, so nothing else is redrawn
     }
     if (drawing.box) { drawing.box.x1 = p.x; drawing.box.y1 = p.y; redraw(); return; }
+    if (drawing.fog) { const l = drawing.fog.pts[drawing.fog.pts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) > 6) { drawing.fog.pts.push([p.x, p.y]); redraw(); } return; }
     if (drawing.turn) { turnTo(p, e.shiftKey); itemsDirty = true; redraw(); return; }
     if (drawing.size) { const o = turnable(sel); if (o) { const k = Math.hypot(p.x - o.x, p.y - o.y) / drawing.d0; if (sel.type === 'label') o.size = Math.round(Math.max(8, Math.min(140, drawing.l0 * k))); else o.s = Math.max(0.3, Math.min(5, +(drawing.s0 * k).toFixed(3))); } itemsDirty = true; redraw(); return; }
     if (drawing.resize) { const b = drawing.resize; b.w = Math.max(30, p.x - b.x); b.h = Math.max(30, p.y - b.y); itemsDirty = true; redraw(); return; }
@@ -497,6 +566,7 @@ window.UnwipMaps = (function () {
       else if (d.on && Math.abs(landCount() - d.before) < 3) U.toast('That’s already land. Paint 🟫 over the sea to add land.', '', 5000);
     }
     if (d.path) { if (d.path.pts.length >= 2) st.paths.push(d.path); else undo.pop(); }
+    if (d.fog) { (st.fog = st.fog || []).push(d.fog); fogDirty = true; }
     if (d.box) { const b = norm(d.box); if (b.w > 20 && b.h > 20) { st.boxes = st.boxes || []; st.boxes.push(b); sel = { type: 'box', i: st.boxes.length - 1 }; } else undo.pop(); }
     if (d.move && !sel) undo.pop();
     itemsDirty = true; itemsSkip = null; redraw(); if (!d.pan) schedule();
@@ -592,7 +662,7 @@ window.UnwipMaps = (function () {
     const ready = [];
     for (const sec of secs) {
       const s = Object.assign(blank(), sec); s.boxes = s.boxes || [];
-      if (s.kind === 'town' && T) { const b = T.blank(); for (const k of Object.keys(b)) s[k] = s[k] || b[k]; }
+      fillKind(s);
       const mk = document.createElement('canvas'); mk.width = MW; mk.height = MH; const mg = mk.getContext('2d', { willReadFrequently: true });
       if (s.land) { const im = new Image(); im.src = s.land; await im.decode().catch(() => {}); mg.drawImage(im, 0, 0); }
       ready.push({ s, mk, mg, name: sec.name || 'Map' });
@@ -600,12 +670,12 @@ window.UnwipMaps = (function () {
     const keep = { st, mask, mctx, landCache, landDirty, itemsDirty }, out = [];
     try {
       for (const r of ready) {
-        st = r.s; mask = r.mk; mctx = r.mg; landCache = null; landDirty = true;
+        st = r.s; mask = r.mk; mctx = r.mg; landCache = null; landDirty = true; syncT(); fogDirty = true;
         const c = document.createElement('canvas'); c.width = W; c.height = H;
         renderAll(c.getContext('2d'), STYLES[st.style] || STYLES.parchment);
         out.push({ name: r.name, canvas: c });
       }
-    } finally { ({ st, mask, mctx, landCache, landDirty, itemsDirty } = keep); baseKey = ''; }
+    } finally { ({ st, mask, mctx, landCache, landDirty, itemsDirty } = keep); syncT(); fogDirty = true; baseKey = ''; }
     return out;
   }
 
@@ -623,11 +693,22 @@ window.UnwipMaps = (function () {
     const box = view && $('.mp-toollist', view); if (!box) return;
     box.innerHTML = (isTown() ? T.TOOLS : TOOLS).map(([t, ic, tip]) => `<button class="mp-tool" data-t="${t}" data-tip="${esc(tip)}">${ic}</button>`).join('');
     $$('.mp-tool', box).forEach(b => b.onclick = () => setTool(b.dataset.t));
-    const gen = $('#mp-gen', view); if (gen) { gen.textContent = isTown() ? '🎲 Random town…' : '🎲 Random map…'; gen.dataset.tip = isTown() ? 'Roll a random village, town or city: streets, buildings, walls and water, from fixed rules and random numbers (no AI). You can edit everything after' : 'Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after'; }
-    const clr = $('#mp-clear', view); if (clr) clr.dataset.tip = isTown() ? 'Start this town again from empty ground' : 'Start this map section again from empty sea';
+    const gen = $('#mp-gen', view); if (gen && isDungeon()) { gen.textContent = '🎲 Random floor…'; gen.dataset.tip = 'Roll a random dungeon floor: rooms, corridors, stairs, doors, a boss room and loot, from fixed rules and random numbers (no AI). You can edit everything after'; }
+    else if (gen) { gen.textContent = isTown() ? '🎲 Random town…' : '🎲 Random map…'; gen.dataset.tip = isTown() ? 'Roll a random village, town or city: streets, buildings, walls and water, from fixed rules and random numbers (no AI). You can edit everything after' : 'Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after'; }
+    const clr = $('#mp-clear', view); if (clr) clr.dataset.tip = isDungeon() ? 'Start this floor again from solid rock' : isTown() ? 'Start this town again from empty ground' : 'Start this map section again from empty sea';
+  }
+  let markK = 'waypoint', fogOn = true;
+  function syncFogBar() { const o = view && $('#mp-opts', view); if (o && tool === 'fog') commonOpts('fog', o); }
+  function commonOpts(t, o) {
+    o.classList.remove('hidden');
+    if (t === 'mark') o.innerHTML = MARKS.map(([v, l]) => `<button type="button" class="chip ${markK === v ? 'on' : ''}" data-mk="${v}">${l}</button>`).join('');
+    else o.innerHTML = `<button type="button" class="chip ${fogOn ? 'on' : ''}" data-fog="1">Cover</button><button type="button" class="chip ${fogOn ? '' : 'on'}" data-fog="0">Reveal</button><span class="mp-opt-sep"></span><button type="button" class="chip" data-fa="cover">Cover all</button><button type="button" class="chip" data-fa="clear">Clear all fog</button><button type="button" class="chip ${st.fogHide ? '' : 'on'}" data-fa="show">${st.fogHide ? 'Fog hidden' : 'Fog shown'}</button>`;
+    o.querySelectorAll('[data-mk]').forEach(b => b.onclick = () => { markK = b.dataset.mk; commonOpts(t, o); });
+    o.querySelectorAll('[data-fog]').forEach(b => b.onclick = () => { fogOn = b.dataset.fog === '1'; commonOpts(t, o); });
+    o.querySelectorAll('[data-fa]').forEach(b => b.onclick = () => { const a = b.dataset.fa; push(); if (a === 'cover') { st.fog = [{ all: 1, on: true }]; st.fogHide = false; } else if (a === 'clear') st.fog = []; else st.fogHide = !st.fogHide; fogDirty = true; changed(); schedule(); commonOpts(t, o); });
   }
   function setTool(t) { tool = t;
-    { const o = view && $('#mp-opts', view); if (o) { if (isTown()) T.optionsBar(t, o); else { o.innerHTML = ''; o.classList.add('hidden'); } } } if (t === 'frame' && sel && sel.type === 'box') { sel = null; if (cv) redraw(); } $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('.mp-brush', view).classList.toggle('dim', isTown() ? t !== 'water' : !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); syncFrameSelect(); }
+    { const o = view && $('#mp-opts', view); if (o) { if (t === 'mark' || t === 'fog') commonOpts(t, o); else if (isTown()) T.optionsBar(t, o); else { o.innerHTML = ''; o.classList.add('hidden'); } } } if (t === 'frame' && sel && sel.type === 'box') { sel = null; if (cv) redraw(); } $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('.mp-brush', view).classList.toggle('dim', t === 'fog' ? false : isTown() ? !T.brushy(t) && t !== 'water' : !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); syncFrameSelect(); }
   // a small picture of the map, for the Build page
   function thumb() {
     if (!st || !mask) return '';
@@ -720,7 +801,7 @@ window.UnwipMaps = (function () {
       else { push(); st.frame = v; }
       changed(); schedule(); };
     $('#mp-clear', view).onclick = async () => {
-      if (!await U.confirmBox('Clear this map?', isTown() ? 'Removes all streets, buildings, walls, water, areas, landmarks, labels and pins from this section. Undo (Ctrl+Z) brings it back.' : 'Removes all land, forests, towns, roads, labels and pins from this section. Undo (Ctrl+Z) brings it back.', 'Clear the map')) return;
+      if (!await U.confirmBox('Clear this map?', isDungeon() ? 'Removes all rooms, corridors, features, markers, labels and pins from this floor. Undo (Ctrl+Z) brings it back.' : isTown() ? 'Removes all streets, buildings, walls, water, areas, landmarks, labels and pins from this section. Undo (Ctrl+Z) brings it back.' : 'Removes all land, forests, towns, roads, labels and pins from this section. Undo (Ctrl+Z) brings it back.', 'Clear the map')) return;
       push(); const keep = { name: st.name, style: st.style, grid: st.grid, compass: st.compass, frame: st.frame, kind: st.kind || 'world' };
       Object.keys(st).forEach(k => delete st[k]); Object.assign(st, blank(keep.style, keep.kind), keep);
       mctx.clearRect(0, 0, MW, MH); landDirty = true; sel = null; changed(); schedule();
@@ -744,12 +825,13 @@ window.UnwipMaps = (function () {
     };
     document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('#mp-gen-mode .chip'); if (c) { c.parentElement.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); } });
     document.addEventListener('keydown', keys, true);
-    if (isTown() ? !st.streets.length && !st.buildings.length : !st.land && !st.stamps.length) hintToast = U.toast(isTown() ? 'An empty town. Try 🎲 Random town… for a starting point, or draw streets and click between them to fill in buildings.' : 'A blank map. Try 🎲 Random map… for a starting point, or paint land with 🟫.', '', 7000);
+    if (isDungeon()) { if (!/1/.test(st.cells || '')) hintToast = U.toast('An empty floor of solid rock. Try 🎲 Random floor… for a starting point, or drag out rooms and corridors.', '', 7000); }
+    else if (isTown() ? !st.streets.length && !st.buildings.length : !st.land && !st.stamps.length) hintToast = U.toast(isTown() ? 'An empty town. Try 🎲 Random town… for a starting point, or draw streets and click between them to fill in buildings.' : 'A blank map. Try 🎲 Random map… for a starting point, or paint land with 🟫.', '', 7000);
   }
   // ---- sections: several maps inside one (the world, a region, a city…)
   function renderTabs() {
     const box = $('#mp-tabs', view); if (!box) return;
-    box.innerHTML = docData.sections.map((x, i) => `<button class="mp-tab ${i === docData.active ? 'on' : ''}" data-i="${i}" data-tip="${x.kind === 'town' ? 'Town map. ' : ''}Double-click to rename, right-click for more">${x.kind === 'town' ? '🏘️ ' : ''}${esc(x.name || 'Map ' + (i + 1))}</button>`).join('') +
+    box.innerHTML = docData.sections.map((x, i) => `<button class="mp-tab ${i === docData.active ? 'on' : ''}" data-i="${i}" data-tip="${x.kind === 'town' ? 'Town map. ' : x.kind === 'dungeon' ? 'Dungeon floor. ' : ''}Double-click to rename, right-click for more">${x.kind === 'town' ? '🏘️ ' : x.kind === 'dungeon' ? '🕳️ ' : ''}${esc(x.name || 'Map ' + (i + 1))}</button>`).join('') +
       `<button class="mp-tab add" id="mp-add-sec" data-tip="Add another map section: a region close-up, a city, another continent…">+ Section</button>`;
     $$('.mp-tab[data-i]', box).forEach(b => {
       const i = +b.dataset.i;
@@ -790,9 +872,13 @@ window.UnwipMaps = (function () {
     let el;
     if (!how) {
       let kind = opts.kind || (T ? null : 'world');
-      if (!kind) kind = await U.modal({ title: 'New map section', body: '<p>What kind of map?</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: '🏘️ Town or city', value: 'town', kind: 'ghost' }, { label: '🗺️ World or region', value: 'world', kind: 'primary' }] });
+      if (!kind) kind = await U.modal({ title: 'New map section', body: '<p>What kind of map?</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, ...(DG ? [{ label: '🕳️ Dungeon floor', value: 'dungeon', kind: 'ghost' }] : []), { label: '🏘️ Town or city', value: 'town', kind: 'ghost' }, { label: '🗺️ World or region', value: 'world', kind: 'primary' }] });
       if (!kind) return;
-      how = await U.modal({ title: kind === 'town' ? 'New town map' : 'New map section', onOpen: x => { el = x; if (opts.name) x.querySelector('#ms-name').value = opts.name; },
+      if (kind === 'dungeon') how = await U.modal({ title: 'New dungeon floor', onOpen: x => { el = x; x.querySelector('#ms-name').value = opts.name || `Floor ${docData.sections.filter(z => z.kind === 'dungeon').length + 1}`; },
+        body: '<div class="field"><label>Name</label><input id="ms-name" placeholder="e.g. Floor 2, the Cistern"></div><p class="hint" style="margin-top:8px">Start from solid rock, or roll a floor of rooms and corridors to work from (🎲 no AI).</p>',
+        buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Empty', value: 'dblank', kind: 'ghost' }, { label: 'Small', value: 'dsmall', kind: 'ghost' }, { label: 'Medium', value: 'dmedium', kind: 'ghost' }, { label: 'Large', value: 'dlarge', kind: 'primary' }] });
+      if (kind === 'dungeon') { if (!how) return; }
+      else how = await U.modal({ title: kind === 'town' ? 'New town map' : 'New map section', onOpen: x => { el = x; if (opts.name) x.querySelector('#ms-name').value = opts.name; },
         body: `<div class="field"><label>Name</label><input id="ms-name" placeholder="${kind === 'town' ? 'e.g. Brackwell, Saltby, the Old Port' : 'e.g. The North Downs'}"></div><p class="hint" style="margin-top:8px">${kind === 'town' ? 'Start it empty, or roll a village, town or city to work from (🎲 no AI).' : 'Start it empty, or generate land to work from.'}</p>`,
         buttons: kind === 'town' ? [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Empty', value: 'tblank', kind: 'ghost' }, { label: 'Village', value: 'village', kind: 'ghost' }, { label: 'Town', value: 'town', kind: 'ghost' }, { label: 'City', value: 'city', kind: 'primary' }]
           : [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Empty', value: 'blank', kind: 'ghost' }, { label: 'Islands', value: 'archipelago', kind: 'ghost' }, { label: 'Continent', value: 'continent', kind: 'ghost' }, { label: 'One island', value: 'island', kind: 'primary' }] });
@@ -800,13 +886,14 @@ window.UnwipMaps = (function () {
     }
     st.land = maskData();
     const name = how === 'copy' ? `${docData.sections[from].name} (copy)` : ((el && el.querySelector('#ms-name').value.trim()) || opts.name || `Section ${docData.sections.length + 1}`);
-    const townKind = ['tblank', 'village', 'town', 'city'].includes(how);
-    const sec = how === 'copy' ? JSON.parse(JSON.stringify(docData.sections[from])) : blank(st.style, townKind ? 'town' : 'world');
+    const townKind = ['tblank', 'village', 'town', 'city'].includes(how), dunKind = /^d(blank|small|medium|large)$/.test(how);
+    const sec = how === 'copy' ? JSON.parse(JSON.stringify(docData.sections[from])) : blank(st.style, townKind ? 'town' : dunKind ? 'dungeon' : 'world');
     sec.name = name; sec.id = U.uid();
     if (how === 'copy') sec.id = U.uid();
     docData.sections.push(sec);
     await useSection(docData.sections.length - 1); syncControls(); renderTabs(); baseKey = '';
-    if (townKind) { if (how !== 'tblank') T.generate(how); else { changed(); schedule(); } }
+    if (dunKind) { if (how !== 'dblank') DG.generate(how.slice(1)); else { changed(); schedule(); } }
+    else if (townKind) { if (how !== 'tblank') T.generate(how); else { changed(); schedule(); } }
     else if (how !== 'copy' && how !== 'blank') generate(how); else { changed(); schedule(); }
     undo = [];
     return sec;
@@ -834,26 +921,29 @@ window.UnwipMaps = (function () {
   }
   async function create(parentId) {
     let kind = 'world';
-    if (T) { kind = await U.modal({ title: 'New map', body: '<p>What kind of map?</p><p class="hint">A <b>world or region</b> map has coastlines, mountains, forests and towns. A <b>town or city</b> map has streets, buildings and walls. One map can hold both: add sections with “+ Section”.</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: '🏘️ Town or city', value: 'town', kind: 'ghost' }, { label: '🗺️ World or region', value: 'world', kind: 'primary' }] }); if (!kind) return; }
-    const title = await U.promptText('New map', 'Name of the map', kind === 'town' ? 'Map of the city' : 'Map of the world'); if (!title) return;
+    if (TW) { kind = await U.modal({ title: 'New map', body: '<p>What kind of map?</p><p class="hint">A <b>world or region</b> map has coastlines, mountains, forests and towns. A <b>town or city</b> map has streets, buildings and walls. A <b>dungeon floor</b> is a grid of rooms and corridors, with stairs, doors and traps. One map can hold all three: add sections (floors, a city, a region) with “+ Section”.</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, ...(DG ? [{ label: '🕳️ Dungeon floor', value: 'dungeon', kind: 'ghost' }] : []), { label: '🏘️ Town or city', value: 'town', kind: 'ghost' }, { label: '🗺️ World or region', value: 'world', kind: 'primary' }] }); if (!kind) return; }
+    const title = await U.promptText('New map', 'Name of the map', kind === 'town' ? 'Map of the city' : kind === 'dungeon' ? 'The dungeon' : 'Map of the world'); if (!title) return;
     // like a new document: inside the chosen folder, or (nothing chosen) at the bottom of the binder, under
     // "New — drag into place"
     const f = parentId ? U.findNode(parentId) : null;
     const node = { id: U.uid(), type: 'doc', title, words: 0, map: true, icon: '🗺️' };
     if (f) { (f.node.children = f.node.children || []).push(node); f.node.open = true; } else S.project.binder.push(node);
-    await api.saveDoc(S.slug, node.id, JSON.stringify(blank('parchment', kind)));
+    await api.saveDoc(S.slug, node.id, JSON.stringify(kind === 'dungeon' ? { v: 2, active: 0, sections: [{ name: 'Floor 1', ...blank('parchment', kind) }] } : blank('parchment', kind)));
     U.scheduleMeta(); U.renderBinder();
     U.openDoc(node.id);
   }
   // what town.js needs from here
   const shade = (hex, amt) => { const n = parseInt(hex.slice(1), 16); const f = c => Math.max(0, Math.min(255, Math.round(c + (amt > 0 ? (255 - c) * amt : c * amt)))); return '#' + [f(n >> 16), f((n >> 8) & 255), f(n & 255)].map(v => v.toString(16).padStart(2, '0')).join(''); };
-  if (window.UnwipTownFactory) T = window.UnwipTownFactory({
+  const MOD = {
     W, H, MW, MH, K, STYLES, U, rng, noise2, fbm, name, shade,
     get st() { return st; }, get mask() { return mask; }, get mctx() { return mctx; }, get brush() { return brush; },
     paint: (x, y, on, from) => paint(x, y, on, from), push: () => push(), changed: () => changed(), schedule: () => schedule(), redraw: () => redraw(),
     undoPop: () => undo.pop(), select: s => { sel = s; }, landDirty: () => { landDirty = true; baseKey = ''; }, toast: (m, k) => U.toast(m, k || '', 6000)
-  });
+  };
+  if (window.UnwipTownFactory) TW = window.UnwipTownFactory(MOD);
+  if (window.UnwipDungeonFactory) DG = window.UnwipDungeonFactory(MOD);
+  T = TW;
   const bookOnly = () => { if (host.inBook) close(true); };
   U.on('leave', bookOnly); U.on('doc', bookOnly); U.on('view', bookOnly);
-  return { open, create, thumb, placeName: () => name(Math.random), blank: (style, kind) => blank(style, kind), close, pictures, townGen: k => T && T.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
+  return { open, create, thumb, placeName: () => name(Math.random), blank: (style, kind) => blank(style, kind), close, pictures, townGen: k => T && T.generate(k), dungeonGen: k => isDungeon() && DG.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
 })();

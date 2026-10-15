@@ -131,6 +131,6 @@
     thumb: item => { const d = Object.assign(blank(), item.data || {}); return B.svgURL(screenSVG(item, d, Math.max(1, +d.show || 1))); },
     picture: item => { const d = Object.assign(blank(), item.data || {}), svg = screenSVG(item, d, Math.max(1, +d.show || 1)), h = +/height="(\d+)"/.exec(svg)[1]; return B.svgCanvas(svg, 1600, Math.round(1600 * h / 800)); },
     toBook: item => { const d = Object.assign(blank(), item.data || {}); return bracketLines(item, d, Math.max(1, +d.show || 1)).map(l => `<p>${esc(l)}</p>`).join(''); },
-    close: () => { it = null; box = null; }
+    close: () => { if (box) { box.onclick = null; box.oninput = null; } it = null; box = null; }
   };
 })();
