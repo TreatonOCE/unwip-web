@@ -1418,8 +1418,10 @@
     await flushSave();
     const f = findNode(id); if (!f) return;
     if (f.node.map && window.UnwipMaps) { S.selectedId = id; renderBinder(); return window.UnwipMaps.open(id); }
-    if (S.view === 'outline') setView('write');
-    if (S.splitId === id) { await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null; }
+    // opening a page always shows the writing view: from the Corkboard, Moodboard, Timeline or Insights charts it used
+    // to show the page but keep that view's state, which hid the toolbar until the level was switched
+    if (S.view !== 'write') setView('write');
+    if (S.splitId === id) { await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null; if (S.project) S.project.splitId = null; }
     $$('.toast.with-action').forEach(t => t.remove()); // offers about the previous document
     S.docId = id; S.selectedId = id; S.touchedDoc = null;
     S.project.lastDoc = id; scheduleMeta();

@@ -261,7 +261,7 @@ window.UnwipCharSheet = (function () {
   async function browse() {
     if (!S.project || tooSmall()) return;
     const chars = characters();
-    if (!chars.length) { U.toast('Add a character to your Characters folder first, then their sheet can hold gear.'); return; }
+    if (!chars.length) return newSheet();
     const body = document.createElement('div'); body.className = 'cs-browse';
     const pos = new Map(chapters().map((c, i) => [c.id, i])), at = ch => (pos.has(ch) ? pos.get(ch) : -1);
     const equipped = sh => Object.values(sh.slots).filter(l => { const last = l.slice().sort((a, b) => at(a.ch) - at(b.ch)).pop(); return last && last.name; }).length;
@@ -269,8 +269,40 @@ window.UnwipCharSheet = (function () {
       return `<button type="button" class="cs-br-row" data-id="${esc(c.id)}"><span class="cs-br-ic">${U.I ? U.I.person : ''}</span><b>${esc(c.title || 'Untitled')}</b><small>${n ? n + ' equipped' : 'No gear yet'}</small></button>`; }).join('');
     let pick = null, close2 = () => {};
     body.addEventListener('click', e => { const r = e.target.closest('[data-id]'); if (r) { pick = r.dataset.id; close2(); } });
-    await U.modal({ title: 'Character sheets', body, buttons: [{ label: 'Close', value: false, kind: 'ghost' }], onOpen: back => { close2 = () => { const b = back.querySelector('.m-foot .btn'); if (b) b.click(); }; } });
+    const v = await U.modal({ title: 'Character sheets', body, buttons: [{ label: 'New character sheet…', value: 'new', kind: 'ghost' }, { label: 'Close', value: false, kind: 'primary' }], onOpen: back => { close2 = () => { const b = [...back.querySelectorAll('.m-foot .btn')].pop(); if (b) b.click(); }; } });
+    if (v === 'new') return newSheet();
     if (pick) { await U.openDoc(pick); await open(pick); }
+  }
+  // New character sheet: a new character (added to Characters, with the book's character fields), or one who's already
+  // there, then their sheet opens. From the main screen's Open World tab, the book is picked first (opts.slug).
+  async function newSheet(opts = {}) {
+    if (opts.slug && (!S.project || S.slug !== opts.slug)) { const ok = await U.openProject(opts.slug); if (ok === false || !S.project) return; }
+    if (!S.project || tooSmall()) return;
+    const chars = characters(), body = document.createElement('div'); body.className = 'cs-new';
+    body.innerHTML = `<label class="field">Name<input class="cs-new-name" placeholder="e.g. Wren Tallow" maxlength="80"></label>
+      ${chars.length ? `<div class="cs-new-or"><span>or a character already in this book</span></div><div class="cs-new-list">${chars.map(c => `<button type="button" class="cs-new-pick" data-id="${esc(c.id)}">${esc(c.title || 'Untitled')}${Object.keys(sheetOf(c).slots).length ? '<small>has a sheet</small>' : ''}</button>`).join('')}</div>` : ''}
+      <p class="hint">A new character goes in your Characters folder, with the same fields as the others.</p>`;
+    let pick = null, close2 = () => {};
+    body.addEventListener('click', e => { const b = e.target.closest('.cs-new-pick'); if (b) { pick = b.dataset.id; close2(); } });
+    const v = await U.modal({ title: 'New character sheet', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Make the sheet', value: true, kind: 'primary' }],
+      onOpen: back => { const i = back.querySelector('.cs-new-name'); if (i) setTimeout(() => i.focus(), 50); close2 = () => { const b = [...back.querySelectorAll('.m-foot .btn')].pop(); if (b) b.click(); }; } });
+    let id = pick;
+    if (!id) {
+      const name = v ? body.querySelector('.cs-new-name').value.trim().slice(0, 80) : '';
+      if (!name) return;
+      const root = S.project.binder.find(n => n.root && n.kind === 'characters'); if (!root) return;
+      await U.addNode('doc', root.id, true);
+      id = S.docId; const f = U.findNode(id); if (!f) return;
+      // adding a document opens the binder's rename box: the name goes in there and is saved through it (renaming any
+      // other way would be undone when that box later lost focus)
+      const box = document.querySelector('.tree-row input.rename');
+      if (box) { box.value = name; box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); }
+      else { f.node.title = name; U.scheduleMeta(); U.renderBinder(); const t = document.getElementById('doc-title'); if (t) t.value = name; }
+    } else await U.openDoc(id);
+    const f = U.findNode(id); if (!f) return;
+    if (!f.node.csheet) { f.node.csheet = { fig: 'f1', slots: {} }; U.scheduleMeta(); }
+    if (U.level() < 2) U.setMode('lore');
+    await open(id);
   }
   async function addFrom(text) {
     if (!S.project || tooSmall()) return;
@@ -306,5 +338,5 @@ window.UnwipCharSheet = (function () {
   document.querySelectorAll('#plan-lore [data-lore]').forEach(b => b.onclick = () => {
     if (b.dataset.lore === 'sheets') browse(); else if (window.UnwipBuild) window.UnwipBuild.fromBook('world');
   });
-  return { open, browse, isChar, addFrom, cleanName };
+  return { open, browse, newSheet, isChar, addFrom, cleanName };
 })();

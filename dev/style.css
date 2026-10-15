@@ -3315,3 +3315,111 @@ html.m-phone .page-charsheet:not(.hidden), html.m-phone .page-sheet:not(.hidden)
 .cs-sys-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0 0; font-size: 13px; flex-wrap: wrap; }
 .cs-sys-row span:first-child { font-weight: 600; }
 .cs-sys-tip { margin: 0 0 10px; }
+
+/* New character sheet: a name, or one of the characters already there */
+.cs-new { display: flex; flex-direction: column; gap: 12px; min-width: min(440px, 80vw); }
+.cs-new-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; }
+.cs-new-or::before, .cs-new-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.cs-new-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 180px; overflow: auto; }
+.cs-new-pick { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--paper); color: var(--text); border-radius: 99px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.cs-new-pick:hover { border-color: var(--accent); }
+.cs-new-pick small { color: var(--muted); font-size: 11px; }
+
+/* ---- world calendar (calendar.js): a year you can see, edited in place */
+.cal2 { display: flex; flex-direction: column; gap: 16px; }
+.c2-pre { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.c2-card { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--text); font: inherit; cursor: pointer; }
+.c2-card:hover { border-color: var(--accent); }
+.c2-card b { font-size: 13.5px; }
+.c2-card span { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.c2-title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.c2-title #cal-name { flex: 1 1 260px; min-width: 0; font: 600 22px/1.2 var(--serif, Georgia, serif); border: 0; border-bottom: 1px dashed transparent; background: none; color: var(--text); padding: 2px 0; outline: none; }
+.c2-title #cal-name:hover, .c2-title #cal-name:focus { border-bottom-color: var(--line); }
+.c2-era { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.c2-era input { width: 90px; border: 1px solid var(--line); border-radius: 99px; padding: 3px 10px; background: var(--paper); color: var(--text); font: inherit; font-size: 13px; }
+/* the year strip */
+.c2-year { position: relative; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.c2-months, .c2-bands, .c2-moon { position: relative; height: 30px; }
+.c2-bands { height: 18px; }
+.c2-moon { height: 16px; }
+.c2-sm { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--paper); background: color-mix(in srgb, var(--accent) 14%, var(--panel-2)); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.c2-sm:first-child { border-radius: 6px 0 0 6px; } .c2-sm:last-child { border-radius: 0 6px 6px 0; border-right: 0; }
+.c2-sm:nth-child(even) { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); }
+.c2-sm span { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; max-width: 100%; }
+.c2-band { position: absolute; top: 0; bottom: 0; color: #fff; font-size: 10.5px; font-weight: 600; letter-spacing: .3px; padding-left: 6px; display: flex; align-items: center; overflow: hidden; white-space: nowrap; opacity: .85; }
+.c2-bands .c2-band:first-child { border-radius: 4px 0 0 4px; }
+.c2-moon b { position: absolute; left: 0; top: 0; font-size: 10.5px; font-weight: 600; color: var(--muted); background: var(--paper); padding-right: 6px; z-index: 1; line-height: 16px; }
+.c2-moon::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dotted var(--line); }
+.c2-moon i { position: absolute; top: 3px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--mc, #e8c55a); box-shadow: 0 0 0 2px var(--paper); }
+.c2-moon i:first-child { margin-left: 0; }
+.c2-leg { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); padding-top: 2px; }
+.c2-leg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+/* sections */
+.c2-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; align-items: start; }
+.c2-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.c2-sec { min-width: 0; }
+.c2-sec h4 { margin: 0 0 8px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.c2-sec h4 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.c2-list { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow: auto; }
+.c2-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 8px; min-width: 0; flex-wrap: wrap; }
+.c2-row:hover { background: var(--panel-2); }
+.c2-n { width: 18px; text-align: right; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.c2-name { flex: 1 1 110px; min-width: 80px; border: 0; border-bottom: 1px solid transparent; background: none; color: var(--text); font: inherit; font-size: 14px; padding: 4px 2px; outline: none; }
+.c2-name:hover { border-bottom-color: var(--line); } .c2-name:focus { border-bottom-color: var(--accent); }
+.c2-step { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 99px; background: var(--paper); overflow: hidden; }
+.c2-step button { border: 0; background: none; color: var(--muted); width: 24px; height: 26px; cursor: pointer; font-size: 15px; }
+.c2-step button:hover { color: var(--text); background: var(--panel-2); }
+.c2-step input { width: 40px; border: 0; background: none; text-align: center; font: inherit; font-size: 13px; color: var(--text); -moz-appearance: textfield; padding: 0; }
+.c2-step input::-webkit-inner-spin-button, .c2-step input::-webkit-outer-spin-button, .c2-small::-webkit-inner-spin-button, .c2-year-in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.c2-step em { font-style: normal; font-size: 11.5px; color: var(--muted); padding-right: 9px; }
+.c2-tools { display: inline-flex; gap: 1px; margin-left: auto; opacity: 0; transition: opacity .12s; }
+.c2-row:hover .c2-tools, .c2-row:focus-within .c2-tools { opacity: 1; }
+@media (hover: none) { .c2-tools { opacity: 1; } }
+.c2-tools button { border: 0; background: none; color: var(--muted); width: 22px; height: 24px; border-radius: 6px; cursor: pointer; }
+.c2-tools button:hover:not(:disabled) { color: var(--text); background: var(--paper); }
+.c2-tools button:disabled { opacity: .3; cursor: default; }
+.c2-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; padding-left: 6px; font-size: 13px; }
+.c2-all { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; }
+.c2-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.c2-chip { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 10px; border-radius: 99px; background: var(--panel-2); font-size: 13px; }
+.c2-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; width: 18px; height: 18px; border-radius: 50%; font-size: 13px; line-height: 1; }
+.c2-chip button:hover { background: var(--paper); color: var(--text); }
+#cal-wadd { flex: 1 1 110px; min-width: 90px; border: 0; background: none; font: inherit; font-size: 13px; color: var(--text); outline: none; padding: 4px; }
+.c2-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.c2-dot.moon { width: auto; height: auto; font-size: 13px; }
+.c2-say { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.c2-small, .c2-year-in { width: 46px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; background: var(--paper); color: var(--text); font: inherit; font-size: 13px; text-align: center; -moz-appearance: textfield; }
+.c2-year-in { width: 70px; }
+.c2-sel { border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; background: var(--paper); color: var(--text); font: inherit; font-size: 13px; max-width: 150px; }
+.c2-sentence { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+/* the first month as a calendar page */
+.c2-begin { border-top: 1px solid var(--line); padding-top: 14px; }
+#c2-month { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 12px; align-items: start; }
+.c2-cal { border: 1px solid var(--line); border-radius: 10px; background: var(--paper); padding: 10px; min-width: 0; }
+.c2-cal-h { font-weight: 600; font-size: 13.5px; margin-bottom: 6px; } .c2-cal-h span { font-weight: 400; color: var(--muted); }
+.c2-grid { display: grid; gap: 2px; }
+.c2-wd { font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); text-align: center; padding-bottom: 2px; }
+.c2-d { position: relative; min-height: 30px; border-radius: 6px; background: var(--panel-2); font-size: 11.5px; padding: 2px 4px; display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.c2-d.blank { background: none; }
+.c2-d b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.c2-d small { font-size: 10px; line-height: 1; }
+.c2-d.one { background: var(--accent); color: #fff; }
+.c2-d em { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .3px; }
+.c2-lines { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text); }
+.c2-lines b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+@media (max-width: 760px) { .c2-cols, #c2-month { grid-template-columns: minmax(0, 1fr); } .c2-pre { grid-template-columns: minmax(0, 1fr); } }
+
+/* the calendar window is wider than other wide windows, and its small controls keep their own size */
+.modal.cal-wide { width: min(1040px, 96vw); max-width: min(1040px, 96vw); }
+.modal .cal2 .c2-step input[type=number] { width: 40px; padding: 0; border: 0; background: none; border-radius: 0; text-align: center; height: 26px; }
+.modal .cal2 input.c2-small[type=number] { width: 46px; padding: 4px 6px; background: var(--paper); }
+.modal .cal2 input.c2-year-in[type=number] { width: 72px; padding: 4px 6px; background: var(--paper); }
+.modal .cal2 select.c2-sel { width: auto; padding: 4px 6px; background: var(--paper); }
+.modal .cal2 .c2-name { width: auto; }
+.c2-row.mo { flex-wrap: nowrap; }
+@media (max-width: 760px) {
+  .c2-pre { display: flex; overflow-x: auto; gap: 6px; }
+  .c2-card { flex: 0 0 auto; padding: 7px 10px; } .c2-card span { display: none; }
+  .c2-row.mo .c2-step em { display: none; }
+  .c2-row.mo .c2-tools button[data-mv] { display: none; }
+}

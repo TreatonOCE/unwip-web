@@ -462,7 +462,9 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
 
   // ---- timelapse: the replay drawn into a video
   function videoType() {
-    for (const t of ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4;codecs=avc1', 'video/mp4']) if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+    // MP4 (H.264) first: Windows' Media Player, QuickTime and phones all play it, and it's written in self-contained
+    // pieces, so a recording cut off (the app closed mid-recording) still plays. WebM only where MP4 can't be recorded.
+    for (const t of ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']) if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
     return '';
   }
   // a video of the replay: a timelapse squeezed into a set length, or at the replay's own speed (1× is as it was
@@ -628,6 +630,8 @@ pfPlayer(document.getElementById('player'), SESSIONS, { pfPrep: pfPrep, pfApply:
     renderStatus();
     U.toast(`Screen video recording. Click the timer (<b>${clock(0)}</b>) at any time to pause or stop. It keeps going in other books, Build and Play.`, '', 6000);
   }
+  // web: a screen video lives in memory until it's stopped, so closing the tab first would lose it: the browser asks
+  window.addEventListener('beforeunload', e => { if (V.rec && V.parts) { e.preventDefault(); e.returnValue = ''; } });
   function stopVideo() { if (V.rec && V.rec.state !== 'inactive') { try { V.rec.stop(); } catch {} } if (V.stream) V.stream.getTracks().forEach(t => t.stop()); }
   async function finishVideo() {
     clearInterval(V.timer);
