@@ -15,9 +15,18 @@
     toxic: { name: 'Toxic', bg: '#0c110a', main: '#b6ff3a', acc: '#eaeaea' },
     blood: { name: 'Blood', bg: '#140909', main: '#f2ebe4', acc: '#d61f30' },
     chrome: { name: 'Chrome', bg: '#17191d', main: '#c9ced6', acc: '#f2c84b' },
-    ice: { name: 'Ice', bg: '#08131c', main: '#9fe6ff', acc: '#ffffff' }
+    ice: { name: 'Ice', bg: '#08131c', main: '#9fe6ff', acc: '#ffffff' },
+    system: { name: 'System', bg: '#07101e', main: '#5fd0ff', acc: '#ffd36b' },
+    terminal: { name: 'Terminal', bg: '#050a06', main: '#5fd38a', acc: '#e8ffe8' },
+    synth: { name: 'Synthwave', bg: '#160b26', main: '#ff6ad5', acc: '#ffd36b' },
+    hazard: { name: 'Hazard', bg: '#15130a', main: '#f2c230', acc: '#f4f1e6' },
+    void: { name: 'Void', bg: '#020203', main: '#b38cff', acc: '#3df5ff' }
   };
-  const FRAMES = { hex: 'Hexagon', chevron: 'Chevron', roundel: 'Roundel', badge: 'Badge', diamond: 'Diamond', notched: 'Notched ring', none: 'No frame' };
+  const FRAMES = { hex: 'Hexagon', chevron: 'Chevron', roundel: 'Roundel', badge: 'Badge', diamond: 'Diamond', notched: 'Notched ring', octagon: 'Octagon', shield: 'Tech shield', triangle: 'Triangle', split: 'Split hexagon', circuit: 'Circuit ring', gear: 'Gear', brackets: 'HUD brackets', none: 'No frame' };
+  // ---- a faint pattern inside the frame
+  const PATTERNS = { none: 'None', grid: 'Grid', hexgrid: 'Hex grid', circuit: 'Circuit', scan: 'Scanlines', dots: 'Dot matrix', rays: 'Rays', network: 'Node network', rings: 'Rings' };
+  // ---- extras you can switch on
+  const EXTRAS = [['glow', 'Glow'], ['nodes', 'Nodes on the frame'], ['readout', 'Side readouts'], ['barcode', 'Barcode'], ['glitch', 'Glitch'], ['orbit', 'Orbit ring'], ['scope', 'Crosshair']];
   // ---- the symbols: single lines in a 100 × 100 box centred on 0,0 (stroke only, so they take the line weight)
   const SYM = {
     eye: ['Eye', 'M-42 0Q0-34 42 0Q0 34-42 0Z M0 0m-12 0a12 12 0 1 0 24 0a12 12 0 1 0-24 0'],
@@ -47,10 +56,23 @@
     rook: ['Tower', 'M-26 40H26M-20 40L-16-14H16L20 40M-22-14V-38H-12V-28H-4V-38H4V-28H12V-38H22V-14'],
     infinity: ['Loop', 'M0 0C-12-18-40-18-40 0S-12 18 0 0S40-18 40 0S12 18 0 0Z'],
     stack: ['Chevrons', 'M-36-10L0-36L36-10M-36 10L0-16L36 10M-36 30L0 4L36 30'],
-    hand: ['Open hand', 'M-22 40V0L-30-16M-22 0V-26M-8-4V-38M6-4V-36M20 0V-26M20 0V18C20 32 10 40-4 40H-22']
+    hand: ['Open hand', 'M-22 40V0L-30-16M-22 0V-26M-8-4V-38M6-4V-36M20 0V-26M20 0V18C20 32 10 40-4 40H-22'],
+    network: ['Network', 'M0 0m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0 M-34-30m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M34-30m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M-30 34m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M30 34m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M-5-5L-29-25M5-5L29-25M-5 5L-25 29M5 5L25 29M-28-30H28M-30 28V-24'],
+    neural: ['Neural', 'M-4-38C-30-40-42-18-34 0C-44 14-30 36-8 34C-2 40 4 40 8 34C30 36 44 14 34 0C42-18 30-40 4-38C2-42-2-42-4-38Z M0-38V34 M-34 0H-14L-6-12M34 0H14L6 12M-22-22L-10-14M22 22L10 14'],
+    lock: ['Lock', 'M-28-4H28V40H-28Z M-18-4V-20C-18-44 18-44 18-20V-4 M0 10V24 M0 12m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0'],
+    shield: ['Shield', 'M0-44L36-30V2C36 24 20 38 0 46C-20 38-36 24-36 2V-30Z M0-30V32 M-22-8H22'],
+    hexcore: ['Hex core', 'M0-42L36-21V21L0 42L-36 21V-21Z M0-20L17-10V10L0 20L-17 10V-10Z M0-42V-20M36 21L17 10M-36 21L-17 10'],
+    radar: ['Radar', 'M0 0m-40 0a40 40 0 1 0 80 0a40 40 0 1 0-80 0 M0 0m-24 0a24 24 0 1 0 48 0a24 24 0 1 0-48 0 M0 0L28-28 M0-40V40M-40 0H40 M16-10m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0'],
+    power: ['Power', 'M0-42V-2 M-20-30A32 32 0 1 0 20-30'],
+    cursor: ['Cursor', 'M-22-40L22 2H2L14 30L4 34L-8 6L-22 20Z'],
+    ascend: ['Level up', 'M0-44L30-14H12V8H-12V-14H-30Z M-24 22H24M-24 34H24M-24 46H24'],
+    target: ['Target lock', 'M-40-24V-40H-24M24-40H40V-24M40 24V40H24M-24 40H-40V24 M0 0m-14 0a14 14 0 1 0 28 0a14 14 0 1 0-28 0 M0-6V6M-6 0H6'],
+    glyph: ['Data glyph', 'M-36-36H-12V-12H-36Z M12-36H36V-12H12Z M-36 12H-12V36H-36Z M12 12H24V24H12Z M24 24H36V36H24Z M-12-24H12M-24-12V12M24-12V12']
   };
   const SYM_KEYS = Object.keys(SYM);
-  const blank = () => ({ frame: 'hex', symbol: 'eye', scheme: 'neon', name: '', desig: '', code: '', weight: 5, panel: true, ticks: true, double: true, custom: null });
+  const blank = () => ({ frame: 'hex', symbol: 'eye', scheme: 'neon', name: '', desig: '', code: '', weight: 5, panel: true, ticks: true, double: true, custom: null, pattern: 'none', symScale: 1, rank: 0, glow: false, nodes: false, readout: false, barcode: false, glitch: false, orbit: false, scope: false });
+  // a steady number from the name, so barcodes and readouts don't change every time it's drawn
+  const hash = str => { let h = 2166136261; for (const c of String(str || 'unwip')) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
   const COND = "'Bahnschrift SemiCondensed', Bahnschrift, 'DIN Condensed', 'Avenir Next Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif";
   const colours = d => Object.assign({}, SCHEMES[d.scheme] || SCHEMES.neon, d.custom || {});
 
@@ -67,6 +89,52 @@
       case 'diamond': return `<polygon points="200,22 378,200 200,378 22,200" ${s}/>${d.double ? `<polygon points="200,54 346,200 200,346 54,200" ${a}/>` : ''}${d.ticks ? `<path d="M200 22V40M200 360V378M22 200H40M360 200H378" ${a}/>` : ''}`;
       case 'notched': { let p = ''; const n = 8, r = 168, gap = 0.14; for (let i = 0; i < n; i++) { const a0 = i * 2 * Math.PI / n + gap, a1 = (i + 1) * 2 * Math.PI / n - gap; p += `M${(200 + r * Math.cos(a0)).toFixed(1)} ${(200 + r * Math.sin(a0)).toFixed(1)}A${r} ${r} 0 0 1 ${(200 + r * Math.cos(a1)).toFixed(1)} ${(200 + r * Math.sin(a1)).toFixed(1)}`; }
         return `<path d="${p}" ${s} stroke-linecap="butt"/>${d.double ? `<circle cx="200" cy="200" r="146" ${a}/>` : ''}${d.ticks ? ticks(184, 8, 16) : ''}`; }
+      case 'octagon': return `<polygon points="${poly(8, 174, -Math.PI / 8)}" ${s}/>${d.double ? `<polygon points="${poly(8, 152, -Math.PI / 8)}" ${a}/>` : ''}${d.ticks ? ticks(174, 8, 14) : ''}`;
+      case 'shield': return `<polygon points="200,24 352,64 352,228 200,376 48,228 48,64" ${s}/>${d.double ? `<polygon points="200,50 330,84 330,220 200,348 70,220 70,84" ${a}/>` : ''}${d.ticks ? `<path d="M200 24V44M48 146H66M334 146H352" ${a}/>` : ''}`;
+      case 'triangle': return `<polygon points="${poly(3, 190, -Math.PI / 2).replace(/,/g, ',')}" transform="translate(0 30)" ${s}/>${d.double ? `<polygon points="${poly(3, 160, -Math.PI / 2)}" transform="translate(0 30)" ${a}/>` : ''}${d.ticks ? `<path d="M200 40V60" ${a}/>` : ''}`;
+      case 'split': { let p = ''; for (let i = 0; i < 6; i++) { const q0 = -Math.PI / 2 + i * Math.PI / 3, q1 = q0 + Math.PI / 3, f = 0.12; const P = (q, r) => [200 + r * Math.cos(q), 200 + r * Math.sin(q)]; const [x0, y0] = P(q0, 172), [x1, y1] = P(q1, 172); p += `M${(x0 + (x1 - x0) * f).toFixed(1)} ${(y0 + (y1 - y0) * f).toFixed(1)}L${(x1 - (x1 - x0) * f).toFixed(1)} ${(y1 - (y1 - y0) * f).toFixed(1)}`; }
+        return `<path d="${p}" ${s} stroke-linecap="square"/>${d.double ? `<polygon points="${poly(6, 150, -Math.PI / 2)}" ${a}/>` : ''}${d.ticks ? ticks(176, 6, 10) : ''}`; }
+      case 'circuit': { let p = '', dots = ''; for (let i = 0; i < 12; i++) { const q = i * Math.PI / 6 + Math.PI / 12, out = i % 2 === 0, r0 = 164, r1 = out ? 180 : 146, q2 = q + (out ? 0.08 : -0.08);
+          const X = (r, qq) => (200 + r * Math.cos(qq)).toFixed(1), Y = (r, qq) => (200 + r * Math.sin(qq)).toFixed(1);
+          p += `M${X(r0, q)} ${Y(r0, q)}L${X(r1, q)} ${Y(r1, q)}L${X(r1, q2)} ${Y(r1, q2)}`; dots += `<circle cx="${X(r1, q2)}" cy="${Y(r1, q2)}" r="${Math.max(3, w * 0.7)}" fill="${C.bg}" stroke="${C.acc}" stroke-width="${Math.max(1.5, w * 0.4)}"/>`; }
+        return `<circle cx="200" cy="200" r="164" ${s}/><path d="${p}" fill="none" stroke="${C.acc}" stroke-width="${Math.max(1.5, w * 0.45)}"/>${dots}${d.double ? `<circle cx="200" cy="200" r="132" ${a} stroke-dasharray="10 6"/>` : ''}`; }
+      case 'gear': { let p = ''; const n = 16, R1 = 176, R0 = 158; for (let i = 0; i < n; i++) { const q = i * 2 * Math.PI / n, h = Math.PI / n * 0.55, pt = (r, qq) => `${(200 + r * Math.cos(qq)).toFixed(1)} ${(200 + r * Math.sin(qq)).toFixed(1)}`; p += `${i ? 'L' : 'M'}${pt(R0, q - h * 1.4)}L${pt(R1, q - h)}L${pt(R1, q + h)}L${pt(R0, q + h * 1.4)}`; }
+        return `<path d="${p}Z" ${s}/>${d.double ? `<circle cx="200" cy="200" r="138" ${a}/>` : ''}${d.ticks ? ticks(138, 24, 8) : ''}`; }
+      case 'brackets': { const k = 70, b = (x, y, dx, dy) => `M${x + dx * k} ${y}H${x}V${y + dy * k}`;
+        return `<path d="${b(30, 30, 1, 1)}${b(370, 30, -1, 1)}${b(30, 370, 1, -1)}${b(370, 370, -1, -1)}" ${s} stroke-linecap="square"/>${d.double ? `<rect x="54" y="54" width="292" height="292" ${a} stroke-dasharray="4 8"/>` : ''}${d.ticks ? `<path d="M200 30V48M200 352V370M30 200H48M352 200H370" ${a}/>` : ''}`; }
+      default: return '';
+    }
+  }
+  // where the frame's corners are, for nodes
+  function cornersOf(d) {
+    const pts = (n, r, rot) => [...Array(n)].map((_, i) => [200 + r * Math.cos(rot + i * 2 * Math.PI / n), 200 + r * Math.sin(rot + i * 2 * Math.PI / n)]);
+    switch (d.frame) {
+      case 'hex': case 'split': return pts(6, 172, -Math.PI / 2);
+      case 'octagon': return pts(8, 174, -Math.PI / 8);
+      case 'diamond': return [[200, 22], [378, 200], [200, 378], [22, 200]];
+      case 'chevron': return [[40, 52], [200, 92], [360, 52], [360, 250], [200, 370], [40, 250]];
+      case 'shield': return [[200, 24], [352, 64], [352, 228], [200, 376], [48, 228], [48, 64]];
+      case 'triangle': return pts(3, 190, -Math.PI / 2).map(([x, y]) => [x, y + 30]);
+      case 'badge': return [[70, 30], [330, 30], [370, 70], [370, 330], [330, 370], [70, 370], [30, 330], [30, 70]];
+      case 'brackets': return [[30, 30], [370, 30], [370, 370], [30, 370]];
+      default: return pts(8, 172, -Math.PI / 2);
+    }
+  }
+  function patternSVG(d, C) {
+    const o = (sw = 1, op = .16) => `stroke="${C.main}" stroke-width="${sw}" fill="none" opacity="${op}"`;
+    let p = '';
+    switch (d.pattern) {
+      case 'grid': for (let v = 40; v <= 360; v += 20) p += `M${v} 40V360M40 ${v}H360`; return `<path d="${p}" ${o()}/>`;
+      case 'hexgrid': { const r = 14, w = r * Math.sqrt(3); for (let row = 0; row < 20; row++) for (let col = 0; col < 16; col++) { const cx = 40 + col * w + (row % 2 ? w / 2 : 0), cy = 40 + row * r * 1.5; p += `M${(cx).toFixed(1)} ${(cy - r).toFixed(1)}l${(w / 2).toFixed(1)} ${r / 2}v${r}l${(-w / 2).toFixed(1)} ${r / 2}l${(-w / 2).toFixed(1)} ${-r / 2}v${-r}z`; } return `<path d="${p}" ${o()}/>`; }
+      case 'circuit': { const h = hash(d.name + d.symbol); for (let i = 0; i < 18; i++) { const r = (h >>> (i % 24)) ^ (i * 2654435761 >>> 0), x = 60 + (r % 280), y = 60 + ((r >>> 9) % 280), l = 20 + (r >>> 18) % 50, dir = (r >>> 3) % 4; const dx = [1, -1, 0, 0][dir] * l, dy = [0, 0, 1, -1][dir] * l; p += `M${x} ${y}l${dx} ${dy}l${dy ? 12 : 0} ${dx ? 12 : 0}`; }
+        return `<path d="${p}" ${o(1.6)}/>`; }
+      case 'scan': for (let y = 40; y <= 360; y += 6) p += `M40 ${y}H360`; return `<path d="${p}" ${o(1, .12)}/>`;
+      case 'dots': { let c = ''; for (let x = 44; x <= 356; x += 12) for (let y = 44; y <= 356; y += 12) c += `<circle cx="${x}" cy="${y}" r="1.4"/>`; return `<g fill="${C.main}" opacity=".18">${c}</g>`; }
+      case 'rays': for (let i = 0; i < 36; i++) { const q = i * Math.PI / 18; p += `M${200 + 40 * Math.cos(q)} ${200 + 40 * Math.sin(q)}L${200 + 220 * Math.cos(q)} ${200 + 220 * Math.sin(q)}`; } return `<path d="${p}" ${o()}/>`;
+      case 'network': { const h = hash(d.name + 'net'), pts = [...Array(14)].map((_, i) => { const r = Math.imul(h ^ (i + 1) * 40503, 2246822519) >>> 0; return [60 + r % 280, 60 + (r >>> 12) % 280]; });
+        pts.forEach((a, i) => { const b = pts[(i + 3) % pts.length], c = pts[(i + 5) % pts.length]; p += `M${a[0]} ${a[1]}L${b[0]} ${b[1]}M${a[0]} ${a[1]}L${c[0]} ${c[1]}`; });
+        return `<path d="${p}" ${o()}/><g fill="${C.main}" opacity=".3">${pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3"/>`).join('')}</g>`; }
+      case 'rings': for (let r = 30; r <= 200; r += 18) p += `<circle cx="200" cy="200" r="${r}"/>`; return `<g ${o()}>${p}</g>`;
       default: return '';
     }
   }
@@ -79,13 +147,32 @@
     const L = (d.name || '').length, fs = L > 16 ? 32 : 40, ls = L > 16 ? 3 : 6;
     const fit = (n, f, sp, max) => n * (f * 0.56 + sp) > max ? ` textLength="${max}" lengthAdjust="spacingAndGlyphs"` : '';
     const text = hasText ? `<text x="200" y="${d.desig ? 450 : 462}" text-anchor="middle" font-family="${COND}" font-weight="700" font-size="${fs}" letter-spacing="${ls}"${fit(nm.length, fs, ls, 350)} fill="${C.main}">${nm}</text>
-      ${dg ? `<path d="M40 482H${200 - Math.min(150, dg.length * 6.5)}M${200 + Math.min(150, dg.length * 6.5)} 482H360" stroke="${C.acc}" stroke-width="2"/><text x="200" y="488" text-anchor="middle" font-family="${COND}" font-size="17" letter-spacing="4"${fit((d.desig || '').length, 17, 4, 300)} fill="${C.acc}">${dg}</text>` : ''}
+      ${dg ? `<path d="M40 482H${200 - Math.min(160, (d.desig || '').length * 6.8 + 12)}M${200 + Math.min(160, (d.desig || '').length * 6.8 + 12)} 482H360" stroke="${C.acc}" stroke-width="2"/><text x="200" y="488" text-anchor="middle" font-family="${COND}" font-size="17" letter-spacing="4"${fit((d.desig || '').length, 17, 4, 300)} fill="${C.acc}">${dg}</text>` : ''}
       ${cd ? `<text x="372" y="512" text-anchor="end" font-family="Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="${C.main}" opacity=".6">${cd}</text>` : ''}` : '';
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 ${H}" width="${size}" height="${Math.round(size * H / 400)}">
-      ${d.panel ? `<rect width="400" height="${H}" fill="${C.bg}"/>` : ''}
+    const sk = k * (+d.symScale || 1), syCy = cy + (d.frame === 'triangle' ? 40 : 0) - (d.rank ? 16 : 0);
+    const symPath = (col, op, dx) => `<g transform="translate(${200 + (dx || 0)} ${syCy}) scale(${sk})"><path d="${sym[1]}" fill="none" stroke="${col}" stroke-width="${symW / (+d.symScale || 1)}" stroke-linejoin="round" stroke-linecap="round"${op ? ` opacity="${op}"` : ''}/></g>`;
+    const hv = hash(d.name + d.code + d.desig);
+    const extras = [];
+    if (d.orbit) extras.push(`<circle cx="200" cy="${syCy}" r="${Math.min(118, 50 * sk + 18)}" fill="none" stroke="${C.acc}" stroke-width="1.6" stroke-dasharray="3 7"/><circle cx="${200 + Math.min(118, 50 * sk + 18) * Math.cos(-0.7)}" cy="${syCy + Math.min(118, 50 * sk + 18) * Math.sin(-0.7)}" r="5" fill="${C.acc}"/>`);
+    if (d.scope) extras.push(`<path d="M200 ${syCy - 140}V${syCy - 100}M200 ${syCy + 100}V${syCy + 140}M60 ${syCy}H100M300 ${syCy}H340" stroke="${C.acc}" stroke-width="1.6"/>`);
+    if (d.nodes) { const cs = cornersOf(d); extras.push(`<path d="${cs.map(([x, y]) => { const q = Math.atan2(y - syCy, x - 200), r = 62 * Math.min(1.4, sk / 2.15 + 0.3); return `M${x.toFixed(1)} ${y.toFixed(1)}L${(200 + r * Math.cos(q)).toFixed(1)} ${(syCy + r * Math.sin(q)).toFixed(1)}`; }).join('')}" stroke="${C.acc}" stroke-width="1" opacity=".55" stroke-dasharray="2 4"/>${cs.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${Math.max(5, d.weight * 1.1)}" fill="${C.bg}" stroke="${C.acc}" stroke-width="${Math.max(1.6, d.weight * 0.45)}"/>`).join('')}`); }
+    if (d.rank) extras.push([...Array(+d.rank)].map((_, i) => `<path d="M168 ${syCy + 92 + i * 14}L200 ${syCy + 80 + i * 14}L232 ${syCy + 92 + i * 14}" fill="none" stroke="${C.acc}" stroke-width="5" stroke-linejoin="miter"/>`).join(''));
+    if (d.readout) { const L = (d.code || ('SYS-' + String(hv % 97).padStart(2, '0'))).toUpperCase(), R = '0x' + hv.toString(16).toUpperCase().padStart(8, '0');
+      extras.push(`<text transform="translate(16 200) rotate(-90)" text-anchor="middle" font-family="Menlo, Consolas, monospace" font-size="11" letter-spacing="3" fill="${C.main}" opacity=".55">${esc(L)} // ${esc((d.desig || 'UNIT').toUpperCase().slice(0, 12))}</text><text transform="translate(384 200) rotate(90)" text-anchor="middle" font-family="Menlo, Consolas, monospace" font-size="11" letter-spacing="3" fill="${C.main}" opacity=".55">${R}</text>`); }
+    const barH = d.barcode ? 34 : 0, H2 = H + barH;
+    let barcode = '';
+    if (d.barcode) { let x = 120, b = ''; for (let i = 0; i < 48 && x < 280; i++) { const w = 1 + ((hv >>> (i % 29)) ^ i * 7) % 4; if (i % 2 === 0) b += `<rect x="${x}" y="${H + 4}" width="${w}" height="22"/>`; x += w + 1; } barcode = `<g fill="${C.main}" opacity=".8">${b}</g>`; }
+    const glow = d.glow ? `<defs><filter id="in-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${3 + d.weight * 0.4}" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>` : '';
+    const clip = `<clipPath id="in-clip"><circle cx="200" cy="200" r="150"/></clipPath>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 ${H2}" width="${size}" height="${Math.round(size * H2 / 400)}">
+      <defs>${clip}</defs>${glow}
+      ${d.panel ? `<rect width="400" height="${H2}" fill="${C.bg}"/>` : ''}
+      ${d.pattern && d.pattern !== 'none' ? `<g clip-path="url(#in-clip)">${patternSVG(d, C)}</g>` : ''}
+      <g${d.glow ? ' filter="url(#in-glow)"' : ''}>
       ${frameSVG(d, C)}
-      <g transform="translate(200 ${cy}) scale(${k})"><path d="${sym[1]}" fill="none" stroke="${C.main}" stroke-width="${symW}" stroke-linejoin="round" stroke-linecap="round"/></g>
-      ${text}</svg>`;
+      ${d.glitch ? symPath(C.acc, .75, -5) + symPath(C.main, .35, 5) : ''}${symPath(C.main)}
+      ${extras.join('')}</g>
+      ${text}${barcode}</svg>`;
   }
   const symIcon = (k, col) => `<svg viewBox="-52 -52 104 104" width="34" height="34"><path d="${SYM[k][1]}" fill="none" stroke="${col}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
   const rnd = a => a[Math.floor(Math.random() * a.length)];
@@ -97,7 +184,7 @@
     it.data = Object.assign(blank(), it.data || {});
     if (!it.data.name && it.title && it.title !== 'Untitled') it.data.name = it.title;
     c.extra.innerHTML = '<button class="btn small" id="in-rand" title="Roll a random frame, symbol and colours (dice, not AI)">🎲 Random</button>';
-    $('#in-rand', c.extra).onclick = () => { const d = it.data; d.frame = rnd(Object.keys(FRAMES).filter(f => f !== 'none')); d.symbol = rnd(SYM_KEYS); d.scheme = rnd(Object.keys(SCHEMES)); d.custom = null; d.double = Math.random() < 0.6; d.ticks = Math.random() < 0.6; save(); draw(); };
+    $('#in-rand', c.extra).onclick = () => { const d = it.data; d.frame = rnd(Object.keys(FRAMES).filter(f => f !== 'none')); d.symbol = rnd(SYM_KEYS); d.scheme = rnd(Object.keys(SCHEMES)); d.custom = null; d.double = Math.random() < 0.6; d.ticks = Math.random() < 0.6; d.pattern = Math.random() < 0.5 ? rnd(Object.keys(PATTERNS)) : 'none'; d.nodes = Math.random() < 0.3; d.glow = Math.random() < 0.35; d.readout = Math.random() < 0.3; d.rank = Math.random() < 0.25 ? 1 + Math.floor(Math.random() * 3) : 0; save(); draw(); };
     draw(); wire();
   }
   const save = () => ctx.changed();
@@ -112,7 +199,10 @@
         <section class="bm-card"><h2>Frame</h2><div class="chip-row">${Object.entries(FRAMES).map(([k, v]) => `<button type="button" class="chip ${d.frame === k ? 'on' : ''}" data-frame="${k}">${v}</button>`).join('')}</div>
           <div class="in-toggles"><label class="check"><input type="checkbox" data-t="double" ${d.double ? 'checked' : ''}> Inner line</label><label class="check"><input type="checkbox" data-t="ticks" ${d.ticks ? 'checked' : ''}> Marks</label><label class="check"><input type="checkbox" data-t="panel" ${d.panel ? 'checked' : ''}> Background</label></div>
           <label class="in-w">Line weight <input type="range" data-d="weight" min="2" max="12" step="0.5" value="${d.weight}"></label></section>
-        <section class="bm-card"><h2>Symbol</h2><div class="in-syms">${SYM_KEYS.map(k => `<button type="button" class="in-sym ${d.symbol === k ? 'on' : ''}" data-sym="${k}" title="${esc(SYM[k][0])}">${symIcon(k, '#2a2a2a')}</button>`).join('')}</div></section>
+        <section class="bm-card"><h2>Pattern</h2><div class="chip-row">${Object.entries(PATTERNS).map(([k, v]) => `<button type="button" class="chip ${(d.pattern || 'none') === k ? 'on' : ''}" data-pat="${k}">${v}</button>`).join('')}</div></section>
+        <section class="bm-card"><h2>Extras</h2><div class="in-toggles">${EXTRAS.map(([k, v]) => `<label class="check"><input type="checkbox" data-t="${k}" ${d[k] ? 'checked' : ''}> ${v}</label>`).join('')}</div>
+          <label class="in-w">Rank chevrons <select data-d="rank">${[0, 1, 2, 3].map(n => `<option value="${n}" ${+d.rank === n ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></label></section>
+        <section class="bm-card"><h2>Symbol</h2><label class="in-w">Size <input type="range" data-d="symScale" min="0.5" max="1.5" step="0.05" value="${d.symScale || 1}"></label><div class="in-syms">${SYM_KEYS.map(k => `<button type="button" class="in-sym ${d.symbol === k ? 'on' : ''}" data-sym="${k}" title="${esc(SYM[k][0])}">${symIcon(k, '#2a2a2a')}</button>`).join('')}</div></section>
         <section class="bm-card"><h2>Colours</h2><div class="chip-row">${Object.entries(SCHEMES).map(([k, v]) => `<button type="button" class="chip in-sch ${d.scheme === k && !d.custom ? 'on' : ''}" data-sch="${k}"><i style="background:${v.bg}"></i><i style="background:${v.main}"></i><i style="background:${v.acc}"></i>${v.name}</button>`).join('')}</div>
           <div class="in-cols"><label>Background <input type="color" data-c="bg" value="${C.bg}"></label><label>Lines <input type="color" data-c="main" value="${C.main}"></label><label>Accent <input type="color" data-c="acc" value="${C.acc}"></label></div></section>
       </div></div>`;
@@ -122,7 +212,7 @@
   function wire() {
     box.oninput = e => {
       const t = e.target, d = it.data;
-      if (t.dataset.d) { d[t.dataset.d] = t.type === 'range' ? +t.value : t.value; if (t.dataset.d === 'name' && (!it.title || it.title === 'Untitled')) it.title = t.value; }
+      if (t.dataset.d) { d[t.dataset.d] = t.type === 'range' || t.dataset.d === 'rank' ? +t.value : t.value; if (t.dataset.d === 'name' && (!it.title || it.title === 'Untitled')) it.title = t.value; }
       else if (t.dataset.c) { d.custom = Object.assign({}, d.custom || {}, { [t.dataset.c]: t.value }); $$('.in-sch', box).forEach(b => b.classList.remove('on')); }
       else if (t.dataset.t) d[t.dataset.t] = t.checked;
       else return;
@@ -133,11 +223,12 @@
       if (t.dataset.frame) d.frame = t.dataset.frame;
       else if (t.dataset.sym) d.symbol = t.dataset.sym;
       else if (t.dataset.sch) { d.scheme = t.dataset.sch; d.custom = null; }
+      else if (t.dataset.pat) d.pattern = t.dataset.pat;
       else return;
       save(); draw();
     };
   }
-  const size = d => (d.name || d.desig || d.code) ? 520 : 400;
+  const size = d => ((d.name || d.desig || d.code) ? 520 : 400) + (d.barcode ? 34 : 0);
   B.editors.insignia = {
     blank, open,
     thumb: item => B.svgURL(insigniaSVG(Object.assign(blank(), item.data || {}), 200)),

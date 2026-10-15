@@ -159,7 +159,7 @@
     return `<div class="bm-spell ${probs.length ? 'bad' : 'good'}" data-id="${s.id}">
       <div class="bm-sh"><input class="bm-sname" data-sp="name" value="${esc(s.name)}" placeholder="Name of the spell">
         <label class="bm-pow">Power <select data-sp="power">${[1, 2, 3, 4, 5].map(p => `<option ${(s.power || 1) === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
-        <button class="icon-btn small" data-del-spell title="Remove">×</button></div>
+        <button class="btn small ghost" data-sp-win title="See this spell as a game’s skill window (LitRPG)">◆ Window</button><button class="icon-btn small" data-del-spell title="Remove">×</button></div>
       <div class="bm-chips"><span>Draws on</span>${d.elements.map(e => `<button type="button" class="chip ${(s.elements || []).includes(e.id) ? 'on' : ''}" data-sp-el="${e.id}">${esc(e.name || 'unnamed')}</button>`).join('') || '<em>add elements above</em>'}</div>
       <div class="bm-chips"><span>Costs</span>${d.costs.map(c => `<button type="button" class="chip ${(s.costs || []).includes(c.id) ? 'on' : ''}" data-sp-cost="${c.id}">${esc(c.name || 'unnamed')} <small>${c.weight}</small></button>`).join('') || '<em>add costs above</em>'}</div>
       <textarea data-sp="what" rows="2" placeholder="What it does, how it’s cast">${esc(s.what || '')}</textarea>
@@ -206,6 +206,7 @@
       else if (t.hasAttribute('data-del-el')) { d.spells.forEach(s => s.elements = (s.elements || []).filter(x => x !== id)); drop(d.elements, 'elements'); }
       else if (t.hasAttribute('data-del-rule')) drop(d.rules, 'rules');
       else if (t.hasAttribute('data-del-spell')) drop(d.spells, 'spells');
+      else if (t.hasAttribute('data-sp-win')) spellWindow(d.spells.find(x => x.id === id));
       else if (t.dataset.spEl || t.dataset.spCost) {
         const s = d.spells.find(x => x.id === id), key = t.dataset.spEl ? 'elements' : 'costs', v = t.dataset.spEl || t.dataset.spCost;
         s[key] = (s[key] || []).includes(v) ? s[key].filter(x => x !== v) : [...(s[key] || []), v];
@@ -259,7 +260,8 @@
     if (d.elements.length) h += `<h3>Elements</h3><ul>${d.elements.map(c => `<li><b>${esc(c.name)}</b>${c.what ? ': ' + esc(c.what) : ''}</li>`).join('')}</ul>`;
     const rules = d.rules.filter(r => !r.off && RULES[r.type]);
     if (rules.length) h += `<h3>Rules</h3><ul>${rules.map(r => `<li>${esc(RULES[r.type].text.replace(/\{(\w)(?::(\w+))?\}/g, (_, k, kind) => k === 'n' ? String(r.n || 3) : nameOf(kind === 'cost' ? d.costs : d.elements, r[k])))}</li>`).join('')}</ul>`;
-    if (d.spells.length) h += `<h3>Spells</h3>${d.spells.map(s => `<p><b>${esc(s.name || 'Unnamed spell')}</b> · power ${s.power || 1}${(s.elements || []).length ? ' · ' + s.elements.map(id => esc(nameOf(d.elements, id))).join(', ') : ''}${(s.costs || []).length ? ' · costs ' + s.costs.map(id => esc(nameOf(d.costs, id))).join(', ') : ''}${s.what ? '<br>' + p(s.what) : ''}</p>`).join('')}`;
+    if (d.spells.length && lookOf(d).theme === 'system') h += `<h3>Skills</h3>${d.spells.map(sp => spellText(d, sp).map(l => `<p>${esc(l)}</p>`).join('')).join('<p></p>')}`;
+    else if (d.spells.length) h += `<h3>Spells</h3>${d.spells.map(s => `<p><b>${esc(s.name || 'Unnamed spell')}</b> · power ${s.power || 1}${(s.elements || []).length ? ' · ' + s.elements.map(id => esc(nameOf(d.elements, id))).join(', ') : ''}${(s.costs || []).length ? ' · costs ' + s.costs.map(id => esc(nameOf(d.costs, id))).join(', ') : ''}${s.what ? '<br>' + p(s.what) : ''}</p>`).join('')}`;
     if ((d.notes || '').trim()) h += `<h3>Notes</h3><p>${p(d.notes)}</p>`;
     return h;
   }
@@ -269,12 +271,68 @@
     clean: { name: 'Clean', bg: '#ffffff', ink: '#1f2430', soft: '#4a5262', line: '#9aa3b2', accent: '#34528a', disc: '#f4f6fa' },
     night: { name: 'Night', bg: '#141a26', ink: '#ece6d6', soft: '#b9b2a2', line: '#c9a85c', accent: '#e0b65a', disc: '#1f2738' },
     arcane: { name: 'Violet', bg: '#24163a', ink: '#f1e9ff', soft: '#cdbbe9', line: '#9b7be0', accent: '#7fd6c8', disc: '#33214f' },
-    blood: { name: 'Blood', bg: '#2a1012', ink: '#f6e6dc', soft: '#d8b4a8', line: '#a8342e', accent: '#ff8a5c', disc: '#3a171a' }
+    blood: { name: 'Blood', bg: '#2a1012', ink: '#f6e6dc', soft: '#d8b4a8', line: '#a8342e', accent: '#ff8a5c', disc: '#3a171a' },
+    system: { name: 'System', bg: '#07101e', ink: '#e6f6ff', soft: '#8fb6cf', line: '#5fd0ff', accent: '#ffd36b', disc: '#0c1a2c' }
   };
   const lookOf = d => Object.assign({ theme: 'parchment', frame: 'double', summary: true, costs: true, kinds: true, count: true }, d.look || {});
+  // ---- the System look: drawn like a game's status window (LitRPG), monospace, glowing lines, bars for costs
+  const MONO = "Menlo, Consolas, 'DejaVu Sans Mono', monospace";
+  const GLOW = '<defs><filter id="bm-glow" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+  const wrapW = (s, n, max) => { const words = String(s || '').split(/\s+/), lines = []; let l = ''; for (const x of words) { if ((l + ' ' + x).trim().length > n) { lines.push(l.trim()); l = x; } else l += ' ' + x; } if (l.trim()) lines.push(l.trim()); return lines.slice(0, max); };
+  function hud(W, H, P, label, right) {
+    const k = 22, br = (x, y, dx, dy) => `M${x + dx * k} ${y}H${x}V${y + dy * k}`;
+    return `<rect width="${W}" height="${H}" fill="${P.bg}"/>${GLOW}
+      <rect x="14" y="14" width="${W - 28}" height="${H - 28}" fill="none" stroke="${P.line}" stroke-width="1" opacity=".4"/>
+      <path d="${br(14, 14, 1, 1)}${br(W - 14, 14, -1, 1)}${br(14, H - 14, 1, -1)}${br(W - 14, H - 14, -1, -1)}" fill="none" stroke="${P.line}" stroke-width="3"/>
+      <rect x="30" y="30" width="${W - 60}" height="34" fill="${P.line}" opacity=".12"/>
+      <text x="44" y="53" font-family="${MONO}" font-size="16" letter-spacing="3" fill="${P.line}">◆ ${esc(label)}</text>
+      <text x="${W - 44}" y="53" text-anchor="end" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${P.accent}">${esc(right)}</text>`;
+  }
+  const bar = (x, y, n, P) => [1, 2, 3, 4, 5].map(i => `<rect x="${x + (i - 1) * 16}" y="${y - 11}" width="12" height="12" fill="${i <= n ? P.line : 'none'}" stroke="${P.line}" stroke-width="1" opacity="${i <= n ? 1 : .45}"/>`).join('');
+  function systemCardSVG(item, d, L, w, h) {
+    const P = LOOKS.system, x = s => esc(s || '');
+    const sum = L.summary ? wrapW(d.answers.summary, 62, 2) : [];
+    const costs = L.costs ? d.costs.slice(0, 4) : [], kinds = L.kinds ? d.elements.filter(e => (e.name || '').trim()).slice(0, 6) : [];
+    let y = 128;
+    let out = `<text x="44" y="${y}" font-family="${MONO}" font-size="40" font-weight="700" letter-spacing="2" fill="${P.ink}" filter="url(#bm-glow)">${x((item.title || 'Magic system').toUpperCase())}</text>`;
+    y += 36; out += sum.map((l, i) => `<text x="44" y="${y + i * 26}" font-family="${MONO}" font-size="17" fill="${P.soft}">&gt; ${x(l)}</text>`).join(''); y += sum.length * 26 + 18;
+    if (costs.length) { out += `<text x="44" y="${y}" font-family="${MONO}" font-size="13" letter-spacing="3" fill="${P.line}" opacity=".8">COSTS</text>`; y += 28;
+      costs.forEach(c => { out += `<text x="44" y="${y}" font-family="${MONO}" font-size="17" fill="${P.ink}">${x((c.name || 'unnamed').toUpperCase().slice(0, 18))}</text>${bar(300, y, c.weight || 1, P)}<text x="392" y="${y}" font-family="${MONO}" font-size="14" fill="${P.soft}">${x(WEIGHT[c.weight] || '')}</text>`; y += 28; }); y += 6; }
+    if (kinds.length) { let at = 44; out += `<text x="44" y="${y}" font-family="${MONO}" font-size="13" letter-spacing="3" fill="${P.line}" opacity=".8">SCHOOLS</text>`; y += 30;
+      kinds.forEach(k => { const t = `[${(k.name || '').toUpperCase()}]`; out += `<text x="${at}" y="${y}" font-family="${MONO}" font-size="17" fill="${P.accent}">${x(t)}</text>`; at += t.length * 10.5 + 16; }); }
+    const foot = L.count ? `<text x="44" y="${h > 0 ? 458 : 458}" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${P.soft}">SKILLS: ${d.spells.length}  //  SCHOOLS: ${d.elements.length}  //  RULES: ${d.rules.filter(r => !r.off).length}</text>` : '';
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="${w}" height="${h}">${hud(800, 500, P, 'MAGIC SYSTEM', '[ ACTIVE ]')}${out}${foot}</svg>`;
+  }
+  // one spell as a game's skill window
+  function spellSVG(d, s, w = 640) {
+    const P = LOOKS.system, x = t => esc(t || ''), els = (s.elements || []).map(id => nameOf(d.elements, id)), cs = (s.costs || []).map(id => d.costs.find(c => c.id === id)).filter(Boolean);
+    const what = wrapW(s.what, 48, 4), H = 250 + what.length * 24 + cs.length * 26;
+    let y = 108, out = `<text x="40" y="${y}" font-family="${MONO}" font-size="30" font-weight="700" letter-spacing="1.5" fill="${P.ink}" filter="url(#bm-glow)">${x((s.name || 'Unnamed spell').toUpperCase())}</text>`;
+    y += 40; out += `<text x="40" y="${y}" font-family="${MONO}" font-size="15" fill="${P.soft}">RANK</text>${[1, 2, 3, 4, 5].map(i => `<text x="${150 + (i - 1) * 22}" y="${y}" font-family="${MONO}" font-size="18" fill="${i <= (s.power || 1) ? P.accent : P.soft}" opacity="${i <= (s.power || 1) ? 1 : .35}">★</text>`).join('')}`;
+    y += 30; out += `<text x="40" y="${y}" font-family="${MONO}" font-size="15" fill="${P.soft}">SCHOOL</text><text x="150" y="${y}" font-family="${MONO}" font-size="15" fill="${P.ink}">${x(els.join(' + ') || '—')}</text>`;
+    y += 30; out += `<text x="40" y="${y}" font-family="${MONO}" font-size="15" fill="${P.soft}">COST</text>`;
+    if (!cs.length) out += `<text x="150" y="${y}" font-family="${MONO}" font-size="15" fill="${P.ink}">—</text>`;
+    cs.forEach((c, i) => { out += `<text x="150" y="${y + i * 26}" font-family="${MONO}" font-size="15" fill="${P.ink}">${x((c.name || '').toUpperCase().slice(0, 16))}</text>${bar(350, y + i * 26, c.weight || 1, P)}`; });
+    y += Math.max(1, cs.length) * 26 + 10;
+    out += what.map((l, i) => `<text x="40" y="${y + i * 24}" font-family="${MONO}" font-size="15" fill="${P.soft}">${x(l)}</text>`).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 ${H}" width="${w}" height="${Math.round(w * H / 640)}">${hud(640, H, P, 'SKILL', '')}${out}</svg>`;
+  }
+  // the same as [bracketed] lines, the way LitRPG books print system messages (they show as boxes with LitRPG tools on)
+  function spellText(d, s) {
+    const els = (s.elements || []).map(id => nameOf(d.elements, id)), cs = (s.costs || []).map(id => nameOf(d.costs, id));
+    return [`[Skill: ${s.name || 'Unnamed spell'}]`, `[Rank: ${s.power || 1}]`, els.length ? `[School: ${els.join(', ')}]` : '', cs.length ? `[Cost: ${cs.join(', ')}]` : '', s.what ? `[${String(s.what).replace(/[\[\]]/g, '').replace(/\s+/g, ' ').trim()}]` : ''].filter(Boolean);
+  }
+  async function spellWindow(s) {
+    const d = it.data, body = document.createElement('div'); body.className = 'bm-big';
+    body.innerHTML = `<img alt="${esc(s.name || 'Spell')}" src="${B.svgURL(spellSVG(d, s, 1280))}"><p class="bm-help">Copy text gives the [bracketed] lines LitRPG books use: paste them into a chapter and, with LitRPG tools on, they show as system boxes.</p>`;
+    const v = await U.modal({ title: s.name || 'Spell', body, wide: true, buttons: [{ label: 'Copy text', value: 'text', kind: 'ghost' }, { label: 'Copy picture', value: 'copy', kind: 'ghost' }, { label: 'Save PNG…', value: 'png', kind: 'ghost' }, { label: 'Close', value: null, kind: 'primary' }] });
+    if (v === 'text') { try { await navigator.clipboard.writeText(spellText(d, s).join('\n')); U.toast('Copied. Paste it into a chapter.'); } catch { U.toast('Couldn’t copy here.', 'warn'); } }
+    else if (v) { const svg = spellSVG(d, s, 1280), m = /height="(\d+)"/.exec(svg.slice(svg.indexOf('width="1280"'))); const c = await B.svgCanvas(svg, 1280, m ? +m[1] : 600); if (v === 'copy') B.copyCanvas(c); else B.savePNG(c, s.name || 'Spell'); }
+  }
   // a picture: a card with the name, the one-line summary, the costs and the kinds of magic
   function cardSVG(item, w = 800, h = 500) {
     const d = Object.assign(blank(), item.data || {}), L = lookOf(d), P = LOOKS[L.theme] || LOOKS.parchment;
+    if (L.theme === 'system') return systemCardSVG(item, d, L, w, h);
     const wrap = (s, n) => { const words = String(s || '').split(/\s+/), lines = []; let l = ''; for (const x of words) { if ((l + ' ' + x).trim().length > n) { lines.push(l.trim()); l = x; } else l += ' ' + x; } if (l.trim()) lines.push(l.trim()); return lines.slice(0, 3); };
     const x = s => esc(s || '');
     const sum = L.summary ? wrap(d.answers.summary, 52) : [];

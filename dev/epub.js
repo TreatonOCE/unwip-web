@@ -96,7 +96,9 @@ window.FolioEPUB = (function () {
     const num = ch.numbered && t.number !== 'none' ? `${t.label ? t.label + ' ' : ''}${window.UnwipTypeset ? window.UnwipTypeset.numberText(ch.n, t) : words(ch.n)}` : '';
     const title = ch.hidden ? '' : (ch.title || (!num ? ch.raw || '' : ''));
     if (!num && !title) return '';
-    return `<div class="opener">${num ? `<p class="num">${x(num)}</p>` : ''}${t.orn ? `<p class="orn">${x(t.orn)}</p>` : ''}<h1${!title ? ' class="hidden-title"' : ''}>${x(title || num)}</h1></div>\n`;
+    // no title of its own: the number line is the heading (said once; Kindle showed "Chapter One" twice before)
+    if (!title) return `<div class="opener"><h1 class="num">${x(num)}</h1>${t.orn ? `<p class="orn">${x(t.orn)}</p>` : ''}</div>\n`;
+    return `<div class="opener">${num ? `<p class="num">${x(num)}</p>` : ''}${t.orn ? `<p class="orn">${x(t.orn)}</p>` : ''}<h1>${x(title)}</h1></div>\n`;
   }
   // LitRPG [system messages]: a paragraph that's all [bracketed] can go out as a box (Settings › LitRPG tools)
   const SYSMSG = /^\s*\[[^\[\]]*(\][^\[\]]*\[[^\[\]]*)*\]\s*$/;
@@ -145,8 +147,7 @@ ${notes.length ? `<section class="notes"><hr/>\n${notes.map((t, i) => `<aside ep
     const extra = t ? `
 .opener { text-align: ${t.align}; margin: 3em 0 2em; page-break-before: always; }
 .opener h1 { margin: .2em 0 0; page-break-before: auto; font-family: "${t.head}", serif; font-weight: normal; font-style: ${t.titleStyle === 'italic' ? 'italic' : 'normal'}; ${t.titleStyle === 'smallcaps' ? 'font-variant: small-caps; letter-spacing: .1em;' : ''}${t.titleCase === 'upper' ? 'text-transform: uppercase; letter-spacing: .05em;' : ''} text-align: ${t.align}; font-size: 1.6em; }
-.opener h1.hidden-title { font-size: 1.2em; }
-.opener p.num { text-indent: 0; text-align: ${t.align}; margin: 0; font-size: ${t.number === 'digits' && t.numSize > 2 ? '2.4em' : '1em'}; ${t.numCase === 'smallcaps' ? 'font-variant: small-caps; letter-spacing: .15em;' : t.numCase === 'upper' ? 'text-transform: uppercase; letter-spacing: .12em;' : t.numCase === 'lower' ? 'font-style: italic;' : ''} }
+.opener p.num, .opener h1.num { font-weight: normal; text-indent: 0; text-align: ${t.align}; margin: 0; font-size: ${t.number === 'digits' && t.numSize > 2 ? '2.4em' : '1em'}; ${t.numCase === 'smallcaps' ? 'font-variant: small-caps; letter-spacing: .15em;' : t.numCase === 'upper' ? 'text-transform: uppercase; letter-spacing: .12em;' : t.numCase === 'lower' ? 'font-style: italic;' : ''} }
 .opener p.orn { text-indent: 0; text-align: ${t.align}; margin: .3em 0; }
 p.drop::first-letter { float: left; font-size: 3.2em; line-height: .8; margin: .06em .08em 0 0; }
 span.lead { font-variant: small-caps; letter-spacing: .04em; }

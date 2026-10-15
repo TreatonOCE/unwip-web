@@ -25,8 +25,18 @@
   // the rune's strokes as an SVG group in grid units (0..glyphW, 0..glyphH), drawn in colour col
   // System (circuit) ends: strokes run like traces on a board, straight and at 45°, with a ring where a trace ends and
   // a dot where three or more meet. On a dark panel they glow.
-  const PANEL = { dark: '#0b1420', light: '#f4ecd8' };
-  const panelBG = A => A.panel === 'dark' ? PANEL.dark : PANEL.light;
+  const PANEL = { dark: '#0b1420', system: '#07101e', light: '#f4ecd8' };
+  const isDark = A => A.panel === 'dark' || A.panel === 'system';
+  const panelBG = A => PANEL[A.panel] || PANEL.light;
+  // the System window: a game-interface frame round a picture (border, corner brackets, a header line)
+  function hudFrame(x, y, w, h, col, label) {
+    const k = Math.min(w, h) * 0.08, b = (cx, cy, dx, dy) => `M${cx + dx * k} ${cy}H${cx}V${cy + dy * k}`;
+    return `<g fill="none" stroke="${col}"><rect x="${x + 3}" y="${y + 3}" width="${w - 6}" height="${h - 6}" stroke-width=".6" opacity=".35"/>
+      <path d="${b(x + 3, y + 3, 1, 1)}${b(x + w - 3, y + 3, -1, 1)}${b(x + 3, y + h - 3, 1, -1)}${b(x + w - 3, y + h - 3, -1, -1)}" stroke-width="1.6"/></g>
+      <text x="${x + 10}" y="${y + 13}" font-family="Menlo, Consolas, monospace" font-size="7" letter-spacing="1.2" fill="${col}" opacity=".85">${esc(String(label || 'SYSTEM').toUpperCase())}</text>
+      <path d="M${x + w - 34} ${y + 9}h5M${x + w - 27} ${y + 9}h5M${x + w - 20} ${y + 9}h10" stroke="${col}" stroke-width="2" opacity=".7"/>
+      <path d="M${x + 10} ${y + 17}H${x + w - 10}" stroke="${col}" stroke-width=".5" opacity=".4"/>`;
+  }
   function tracePath(A, s) {
     const [x1, y1] = dotXY(A, s.a), [x2, y2] = dotXY(A, s.b);
     if (s.a === s.b) return `M${x1} ${y1}h0.01`;
@@ -43,7 +53,7 @@
     const deg = {}; for (const s of list) { deg[s.a] = (deg[s.a] || 0) + 1; if (s.b !== s.a) deg[s.b] = (deg[s.b] || 0) + 1; }
     const paths = list.map(s => `<path d="${tracePath(A, s)}"/>`).join('');
     const nodes = Object.entries(deg).map(([i, n]) => { const [x, y] = dotXY(A, +i); return n === 1 ? `<circle cx="${x}" cy="${y}" r="${sw * 1.15}" fill="${panelBG(A)}" stroke-width="${sw * 0.75}"/>` : n >= 3 ? `<circle cx="${x}" cy="${y}" r="${sw * 0.95}" fill="${c}" stroke="none"/>` : ''; }).join('');
-    const glow = A.panel === 'dark' ? `<g stroke-width="${sw * 3.2}" opacity=".18" stroke-linecap="round">${paths}</g>` : '';
+    const glow = isDark(A) ? `<g stroke-width="${sw * 3.2}" opacity=".18" stroke-linecap="round">${paths}</g>` : '';
     return `<g${skew} fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="${cap}" stroke-linejoin="${join}">${glow}${paths}${nodes}</g>`;
   }
   function glyphSVG(A, g, size, col) {
@@ -90,10 +100,11 @@
       if (t.g) parts += `<g transform="translate(${x} ${y})">${glyphG(A, t.g, col)}</g>`;
       else parts += `<text x="${x + (vert ? gw / 2 : 5)}" y="${y + gh * 0.75}"${vert ? ' text-anchor="middle"' : ''} font-family="${A.cap === 'circuit' ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${gh * 0.8}" fill="${col}" opacity=".35">${esc(t.ch)}</text>`;
     }));
-    const pad = CELL;
-    const W = (vert ? lines.length * colW - CELL * 1.4 : maxLen) + pad * 2, H = (vert ? maxLen : lines.length * lineH - CELL * 1.4) + pad * 2;
-    const bg = opts.bg ? `<rect x="${-pad}" y="${-pad}" width="${W}" height="${H}" fill="${opts.bg}"/>` : '';
-    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-pad} ${-pad} ${W} ${H}" width="${W * (opts.scale || 1)}" height="${H * (opts.scale || 1)}">${bg}${parts}</svg>`, w: W, h: H };
+    const hud = A.panel === 'system', pad = hud ? CELL * 1.6 : CELL, top = hud ? pad + 14 : pad;
+    const W = Math.max((vert ? lines.length * colW - CELL * 1.4 : maxLen) + pad * 2, hud ? 120 : 0), H = (vert ? maxLen : lines.length * lineH - CELL * 1.4) + pad + top;
+    const bg = opts.bg ? `<rect x="${-pad}" y="${-top}" width="${W}" height="${H}" fill="${opts.bg}"/>` : '';
+    const frame = hud ? hudFrame(-pad, -top, W, H, col, opts.title || 'System // script') : '';
+    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-pad} ${-top} ${W} ${H}" width="${W * (opts.scale || 1)}" height="${H * (opts.scale || 1)}">${bg}${frame}${parts}</svg>`, w: W, h: H };
   }
   // the whole alphabet as a chart: each rune with its letter and name underneath
   function chartSVG(A, opts = {}) {
@@ -101,7 +112,8 @@
     const rows = Math.max(1, Math.ceil(list.length / per)), W = Math.min(per, Math.max(1, list.length)) * cw + CELL * 2, H = rows * ch + CELL * 2;
     const cells = list.map((g, i) => { const x = CELL + (i % per) * cw + (cw - glyphW(A)) / 2, y = CELL * 1.4 + Math.floor(i / per) * ch;
       return `<g transform="translate(${x} ${y})">${glyphG(A, g)}</g><text x="${CELL + (i % per) * cw + cw / 2}" y="${y + glyphH(A) + CELL * 1.25}" text-anchor="middle" font-family="${A.cap === 'circuit' ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${CELL * 0.62}" fill="${A.color}">${esc((g.key || '').toUpperCase())}${g.name ? ' · ' + esc(g.name) : ''}</text>`; }).join('');
-    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * (opts.scale || 1)}" height="${H * (opts.scale || 1)}"><rect width="${W}" height="${H}" fill="${opts.bg || panelBG(A)}"/>${cells || `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Georgia" font-size="12" fill="#999">No runes yet</text>`}</svg>`, w: W, h: H };
+    const hudTop = A.panel === 'system' ? 18 : 0;
+    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ${-hudTop} ${W} ${H + hudTop}" width="${W * (opts.scale || 1)}" height="${(H + hudTop) * (opts.scale || 1)}"><rect y="${-hudTop}" width="${W}" height="${H + hudTop}" fill="${opts.bg || panelBG(A)}"/>${hudTop ? hudFrame(0, -hudTop, W, H + hudTop, A.color, opts.title || 'System // alphabet') : ''}${cells || `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-family="Georgia" font-size="12" fill="#999">No runes yet</text>`}</svg>`, w: W, h: H + hudTop };
   }
   // a random rune: a few joined strokes, not a copy of one already in the set (dice, not AI)
   function randomRune(A) {
@@ -148,7 +160,7 @@
         <h3>Style</h3>
         <div class="field"><label>Stroke</label><input type="range" id="br-w" min="1.2" max="7" step="0.2"></div>
         <div class="field"><label>Ends</label><select id="br-cap"><option value="round">Ink (round)</option><option value="square">Carved (square)</option><option value="circuit">System (circuit traces)</option></select></div>
-        <div class="field"><label>Background</label><select id="br-panel"><option value="">Parchment</option><option value="dark">Dark panel (glows)</option></select></div>
+        <div class="field"><label>Background</label><select id="br-panel"><option value="">Parchment</option><option value="dark">Dark panel (glows)</option><option value="system">System window (game interface)</option></select></div>
         <div class="field"><label>Slant</label><input type="range" id="br-slant" min="-20" max="20" step="1"></div>
         <div class="field"><label>Spacing</label><input type="range" id="br-sp" min="0.4" max="2.5" step="0.1"></div>
         <div class="field"><label>Direction</label><select id="br-dir"><option value="ltr">Left to right</option><option value="rtl">Right to left</option><option value="ttb">Top to bottom (columns)</option></select></div>
@@ -165,7 +177,7 @@
     };
     gridOpts();
     const panel = $('#br-panel', box);
-    const dark = () => box.querySelector('.br-wrap').classList.toggle('br-dark', A.panel === 'dark');
+    const dark = () => box.querySelector('.br-wrap').classList.toggle('br-dark', isDark(A));
     W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; col.value = A.color; panel.value = A.panel || ''; dark();
     const spx = $('#br-sp', box), dirx = $('#br-dir', box);
     spx.value = A.spacing || 1; dirx.value = A.dir || 'ltr';
@@ -174,7 +186,7 @@
     W.oninput = () => { A.width = +W.value; all(); };
     // picking circuit traces the first time: a dark panel and a cyan line, like a game's interface (change either after)
     cap.onchange = () => { A.cap = cap.value; if (A.cap === 'circuit' && !A.panel && /^#2b2118$/i.test(A.color)) { A.panel = 'dark'; A.color = '#5fd0ff'; col.value = A.color; panel.value = 'dark'; dark(); } all(); };
-    panel.onchange = () => { A.panel = panel.value; if (A.panel === 'dark' && /^#2b2118$/i.test(A.color)) { A.color = '#5fd0ff'; col.value = A.color; } else if (!A.panel && /^#5fd0ff$/i.test(A.color)) { A.color = '#2b2118'; col.value = A.color; } dark(); all(); }; sl.oninput = () => { A.slant = +sl.value; all(); }; col.oninput = () => { A.color = col.value; all(); };
+    panel.onchange = () => { A.panel = panel.value; if (isDark(A) && /^#2b2118$/i.test(A.color)) { A.color = '#5fd0ff'; col.value = A.color; } else if (!A.panel && /^#5fd0ff$/i.test(A.color)) { A.color = '#2b2118'; col.value = A.color; } dark(); all(); }; sl.oninput = () => { A.slant = +sl.value; all(); }; col.oninput = () => { A.color = col.value; all(); };
     grid.onchange = async () => {
       let v = grid.value;
       if (v === 'custom') {
@@ -225,7 +237,7 @@
   }
   function preview() {
     const p = $('#br-preview', box); if (!p) return;
-    p.innerHTML = (A.sample || '').trim() ? textSVG(A, A.sample, { scale: 0.9, bg: A.panel ? panelBG(A) : '' }).svg : '<span class="bm-help">Your writing shows here.</span>';
+    p.innerHTML = (A.sample || '').trim() ? textSVG(A, A.sample, { scale: 0.9, bg: A.panel ? panelBG(A) : '', title: it && it.title }).svg : '<span class="bm-help">Your writing shows here.</span>';
   }
   function drawEdit(hover) {
     const svg = $('#br-svg', box); if (!svg) return;
@@ -271,12 +283,12 @@
   }
   async function runesPicture(item) {
     const a = Object.assign(runesBlank(), item.data || {});
-    const r = (a.sample || '').trim() ? textSVG(a, a.sample, { bg: panelBG(a), scale: 4 }) : chartSVG(a, { scale: 4 });
+    const r = (a.sample || '').trim() ? textSVG(a, a.sample, { bg: panelBG(a), scale: 4, title: item.title }) : chartSVG(a, { scale: 4, title: item.title });
     return B.svgCanvas(r.svg, Math.round(r.w * 4), Math.round(r.h * 4));
   }
   async function runesToBook(item) {
     const a = Object.assign(runesBlank(), item.data || {});
-    const ch = chartSVG(a, { scale: 3 }), c = await B.svgCanvas(ch.svg, Math.round(ch.w * 3), Math.round(ch.h * 3));
+    const ch = chartSVG(a, { scale: 3, title: item.title }), c = await B.svgCanvas(ch.svg, Math.round(ch.w * 3), Math.round(ch.h * 3));
     const rows = a.glyphs.filter(g => g.key || g.name || g.meaning).map(g => `<li><b>${esc((g.key || '').toUpperCase())}</b>${g.name ? ' · ' + esc(g.name) : ''}${g.meaning ? ': ' + esc(g.meaning) : ''}</li>`).join('');
     return `<p><img src="${c.toDataURL('image/png')}" alt="${esc(item.title)}" width="${Math.min(560, Math.round(ch.w * 1.6))}"></p>${rows ? `<ul>${rows}</ul>` : ''}`;
   }
@@ -288,10 +300,10 @@
   };
 
   // ================================================================== SIGILS
-  const sigilBlank = () => ({ n: 6, mirror: true, rings: 2, width: 3, color: '#2b2118', bg: 'paper', strokes: [], ring: { alpha: '', text: '' }, guides: true });
-  const BG = { paper: '#f4ecd8', white: '#ffffff', night: '#141a26', blood: '#140808', witch: '#1b1424', none: '' };
+  const sigilBlank = () => ({ n: 6, mirror: true, rings: 2, width: 3, color: '#2b2118', bg: 'paper', strokes: [], ring: { alpha: '', text: '' }, guides: true, smooth: 5, snap: true });
+  const BG = { paper: '#f4ecd8', white: '#ffffff', night: '#141a26', blood: '#140808', witch: '#1b1424', system: '#07101e', none: '' };
   // on a dark background the default brown ink becomes a colour that shows: pale on night, red on blood, candle gold for witch
-  const DARK_INK = { night: '#e9dcb8', blood: '#d8402f', witch: '#d6a95b' };
+  const DARK_INK = { night: '#e9dcb8', blood: '#d8402f', witch: '#d6a95b', system: '#5fd0ff' };
   // a star drawn through the circle: pentagram {5/2}, hexagram (two triangles), heptagram {7/3}, octagram {8/3}
   function starPath(n, r) {
     const pt = i => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [r * Math.cos(a), r * Math.sin(a)]; };
@@ -315,29 +327,87 @@
   }
   // the sigil's drawing (no background), in a -100..100 box; ring runes need the alphabet (passed in)
   function sigilG(D, alpha, col) {
-    const c = col || D.color, paths = D.strokes.map(s => `<path d="${strokeD(s)}"/>`).join('');
+    const c = col || D.color, dotR = Math.max(2.2, D.width * 0.9);
+    const paths = D.strokes.map(s => s.t === 'dot' ? `<circle cx="${s.pts[0][0]}" cy="${s.pts[0][1]}" r="${dotR}" fill="${c}" stroke="none"/>` : `<path d="${strokeD(s)}"/>`).join('');
     let g = '';
     for (let k = 0; k < D.n; k++) {
       g += `<g transform="rotate(${360 * k / D.n})">${paths}</g>`;
       if (D.mirror) g += `<g transform="rotate(${360 * k / D.n}) scale(-1 1)">${paths}</g>`;
     }
     let rings = '';
-    if (+D.star) rings += `<path d="${starPath(+D.star, (alpha && (D.ring.text || '').trim()) ? 77 : D.rings ? 96 - 8 * (D.rings - 1) : 88)}"/>`; // points touch the innermost ring
-    const ringText = alpha && (D.ring.text || '').trim();
+    const ringText = (D.ring.text || '').trim();
+    if (+D.star) rings += `<path d="${starPath(+D.star, ringText ? 77 : D.rings ? 96 - 8 * (D.rings - 1) : 88)}"/>`; // points touch the innermost ring
     const outer = [96, 88, 80].slice(0, D.rings || 0);
     if (ringText) rings += `<circle r="97" /><circle r="77" />`; else rings += outer.map(r => `<circle r="${r}"/>`).join('');
     let runes = '';
-    if (ringText) {
+    if (ringText && !alpha) {
+      // no rune alphabet picked: the words go round in plain letters (monospace in the System look)
+      const sys = D.bg === 'system', txt = esc(ringText.toUpperCase()), fs = Math.min(11, 520 / Math.max(12, ringText.length + 4));
+      runes = `<defs><path id="sg-ring-path" d="M0 87A87 87 0 1 1 0.01 87"/></defs><text font-family="${sys ? 'Menlo, Consolas, monospace' : 'Georgia, serif'}" font-size="${fs}" letter-spacing="${sys ? 2 : 3}" fill="${c}" text-anchor="middle"><textPath href="#sg-ring-path" startOffset="50%">${sys ? '// ' + txt + ' //' : txt}</textPath></text>`;
+    } else if (ringText) {
       const list = tokens(alpha, ringText).filter(t => t.g || t.space), h = 13, sc = h / Math.max(1, glyphH(alpha)), gw = glyphW(alpha) * sc;
       const step = 360 / Math.max(list.length, 12);
       list.forEach((t, i) => { if (!t.g) return; runes += `<g transform="rotate(${i * step}) translate(${-gw / 2} -93.5) scale(${sc})">${glyphG(alpha, t.g, c, (1.5 * D.width / 3) / sc / (alpha.width || 3.2))}</g>`; });
     }
     return `<g fill="none" stroke="${c}" stroke-width="${D.width}" stroke-linecap="round" stroke-linejoin="round">${g}${rings}</g>${runes}`;
   }
+  const GUIDE_R = [25, 50, 75];
+  // snapping: onto the centre, a slice line (or the mirror line between slices) and the guide circles
+  function snapPt(D, p) {
+    let [x, y] = p, r = Math.hypot(x, y);
+    if (r < 4) return [0, 0];
+    let a = Math.atan2(y, x);
+    const step = 2 * Math.PI / D.n / (D.mirror ? 2 : 1), base = -Math.PI / 2;
+    const k = Math.round((a - base) / step), ga = base + k * step;
+    if (Math.abs(r * Math.sin(a - ga)) < 4) a = ga;
+    const rings = GUIDE_R.concat([96, 88, 80].slice(0, D.rings || 0));
+    const near = rings.find(R => Math.abs(R - r) < 3.5); if (near) r = near;
+    return [Math.round(r * Math.cos(a) * 10) / 10, Math.round(r * Math.sin(a) * 10) / 10];
+  }
+  // where a point lands in every slice (and its mirror), for the preview under the pointer
+  function copiesOf(D, [x, y]) {
+    const out = [];
+    for (let k = 0; k < D.n; k++) for (const m of D.mirror ? [1, -1] : [1]) { const a = 2 * Math.PI * k / D.n, px = x * m; out.push([px * Math.cos(a) - y * Math.sin(a), px * Math.sin(a) + y * Math.cos(a)]); }
+    return out;
+  }
+  // the pen: a "lazy" tip on a short string behind the pointer (higher smoothing = longer string), then the
+  // finished stroke is thinned out and rounded off, so a wobbly hand still gives a clean line
+  function simplify(pts, eps) {
+    if (pts.length < 3) return pts;
+    const [a, b] = [pts[0], pts[pts.length - 1]], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+    let far = 0, at = 0;
+    for (let i = 1; i < pts.length - 1; i++) { const d = Math.abs(dy * pts[i][0] - dx * pts[i][1] + b[0] * a[1] - b[1] * a[0]) / L; if (d > far) { far = d; at = i; } }
+    return far > eps ? simplify(pts.slice(0, at + 1), eps).slice(0, -1).concat(simplify(pts.slice(at), eps)) : [a, b];
+  }
+  function chaikin(pts, times) {
+    for (let t = 0; t < times && pts.length > 2; t++) {
+      const out = [pts[0]];
+      for (let i = 0; i < pts.length - 1; i++) { const [p, q] = [pts[i], pts[i + 1]]; out.push([p[0] * .75 + q[0] * .25, p[1] * .75 + q[1] * .25], [p[0] * .25 + q[0] * .75, p[1] * .25 + q[1] * .75]); }
+      out.push(pts[pts.length - 1]); pts = out;
+    }
+    return pts.map(p => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]);
+  }
+  function smoothStroke(pts, level) {
+    if (!level || pts.length < 3) return pts;
+    return chaikin(simplify(pts, 0.25 + level * 0.12), level > 6 ? 3 : 2);
+  }
   function sigilSVG(D, alpha, size, opts = {}) {
     const bg = opts.bg !== undefined ? opts.bg : BG[D.bg];
-    const guides = opts.guides ? `<g class="sg-guides" stroke="#888" stroke-width=".5" stroke-dasharray="2 3" fill="none">${[...Array(D.n)].map((_, k) => `<line x1="0" y1="0" x2="0" y2="-100" transform="rotate(${360 * k / D.n})"/>`).join('')}${D.mirror ? [...Array(D.n)].map((_, k) => `<line x1="0" y1="0" x2="0" y2="-100" transform="rotate(${360 * (k + 0.5) / D.n})" opacity=".45"/>`).join('') : ''}<circle r="50"/></g>` : '';
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-104 -104 208 208" width="${size}" height="${size}">${bg ? `<rect x="-104" y="-104" width="208" height="208" fill="${bg}"/>` : ''}${guides}${sigilG(D, alpha, opts.color || (DARK_INK[D.bg] && D.color === '#2b2118' ? DARK_INK[D.bg] : D.color))}${opts.overlay || ''}</svg>`;
+    const guides = opts.guides ? `<g class="sg-guides" stroke="#888" stroke-width=".5" stroke-dasharray="2 3" fill="none">${[...Array(D.n)].map((_, k) => `<line x1="0" y1="0" x2="0" y2="-100" transform="rotate(${360 * k / D.n})"/>`).join('')}${D.mirror ? [...Array(D.n)].map((_, k) => `<line x1="0" y1="0" x2="0" y2="-100" transform="rotate(${360 * (k + 0.5) / D.n})" opacity=".45"/>`).join('') : ''}${GUIDE_R.map(r => `<circle r="${r}"${r === 50 ? '' : ' opacity=".5"'}/>`).join('')}</g>` : '';
+    const col = opts.color || (DARK_INK[D.bg] && D.color === '#2b2118' ? DARK_INK[D.bg] : D.color), g = sigilG(D, alpha, col);
+    let body = g;
+    if (D.bg === 'system') {
+      // a game interface: the lines glow, a ring of ticks, corner brackets and a readout
+      let ticks = ''; for (let i = 0; i < 72; i++) { const a = i * Math.PI / 36, r1 = i % 6 ? 99 : 96; ticks += `M${(Math.cos(a) * r1).toFixed(1)} ${(Math.sin(a) * r1).toFixed(1)}L${(Math.cos(a) * 101.5).toFixed(1)} ${(Math.sin(a) * 101.5).toFixed(1)}`; }
+      const br = (x, y, dx, dy) => `M${x + dx * 14} ${y}H${x}V${y + dy * 14}`;
+      body = `<defs><filter id="sg-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <path d="${ticks}" stroke="${col}" stroke-width=".6" opacity=".45" fill="none"/>
+        <path d="${br(-100, -100, 1, 1)}${br(100, -100, -1, 1)}${br(-100, 100, 1, -1)}${br(100, 100, -1, -1)}" stroke="${col}" stroke-width="1.2" fill="none" opacity=".8"/>
+        <text x="-97" y="99" font-family="Menlo, Consolas, monospace" font-size="5" letter-spacing=".8" fill="${col}" opacity=".75">SIGIL // ${String(D.n).padStart(2, '0')}${+D.star ? ' // STAR ' + D.star : ''}</text>
+        <text x="97" y="99" text-anchor="end" font-family="Menlo, Consolas, monospace" font-size="5" letter-spacing=".8" fill="${col}" opacity=".55">BOUND ${D.strokes.length}</text>
+        <g filter="url(#sg-glow)">${g}</g>`;
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-104 -104 208 208" width="${size}" height="${size}">${bg ? `<rect x="-104" y="-104" width="208" height="208" fill="${bg}"/>` : ''}${guides}${body}${opts.overlay || ''}</svg>`;
   }
   function randomSigil(D) {
     const out = [], R = [28, 52, 76], slice = (Math.PI * 2) / D.n, at = (r, f) => { const a = -Math.PI / 2 + slice * f * (D.mirror ? 0.5 : 1); return [r * Math.cos(a), r * Math.sin(a)]; };
@@ -360,23 +430,26 @@
         <div class="br-tools"><div class="chip-row" id="sg-tool">${[['pen', 'Pen'], ['line', 'Line'], ['circle', 'Circle'], ['dot', 'Dot'], ['rub', 'Rub out']].map(([v, l]) => `<button type="button" class="chip ${sgTool === v ? 'on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
           <span class="mp-sp"></span><button class="btn small ghost" id="sg-undo" title="Undo">↶</button><button class="btn small ghost" id="sg-clear">Clear</button><button class="btn small" id="sg-rand" title="Roll a random sigil to start from (dice-style rules, not AI)">🎲 Random</button></div>
         <div class="sg-stage" id="sg-stage"></div>
-        <p class="br-hint">Draw anywhere: it repeats around the circle. In Rub out, tap a line to remove it.</p>
+        <p class="br-hint">Draw anywhere: it repeats around the circle. The faint marks show where each copy will land. A dot goes down when you let go, so you can slide it into place first. In Rub out, tap a line to remove it.</p>
       </section>
       <aside class="br-side">
         <h3>Symmetry</h3>
         <div class="field"><label>Repeats around the circle: <b id="sg-n-v">${sg.n}</b></label><input type="range" id="sg-n" min="1" max="16" step="1" value="${sg.n}"></div>
         <label class="bd-check"><input type="checkbox" id="sg-mirror" ${sg.mirror ? 'checked' : ''}> Mirror each slice</label>
         <label class="bd-check"><input type="checkbox" id="sg-guides" ${sg.guides ? 'checked' : ''}> Show guides</label>
+        <label class="bd-check"><input type="checkbox" id="sg-snap" ${sg.snap !== false ? 'checked' : ''}> Snap to guides <span class="tip-q" data-tip="Dots, lines and circles click onto the centre, the slice lines and the guide circles when you're close. Untick to place them freely.">?</span></label>
+        <h3>Pen</h3>
+        <div class="field"><label>Smoothing: <b id="sg-sm-v">${sg.smooth ? sg.smooth : 'Off'}</b> <span class="tip-q" data-tip="Like the streamline setting in drawing apps: the pen trails your hand a little and the line is rounded off, so wobbles don't show. Higher is smoother but follows less tightly.">?</span></label><input type="range" id="sg-sm" min="0" max="10" step="1" value="${sg.smooth || 0}"></div>
         <h3>Look</h3>
         <div class="field"><label>Outer rings</label><select id="sg-rings">${[0, 1, 2, 3].map(n => `<option value="${n}" ${sg.rings === n ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></div>
         <div class="field"><label>Line</label><input type="range" id="sg-w" min="1" max="8" step="0.5" value="${sg.width}"></div>
         <div class="field"><label>Colour</label><input type="color" id="sg-col" value="${sg.color}"></div>
-        <div class="field"><label>Background</label><select id="sg-bg">${[['paper', 'Parchment'], ['white', 'White'], ['night', 'Night'], ['blood', 'Blood (black and red)'], ['witch', 'Witch (plum and candlelight)'], ['none', 'None (see-through)']].map(([v, l]) => `<option value="${v}" ${sg.bg === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="field"><label>Background</label><select id="sg-bg">${[['paper', 'Parchment'], ['white', 'White'], ['night', 'Night'], ['blood', 'Blood (black and red)'], ['witch', 'Witch (plum and candlelight)'], ['system', 'System (game interface)'], ['none', 'None (see-through)']].map(([v, l]) => `<option value="${v}" ${sg.bg === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><label>Star</label><select id="sg-star">${[['', 'None'], ['5', 'Pentagram (5 points)'], ['6', 'Hexagram (6 points)'], ['7', 'Heptagram (7 points)'], ['8', 'Octagram (8 points)']].map(([v, l]) => `<option value="${v}" ${String(sg.star || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <h3>Ring of runes</h3>
-        ${alphas.length ? `<div class="field"><label>Alphabet</label><select id="sg-alpha"><option value="">— none —</option>${alphas.map(a => `<option value="${a.id}" ${sg.ring.alpha === a.id ? 'selected' : ''}>${esc(a.title)}</option>`).join('')}</select></div>
-          <div class="field"><label>Words around the edge</label><input id="sg-text" value="${esc(sg.ring.text)}" placeholder="e.g. what is bound stays bound"></div>`
-          : '<p class="bm-help">Make a rune alphabet in Build to write a ring of runes around the edge.</p>'}
+        <div class="field"><label>Words around the edge</label><input id="sg-text" value="${esc(sg.ring.text)}" placeholder="e.g. what is bound stays bound"></div>
+        ${alphas.length ? `<div class="field"><label>Written in</label><select id="sg-alpha"><option value="">Plain letters</option>${alphas.map(a => `<option value="${a.id}" ${sg.ring.alpha === a.id ? 'selected' : ''}>${esc(a.title)} (runes)</option>`).join('')}</select></div>`
+          : '<p class="bm-help">Make a rune alphabet in Build to write these words in runes instead.</p>'}
       </aside></div>`;
     const ink = () => (DARK_INK[sg.bg] && sg.color === '#2b2118') ? DARK_INK[sg.bg] : sg.color;
     const re = () => { drawSigil(); ctx.changed(); const c = $('#sg-col', box); if (c && document.activeElement !== c) c.value = ink(); };
@@ -384,12 +457,15 @@
     $('#sg-n', box).oninput = e => { sg.n = +e.target.value; $('#sg-n-v', box).textContent = sg.n; re(); };
     $('#sg-mirror', box).onchange = e => { sg.mirror = e.target.checked; re(); };
     $('#sg-guides', box).onchange = e => { sg.guides = e.target.checked; re(); };
+    $('#sg-snap', box).onchange = e => { sg.snap = e.target.checked; ctx.changed(); };
+    $('#sg-sm', box).oninput = e => { sg.smooth = +e.target.value; $('#sg-sm-v', box).textContent = sg.smooth || 'Off'; ctx.changed(); };
     $('#sg-rings', box).onchange = e => { sg.rings = +e.target.value; re(); };
     $('#sg-w', box).oninput = e => { sg.width = +e.target.value; re(); };
     $('#sg-col', box).oninput = e => { sg.color = e.target.value; re(); };
     $('#sg-bg', box).onchange = e => { sg.bg = e.target.value; re(); };
     $('#sg-star', box).onchange = e => { sg.star = e.target.value; if (sg.star && [5, 6, 7, 8].includes(+sg.star) && sg.n % +sg.star && !sg.strokes.length) { sg.n = +sg.star; $('#sg-n', box).value = sg.n; $('#sg-n-v', box).textContent = sg.n; } re(); };
-    if ($('#sg-alpha', box)) { $('#sg-alpha', box).onchange = e => { sg.ring.alpha = e.target.value; sgAlpha = alphas.find(a => a.id === sg.ring.alpha) || null; re(); }; $('#sg-text', box).oninput = e => { sg.ring.text = e.target.value; re(); }; }
+    $('#sg-text', box).oninput = e => { sg.ring.text = e.target.value; re(); };
+    if ($('#sg-alpha', box)) $('#sg-alpha', box).onchange = e => { sg.ring.alpha = e.target.value; sgAlpha = alphas.find(a => a.id === sg.ring.alpha) || null; re(); };
     $$('#sg-tool .chip', box).forEach(b => b.onclick = () => { sgTool = b.dataset.v; $$('#sg-tool .chip', box).forEach(x => x.classList.toggle('on', x === b)); });
     const keep = () => { sgUndo.push(JSON.stringify(sg.strokes)); if (sgUndo.length > 60) sgUndo.shift(); };
     $('#sg-undo', box).onclick = () => { if (sgUndo.length) { sg.strokes = JSON.parse(sgUndo.pop()); re(); } };
@@ -398,27 +474,51 @@
     drawSigil();
     const stage = $('#sg-stage', box);
     const pt = e => { const svg = $('svg', stage), p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10]; };
+    const snapOn = p => sg.snap !== false ? snapPt(sg, p) : p;
+    let hover = null;
+    const ghost = p => p ? `<g class="sg-ghost" pointer-events="none">${copiesOf(sg, p).map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${sgTool === 'dot' ? Math.max(2.2, sg.width * 0.9) : 2.2}" fill="${sgTool === 'dot' ? '#e0663c' : 'none'}" stroke="#e0663c" stroke-width="${i ? .7 : 1.2}" opacity="${i ? .45 : .95}"/>`).join('')}</g>` : '';
+    const paint = () => { const st = $('#sg-stage', box); if (st) st.innerHTML = sigilSVG(sg, sgAlpha && sgAlpha.data, '100%', { guides: sg.guides, overlay: ghost(hover) }); };
     stage.onpointerdown = e => {
       if (!$('svg', stage)) return; e.preventDefault();
-      const p = pt(e);
+      const raw = pt(e);
       if (sgTool === 'rub') {
         // the nearest line, measured in the slice it was drawn in (or any of its copies)
         let best = -1, bd = 8;
         const variants = [];
-        for (let k = 0; k < sg.n; k++) for (const m of sg.mirror ? [1, -1] : [1]) { const a = -2 * Math.PI * k / sg.n, x = p[0] * Math.cos(a) - p[1] * Math.sin(a), y = p[0] * Math.sin(a) + p[1] * Math.cos(a); variants.push([x * m, y]); }
+        for (let k = 0; k < sg.n; k++) for (const m of sg.mirror ? [1, -1] : [1]) { const a = -2 * Math.PI * k / sg.n, x = raw[0] * Math.cos(a) - raw[1] * Math.sin(a), y = raw[0] * Math.sin(a) + raw[1] * Math.cos(a); variants.push([x * m, y]); }
         sg.strokes.forEach((s, i) => { for (const v of variants) for (const q of s.t === 'circle' ? [s.pts[0]] : s.pts) { const d = Math.hypot(q[0] - v[0], q[1] - v[1]) - (s.t === 'circle' ? Math.hypot(s.pts[1][0] - s.pts[0][0], s.pts[1][1] - s.pts[0][1]) : 0); if (Math.abs(d) < bd) { bd = Math.abs(d); best = i; } } });
         if (best >= 0) { keep(); sg.strokes.splice(best, 1); re(); }
         return;
       }
-      keep(); sgDraw = { t: sgTool, pts: [p, p] }; if (sgTool === 'dot') { sg.strokes.push({ t: 'dot', pts: [p] }); sgDraw = null; re(); return; }
-      sg.strokes.push(sgDraw); stage.setPointerCapture(e.pointerId); drawSigil();
+      const p = sgTool === 'pen' ? raw : snapOn(raw);
+      keep(); stage.setPointerCapture(e.pointerId);
+      if (sgTool === 'dot') { sgDraw = { t: 'dot', pts: [p] }; hover = p; paint(); return; }   // goes down on release
+      sgDraw = { t: sgTool, pts: [p, p], tip: p };
+      sg.strokes.push(sgDraw); hover = null; paint();
     };
     stage.onpointermove = e => {
-      if (!sgDraw) return; const p = pt(e);
-      if (sgDraw.t === 'pen') { const l = sgDraw.pts[sgDraw.pts.length - 1]; if (Math.hypot(p[0] - l[0], p[1] - l[1]) > 1.6) sgDraw.pts.push(p); } else sgDraw.pts[1] = p;
-      drawSigil();
+      if (!$('svg', stage)) return;
+      const raw = pt(e);
+      if (!sgDraw) { if (e.pointerType === 'touch' || sgTool === 'rub') return; hover = sgTool === 'pen' ? raw : snapOn(raw); paint(); return; }
+      if (sgDraw.t === 'dot') { sgDraw.pts[0] = snapOn(raw); hover = sgDraw.pts[0]; paint(); return; }
+      if (sgDraw.t === 'pen') {
+        // the tip only moves once the pointer pulls the string tight
+        const L = (sg.smooth || 0) * 1.3, tip = sgDraw.tip, d = Math.hypot(raw[0] - tip[0], raw[1] - tip[1]);
+        if (d > L) { const k = (d - L) / d; sgDraw.tip = [tip[0] + (raw[0] - tip[0]) * k, tip[1] + (raw[1] - tip[1]) * k]; }
+        const l = sgDraw.pts[sgDraw.pts.length - 1], q = sgDraw.tip;
+        if (Math.hypot(q[0] - l[0], q[1] - l[1]) > 1) sgDraw.pts.push([Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]);
+      } else sgDraw.pts[1] = snapOn(raw);
+      paint();
     };
-    stage.onpointerup = () => { if (!sgDraw) return; const s = sgDraw; sgDraw = null; if (s.t !== 'pen' && Math.hypot(s.pts[1][0] - s.pts[0][0], s.pts[1][1] - s.pts[0][1]) < 1) sg.strokes.pop(); if (s.t === 'pen' && s.pts.length > 2) s.pts.shift(); re(); };
+    stage.onpointerleave = () => { if (!sgDraw && hover) { hover = null; paint(); } };
+    const finish = () => {
+      if (!sgDraw) return; const s = sgDraw; sgDraw = null; delete s.tip;
+      if (s.t === 'dot') { sg.strokes.push(s); hover = null; re(); return; }
+      if (s.t !== 'pen' && Math.hypot(s.pts[1][0] - s.pts[0][0], s.pts[1][1] - s.pts[0][1]) < 1) sg.strokes.pop();
+      if (s.t === 'pen') { if (s.pts.length > 2) s.pts.shift(); s.pts = smoothStroke(s.pts, sg.smooth || 0); }
+      re();
+    };
+    stage.onpointerup = finish; stage.onpointercancel = finish;
   }
   function drawSigil() { const st = $('#sg-stage', box); if (st) st.innerHTML = sigilSVG(sg, sgAlpha && sgAlpha.data, '100%', { guides: sg.guides }); }
   async function alphaFor(item) { const id = item.data && item.data.ring && item.data.ring.alpha; if (!id) return null; const a = await B.get(id); return a && a.data ? Object.assign(runesBlank(), a.data) : null; }
