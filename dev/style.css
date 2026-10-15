@@ -2305,7 +2305,7 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
   .dash-setgoal { position: static; flex-basis: 100%; order: 9; }
   .quote-card { padding: 14px 44px 14px 16px; }
   .form-grid { grid-template-columns: minmax(0, 1fr) !important; }
-  .form-grid .field input, .form-grid .field select { width: 100%; box-sizing: border-box; }
+  .form-grid .field input:not([type=checkbox]):not([type=radio]), .form-grid .field select { width: 100%; box-sizing: border-box; }
 }
 @media (min-width: 641px) { .dash-card.dials:has(.dash-setgoal) .stat-stack { margin-top: 20px; } }
 
@@ -2886,3 +2886,17 @@ body.litrpg .editor p.lit-sys, body.litrpg #editor p.lit-sys { margin: .5em auto
 .in-w { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
 .in-cols { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 13px; color: var(--muted); }
 .in-cols label { display: flex; align-items: center; gap: 6px; }
+
+/* Settings › LitRPG: tick boxes inside a field look like the other tick boxes, at every width */
+#s-litrpg label.check, #s-licence label.check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text); text-transform: none; letter-spacing: 0; font-weight: 400; margin: 0 0 8px; }
+#s-litrpg label.check input { width: auto; flex: none; margin: 0; }
+#s-litrpg .lit-sub { padding-left: 4px; }
+.modal .form-grid, .modal .form-grid > * { min-width: 0; }
+
+/* phones: Record sits in the bar under the book's list, since the status bar is hidden there */
+.binder-foot .bf-proof { display: none; }
+@media (max-width: 720px) { .binder-foot .bf-proof { display: inline-flex; align-items: center; justify-content: center; } }
+.bf-proof .pf-dot { width: 11px; height: 11px; border-radius: 50%; background: #d64535; display: inline-block; }
+.bf-proof .pf-dot.off { background: transparent; border: 2px solid currentColor; box-sizing: border-box; }
+.bf-proof.on .pf-dot { animation: pfpulse 1.6s ease-in-out infinite; }
+.pf-books { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
