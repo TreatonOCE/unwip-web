@@ -422,6 +422,7 @@
   async function leaveProject() {
     if (S.lastPlace && S.lastPlace.slug === S.slug) { clearTimeout(S.lastPlaceT); try { S.settings = await api.setSettings({ lastPlace: S.lastPlace }); } catch {} }
     if (S.sprint) await endSprint(false);
+    if (S.brk && S.brk.then) stopBreak();   // rounds belong to the book; a break timer on its own keeps going
     await flushSplit(); $('#split-pane').classList.add('hidden'); $('#btn-split').classList.remove('on'); S.splitId = null;
     setRevise(false);
     await flushSave();
@@ -994,6 +995,12 @@
     scheduleMeta(); renderBinder(); scheduleNames();
     await offerSheetUpdate(n, was);
   }
+  // a button on every character, place and item sheet, so changing its fields is easy to find (not only by
+  // right-clicking the folder)
+  { const b = $('#btn-sheet');
+    const upd = () => { const r = S.project && S.docId && rootOf(S.docId); const on = !!(r && SHEETS[r.kind] && r.id !== S.docId); b.classList.toggle('hidden', !on); if (on) b.textContent = `Edit ${({ characters: 'character', places: 'place', items: 'item' })[r.kind] || 'sheet'} fields…`; };
+    b.onclick = () => { const r = S.docId && rootOf(S.docId); if (r) editSheet(r); };
+    on('doc', () => setTimeout(upd, 0)); on('project', () => setTimeout(upd, 0)); }
   // Characters, Places and Items: change the fields and headings their new entries start with
   async function editSheet(n) {
     const was = sheetFor(n), std = { fields: SHEETS[n.kind], sections: SHEET_SECTIONS[n.kind] };
@@ -1760,7 +1767,7 @@
     const items = [...tb.children].filter(x => x !== more);
     const order = new Map(items.map((el, i) => [el, i]));
     // first to be tucked away → last
-    const PRIO = ['#btn-listen', '#btn-image', '#btn-footnote', '#btn-scene', '#btn-clear', '[data-cmd="strikeThrough"]', '[data-cmd="justifyFull"]', '[data-cmd="justifyRight"]',
+    const PRIO = ['#btn-listen', '#btn-image', '#btn-footnote', '#btn-numbers', '#btn-bullets', '#btn-scene', '#btn-clear', '[data-cmd="strikeThrough"]', '[data-cmd="justifyFull"]', '[data-cmd="justifyRight"]',
       '[data-cmd="justifyCenter"]', '[data-cmd="justifyLeft"]', '#sel-block', '[data-cmd="underline"]', '#sel-size', '#btn-comment', '#sel-font'];
     [more, pop].forEach(el => el.addEventListener('mousedown', e => { if (!e.target.closest('select')) e.preventDefault(); }));
     more.onclick = () => {
@@ -3280,6 +3287,15 @@
   // ================================================================== SPRINTS
   function renderSprint() {
     const b = $('#btn-sprint'), lbl = $('#sprint-label'), bar = $('#sprint-progress'), fl = $('#sprint-float');
+    if (!S.sprint && S.brk) {      // a break between rounds (or a break timer on its own)
+      const left = Math.max(0, S.brk.end - Date.now()), time = `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`;
+      const plan = S.sprintPlan, nextUp = plan && S.brk.then ? ` · round ${plan.round} of ${plan.rounds} next` : '';
+      lbl.textContent = `Break ${time}${nextUp}`; b.classList.add('running'); bar.style.width = (100 - left / (S.brk.minutes * 60000) * 100) + '%';
+      b.title = 'On a break. Click to skip it or stop.';
+      document.body.classList.remove('sprinting');
+      fl.innerHTML = `☕<span>Break</span><b>${time}</b>`; fl.classList.toggle('hidden', !document.body.classList.contains('writer'));
+      return;
+    }
     if (!S.sprint) {
       lbl.textContent = 'Sprint'; b.classList.remove('running'); bar.style.width = '0';
       b.title = 'Start a timed writing sprint';
@@ -3297,8 +3313,15 @@
     fl.classList.toggle('hidden', !document.body.classList.contains('writer'));
   }
   async function startSprintDialog() {
+    if (S.brk) {
+      const plan = S.sprintPlan && S.brk.then;
+      const v = await modal({ title: 'On a break', body: `<p>${plan ? `Round ${S.sprintPlan.round} of ${S.sprintPlan.rounds} starts when the break ends.` : 'Your break timer is running.'}</p>`,
+        buttons: [{ label: plan ? 'Stop the sprints' : 'Stop the timer', value: 'stop', kind: 'ghost' }, { label: 'Keep resting', value: null, kind: 'ghost' }, ...(plan ? [{ label: 'Skip the break', value: 'skip', kind: 'primary' }] : [])] });
+      if (v === 'skip') endBreak(true); else if (v === 'stop') { const pl = S.sprintPlan; stopBreak(); if (pl && pl.recs.length) showSprintResult(pl.recs[pl.recs.length - 1], pl, true); }
+      return;
+    }
     if (S.sprint) {
-      if (await confirmBox('Stop sprint?', 'End this sprint now and see your result?', 'End sprint')) endSprint(true);
+      if (await confirmBox('Stop sprint?', S.sprintPlan && S.sprintPlan.rounds > 1 ? 'End this sprint (and the rounds after it) now and see your result?' : 'End this sprint now and see your result?', 'End sprint')) endSprint(true, true);
       return;
     }
     const last = S.project.stats.sprints.slice(-1)[0];
@@ -3310,14 +3333,60 @@
         <div class="field"><label>Custom minutes</label><input type="number" id="sp-custom" min="1" max="240" placeholder="${minutes}"></div>
         <div class="field"><label>Word goal (optional)</label><input type="number" id="sp-goal" min="0" step="50" value="${(last && last.goal) || ''}" placeholder="e.g. 500"></div>
       </div>
-      <label class="check" style="margin-top:12px"><input type="checkbox" id="sp-writer"> Switch to writer mode for the sprint</label>`;
+      <div class="field" style="margin-top:12px"><label>Rounds</label><div class="chip-row" id="sp-rounds">${[1, 2, 3, 4, 6].map(n => `<button type="button" class="chip ${n === ((last && last.rounds) || 1) ? 'on' : ''}" data-n="${n}">${n === 1 ? 'Just one' : n + ' sprints'}</button>`).join('')}</div></div>
+      <div class="field sp-brk-f" style="margin-top:10px"><label>Break between them</label><div class="chip-row" id="sp-brk">${[2, 5, 10, 15].map(m => `<button type="button" class="chip ${m === ((last && last.brk) || 5) ? 'on' : ''}" data-m="${m}">${m} min</button>`).join('')}</div><span class="hint">A chime (and a notification) when each break is over, then the next sprint starts.</span></div>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="sp-writer"> Switch to writer mode for the sprint</label>
+      <p class="hint" style="margin-top:10px">Only need a rest? <button type="button" class="link-btn" id="sp-breakonly">Start a break timer instead</button></p>`;
     $$('#sp-len .chip', body).forEach(c => c.onclick = () => { $$('#sp-len .chip', body).forEach(x => x.classList.remove('on')); c.classList.add('on'); minutes = +c.dataset.m; $('#sp-custom', body).value = ''; });
+    let rounds = (last && last.rounds) || 1, brk = (last && last.brk) || 5;
+    const showBrk = () => $('.sp-brk-f', body).classList.toggle('hidden', rounds < 2);
+    $$('#sp-rounds .chip', body).forEach(c => c.onclick = () => { $$('#sp-rounds .chip', body).forEach(x => x.classList.toggle('on', x === c)); rounds = +c.dataset.n; showBrk(); });
+    $$('#sp-brk .chip', body).forEach(c => c.onclick = () => { $$('#sp-brk .chip', body).forEach(x => x.classList.toggle('on', x === c)); brk = +c.dataset.m; });
+    showBrk();
+    let breakOnly = false;
+    $('#sp-breakonly', body).onclick = () => { breakOnly = true; body.closest('.modal-back').querySelector('.m-foot .btn.primary').click(); };
     const ok = await modal({ title: 'Word sprint', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Start sprint', value: true, kind: 'primary' }] });
     if (!ok) return;
+    if (breakOnly) { breakTimerDialog(); return; }
+    askToNotify();
     const custom = +$('#sp-custom', body).value;
     if (custom > 0) minutes = Math.min(240, custom);
     const goal = Math.max(0, +$('#sp-goal', body).value || 0);
-    beginSprint(minutes, goal, { writer: $('#sp-writer', body).checked });
+    S.sprintPlan = { rounds, brk, round: 1, minutes, goal, recs: [] };
+    beginSprint(minutes, goal, { writer: $('#sp-writer', body).checked, message: rounds > 1 ? `Sprint 1 of ${rounds}: ${minutes} minutes. Go!` : null });
+  }
+  // ---- breaks: between rounds, or a timer on its own
+  function sprintChime() {
+    try {
+      const A = window.AudioContext || window.webkitAudioContext; if (!A) return; const ac = new A(), t = ac.currentTime;
+      [[660, 0], [880, 0.22], [990, 0.44]].forEach(([f, d]) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.25, t + d + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.9); o.connect(g); g.connect(ac.destination); o.start(t + d); o.stop(t + d + 1); });
+      setTimeout(() => ac.close().catch(() => {}), 2000);
+    } catch {}
+  }
+  function askToNotify() { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {}); } catch {} }
+  function notify(title, body) {
+    sprintChime();
+    try { if ('Notification' in window && Notification.permission === 'granted' && !document.hasFocus()) new Notification(title, { body, silent: true }); } catch {}
+  }
+  function startBreak(minutes, then) {
+    stopBreak(true);
+    S.brk = { end: Date.now() + minutes * 60000, minutes, then };
+    S.brk.timer = setInterval(() => { if (!S.brk) return; renderSprint(); if (Date.now() >= S.brk.end) endBreak(false); }, 500);
+    renderSprint();
+  }
+  function stopBreak(quiet) { if (S.brk) clearInterval(S.brk.timer); S.brk = null; if (!quiet) S.sprintPlan = null; renderSprint(); }
+  function endBreak(skipped) {
+    const b = S.brk; if (!b) return;
+    clearInterval(b.timer); S.brk = null; renderSprint();
+    if (b.then) { if (!skipped) notify('Break’s over', 'Your next sprint is starting.'); b.then(); }
+    else { notify('Break’s over', 'Time to get back to it.'); quoteToast('Break’s over. Back to it when you’re ready.'); }
+  }
+  async function breakTimerDialog() {
+    const body = document.createElement('div');
+    body.innerHTML = `<p>A chime (and a notification if Unwip is in the background) when it’s time to come back.</p><div class="chip-row" id="bk-len">${[2, 5, 10, 15, 20, 30].map(m => `<button type="button" class="chip ${m === 5 ? 'on' : ''}" data-m="${m}">${m} min</button>`).join('')}</div>`;
+    let m = 5; $$('#bk-len .chip', body).forEach(c => c.onclick = () => { $$('#bk-len .chip', body).forEach(x => x.classList.toggle('on', x === c)); m = +c.dataset.m; });
+    if (!(await modal({ title: 'Break timer', body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Start break', value: true, kind: 'primary' }] }))) return;
+    askToNotify(); S.sprintPlan = null; startBreak(m, null); toast(`Break started: ${m} minutes. The Sprint button shows the time left.`);
   }
   // opts: { writer, mini (gentle: cheer at the goal and keep going), message }
   function beginSprint(minutes, goal, opts = {}) {
@@ -3327,13 +3396,13 @@
       const sp = S.sprint; if (!sp) return;
       renderSprint();
       if (sp.mini && sp.goal && !sp.cheered && S.sessionTyped - sp.startTyped >= sp.goal) { sp.cheered = true; quoteToast(`${fmt(sp.goal)} words. That was the hard part. Keep going if it's flowing — the timer's still running.`); }
-      if (Date.now() >= sp.end) endSprint(true);
+      if (Date.now() >= sp.end) endSprint(true, false);
     }, 500);
     renderSprint();
     if (opts.writer) setWriter(true); else quoteToast(opts.message || `Sprint started: ${minutes} minutes. Go!`);
     editor.focus();
   }
-  async function endSprint(showResult) {
+  async function endSprint(showResult, early) {
     const sp = S.sprint; if (!sp) return;
     clearInterval(sp.timer); S.sprint = null; renderSprint();
     const mins = Math.max(0.1, Math.min(sp.minutes, (Date.now() - sp.start) / 60000));
@@ -3341,21 +3410,53 @@
     const wpm = Math.round(words / mins * 10) / 10;
     const docNode = S.docId && findNode(S.docId);
     const rec = { date: new Date().toISOString(), minutes: Math.round(mins * 10) / 10, words, wpm, goal: sp.goal, doc: docNode ? docNode.node.title : '' };
+    const plan = S.sprintPlan;
+    if (plan) { rec.rounds = plan.rounds; if (plan.rounds > 1) { rec.brk = plan.brk; rec.round = plan.round; } plan.recs.push(rec); }
     const prevBest = S.project.stats.sprints.reduce((a, x) => Math.max(a, x.wpm || 0), 0);
     S.project.stats.sprints.push(rec);
     scheduleMeta();
-    if (!showResult) return;
+    if (!showResult) { S.sprintPlan = null; return; }
+    // more rounds to go: a break, then the next sprint starts by itself
+    if (plan && !early && plan.round < plan.rounds) {
+      plan.round++;
+      notify('Sprint done', `${fmt(words)} words. ${plan.brk}-minute break, then sprint ${plan.round} of ${plan.rounds}.`);
+      quoteToast(`Sprint ${plan.round - 1} of ${plan.rounds} done: ${fmt(words)} words. ${plan.brk}-minute break. Stretch, drink some water.`);
+      startBreak(plan.brk, () => { if (S.slug) beginSprint(plan.minutes, plan.goal, { message: `Sprint ${plan.round} of ${plan.rounds}. Go!` }); else S.sprintPlan = null; });
+      return;
+    }
+    S.sprintPlan = null;
+    return showSprintResult(rec, plan, false, prevBest);
+  }
+  // the result, and "how did it go?" (saved with the sprint, and shown in All sprints)
+  const SPRINT_WORK = ['Planning', 'Outlining', 'Drafting from an outline', 'Discovery writing', 'Revising', 'Editing'];
+  const SPRINT_FEEL = ['Feeling good', 'In the zone', 'Tired', 'Distracted', 'Sad', 'Burnt out'];
+  async function showSprintResult(rec, plan, stoppedOnBreak, prevBest) {
+    const sp = { goal: rec.goal }, words = rec.words, wpm = rec.wpm;
+    if (prevBest == null) prevBest = S.project.stats.sprints.filter(x => x !== rec).reduce((a, x) => Math.max(a, x.wpm || 0), 0);
+    const recs = plan && plan.recs.length > 1 ? plan.recs : [rec];
     if (document.body.classList.contains('writer')) await setWriter(false);
-    const goalLine = sp.goal ? (words >= sp.goal ? `Goal of ${fmt(sp.goal)} words reached!` : `${fmt(sp.goal - words)} words short of your ${fmt(sp.goal)} goal.`) : '';
+    const goalLine = sp.goal && recs.length === 1 ? (words >= sp.goal ? `Goal of ${fmt(sp.goal)} words reached!` : `${fmt(sp.goal - words)} words short of your ${fmt(sp.goal)} goal.`) : '';
     const best = wpm > prevBest && S.project.stats.sprints.length > 1 ? 'New personal best speed!' : `Best so far: ${prevBest || wpm} wpm`;
-    await modal({
-      title: 'Sprint finished',
-      body: `<div class="sprint-result"><div class="big">${wpm}</div><div class="lbl">words per minute</div>
-        <div class="sprint-grid"><div><b>${fmt(words)}</b><span>words</span></div><div><b>${rec.minutes}</b><span>minutes</span></div><div><b>${S.project.stats.sprints.length}</b><span>sprints in this project</span></div></div>
-        <p style="margin-top:14px">${[goalLine, best].filter(Boolean).join(' ')}</p>
-        ${quotesOn() ? (q => `<div class="sprint-quote">${quoteHTML(q)}</div>`)(Quotes.random()) : ''}</div>`,
-      buttons: [...(window.UnwipSprints ? [{ label: 'All sprints', value: 'all', kind: 'ghost' }] : []), { label: 'Done', value: true, kind: 'primary' }]
-    }).then(v => { if (v === 'all') window.UnwipSprints.open(); });
+    const tw = recs.reduce((a, r) => a + r.words, 0), tm = Math.round(recs.reduce((a, r) => a + r.minutes, 0) * 10) / 10, twpm = tm ? Math.round(tw / tm * 10) / 10 : 0;
+    const chips = (id, list) => `<div class="chip-row sp-log" id="${id}">${list.map(x => `<button type="button" class="chip" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>`;
+    const body = document.createElement('div');
+    body.innerHTML = `<div class="sprint-result">${recs.length > 1 ? `<div class="big">${twpm}</div><div class="lbl">words per minute over ${recs.length} sprints</div>
+        <div class="sprint-grid"><div><b>${fmt(tw)}</b><span>words</span></div><div><b>${tm}</b><span>minutes writing</span></div><div><b>${recs.map(r => fmt(r.words)).join(' · ')}</b><span>words each sprint</span></div></div>`
+      : `<div class="big">${wpm}</div><div class="lbl">words per minute</div>
+        <div class="sprint-grid"><div><b>${fmt(words)}</b><span>words</span></div><div><b>${rec.minutes}</b><span>minutes</span></div><div><b>${S.project.stats.sprints.length}</b><span>sprints in this project</span></div></div>`}
+        <p style="margin-top:14px">${[goalLine, best].filter(Boolean).join(' ')}</p></div>
+      <div class="sp-howwent"><b>How did it go?</b> <span class="hint">(optional, saved with ${recs.length > 1 ? 'these sprints' : 'the sprint'})</span>
+        <label>What you worked on</label>${chips('sp-work', SPRINT_WORK)}
+        <label>How you felt</label>${chips('sp-feel', SPRINT_FEEL)}
+        <input type="text" id="sp-note" placeholder="A note for yourself (optional)" maxlength="200"></div>
+      ${quotesOn() ? (q => `<div class="sprint-quote">${quoteHTML(q)}</div>`)(Quotes.random()) : ''}`;
+    const pick = { work: '', feel: '' };
+    for (const [id, k] of [['sp-work', 'work'], ['sp-feel', 'feel']]) $$(`#${id} .chip`, body).forEach(c => c.onclick = () => { const on = !c.classList.contains('on'); $$(`#${id} .chip`, body).forEach(x => x.classList.remove('on')); c.classList.toggle('on', on); pick[k] = on ? c.dataset.v : ''; });
+    const v = await modal({ title: recs.length > 1 ? `${recs.length} sprints finished` : 'Sprint finished', body,
+      buttons: [...(window.UnwipSprints ? [{ label: 'All sprints', value: 'all', kind: 'ghost' }] : []), { label: 'Done', value: true, kind: 'primary' }] });
+    const note = ($('#sp-note', body).value || '').trim();
+    if (pick.work || pick.feel || note) { for (const r of recs) { if (pick.work) r.work = pick.work; if (pick.feel) r.feel = pick.feel; if (note) r.note = note; } scheduleMeta(); }
+    if (v === 'all') window.UnwipSprints.open();
     editor.focus();
   }
   $('#btn-sprint').onclick = startSprintDialog;

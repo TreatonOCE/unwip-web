@@ -110,6 +110,8 @@
       <button class="tb-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
       <button class="tb-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
       <button class="tb-btn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+      <button class="tb-btn" id="btn-bullets" type="button" title="Bulleted list (Ctrl+Shift+8, or type “- ” at the start of a line)"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
+      <button class="tb-btn" id="btn-numbers" type="button" title="Numbered list (Ctrl+Shift+7, or type “1. ” at the start of a line)"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4.5h1.2V9M3.6 9h2.4" stroke-width="1.6"/><path d="M3.6 14.2c.3-.7 2.4-.9 2.4.4 0 .9-2.4 2-2.4 3.4h2.5" stroke-width="1.6"/></svg></button>
       <span class="tb-sep tb-detailed"></span>
       <button class="tb-btn tb-detailed" id="btn-comment" title="Comment on the selected words (Ctrl+Alt+M)" data-icon="comment"></button>
       <button class="tb-btn tb-detailed" id="btn-scene" title="Insert scene break" data-icon="scene"></button>
@@ -177,6 +179,7 @@
 
     <main class="editor-wrap" id="editor-wrap">
       <div class="page" id="page">
+        <button class="page-sheet hidden" id="btn-sheet" type="button" title="Change the fields and headings every new entry here starts with (Class, Role…)">Edit sheet fields…</button>
         <button class="page-snap" id="btn-snap" title="Snapshots: saved versions of this document (Ctrl+Shift+S to take one)"><span id="snap-ic"></span><span id="snap-count"></span></button>
         <input class="doc-title" id="doc-title" placeholder="Untitled" spellcheck="false">
         <textarea class="doc-synopsis" id="doc-synopsis" rows="1" placeholder="Synopsis: what happens here, in a line or two…" spellcheck="true"></textarea>
@@ -333,5 +336,6 @@
 <script src="webmfix.js"></script>
 <script src="proof.js"></script>
 <script src="licence.js"></script>
+<script src="lists.js"></script>
 </body>
 </html>

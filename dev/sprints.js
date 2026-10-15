@@ -78,12 +78,13 @@ window.UnwipSprints = (function () {
         </div>
         ${chart(runs)}
         <div class="spr-table-wrap"><table class="spr-table">
-          <thead><tr><th>When</th>${books.length > 1 && !book ? '<th>Book</th>' : ''}<th>Chapter</th><th class="n">Minutes</th><th class="n">Words</th><th class="n">WPM</th><th></th></tr></thead>
+          <thead><tr><th>When</th>${books.length > 1 && !book ? '<th>Book</th>' : ''}<th>Chapter</th><th class="n">Minutes</th><th class="n">Words</th><th class="n">WPM</th><th>How it went</th><th></th></tr></thead>
           <tbody>${runs.map((r, i) => { const d = new Date(r.date); return `<tr class="${r.wpm === s.best && s.best ? 'best' : ''}">
             <td>${esc(d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }))} <small>${esc(d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }))}</small></td>
             ${books.length > 1 && !book ? `<td>${esc(r.book)}</td>` : ''}
             <td class="spr-doc">${esc(r.doc || '–')}</td>
             <td class="n">${r.minutes}</td><td class="n">${fmt(r.words || 0)}</td><td class="n"><b>${r.wpm}</b>${r.wpm === s.best && s.best ? ' <span class="spr-star" title="Your best">★</span>' : ''}</td>
+            <td class="spr-how">${[r.work, r.feel].filter(Boolean).map(x => `<span class="spr-tag">${esc(x)}</span>`).join('')}${r.note ? `<small title="${esc(r.note)}">${esc(r.note.length > 40 ? r.note.slice(0, 38) + '…' : r.note)}</small>` : ''}${r.rounds > 1 ? `<small>sprint ${r.round} of ${r.rounds}</small>` : ''}</td>
             <td><button class="spr-del" data-i="${i}" title="Delete this sprint" aria-label="Delete this sprint">×</button></td></tr>`; }).join('')}</tbody>
         </table></div>
         <p class="sb-hint">Delete a sprint you don’t want counted, like a test run or one you abandoned. Your average and best update straight away.</p>`

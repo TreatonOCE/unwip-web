@@ -79,7 +79,7 @@ window.UnwipBookImport = (function () {
       if ((m = l.match(/^(#{1,6})\s+(.*?)\s*#*$/))) { flush(); const n = Math.min(3, m[1].length); out.push(`<h${n}>${mdInline(m[2])}</h${n}>`); continue; }
       if (/^((\*|-|_)\s*){3,}$/.test(l) || /^#$/.test(l)) { flush(); out.push('<p style="text-align:center">* * *</p>'); continue; }
       if ((m = l.match(/^>\s?(.*)$/))) { flush(); out.push(`<blockquote>${mdInline(m[1])}</blockquote>`); continue; }
-      if ((m = l.match(/^([-*+]|\d+[.)])\s+(.*)$/)) && !/^\*[^*\s]/.test(l)) { flush(); out.push(`<p>${mdInline(m[2])}</p>`); continue; }
+      if ((m = l.match(/^([-*+]|\d+[.)])\s+(.*)$/)) && !/^\*[^*\s]/.test(l)) { flush(); out.push(`<p>${/\d/.test(m[1]) ? esc(m[1].replace(')', '.')) + ' ' : '• '}${mdInline(m[2].replace(/^\[[ xX]\]\s*/, ''))}</p>`); continue; }   // lists keep their bullets and numbers (Unwip's own lists)
       if (/\s{2}$/.test(raw) || /\\$/.test(raw)) { para.push(l.replace(/\\$/, '')); flush(); continue; }
       para.push(l);
     }
