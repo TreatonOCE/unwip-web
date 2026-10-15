@@ -571,7 +571,6 @@ window.UnwipDropbox = (function () {
     const j = await r.json();
     await load();
     Object.assign(st, { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in || 14400) * 1000, account: j.account_id, broken: false, records: {}, since: Date.now() });
-    if (st.auto === undefined) st.auto = true;   // a new connection syncs by itself (a choice someone made before is kept)
     await persist();
     try { const a = await (await rpc('/users/get_current_account', null)).json(); st.email = a.email; st.name = a.name && a.name.display_name; await persist(); } catch {}
     await firstSync();
