@@ -1,8 +1,8 @@
 window.UNWIP_DEV = true;
 (function () { const P = 'dev:', S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem;
   S.getItem = function (k) { return g.call(this, P + k); }; S.setItem = function (k, v) { return s.call(this, P + k, v); }; S.removeItem = function (k) { return r.call(this, P + k); }; })();
-window.UNWIP_VERSION = "0.44.82";
-window.UNWIP_LATEST_NOTES = "- Behind the scenes, with nothing you should notice: Dropbox sign-in for syncing and for importing from Scrivener now share one set of steps, and the corkboard has its own file. Both have new checks of their own first, and every check, 39 screens and 43 exported files were compared before and after.\n- Unwip Dev now runs every check before each update, not just the quick ones.";
+window.UNWIP_VERSION = "0.44.83";
+window.UNWIP_LATEST_NOTES = "- Behind the scenes, with nothing you should notice: 33 older fixes that were only ever checked by hand now have an automatic check each, so a later change can't quietly undo them. They cover saving and sync, the editor, Build and maps, and phone layouts. Each check was tested by undoing its fix in a copy of the app and making sure the check complained.";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;
