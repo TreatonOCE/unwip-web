@@ -70,8 +70,7 @@ window.UnwipDropbox = (function () {
   const headerJSON = o => JSON.stringify(o).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
   async function token() {
     if (st.access && st.exp > Date.now() + 60000) return st.access;
-    const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: st.refresh, client_id: KEY }) });
+    const r = await refreshRequest(KEY, st.refresh);
     if (!r.ok) { if (r.status === 400 || r.status === 401) { st.broken = true; await persist(); } throw new Error('Dropbox sign-in has expired'); }
     const j = await r.json(); st.access = j.access_token; st.exp = Date.now() + (j.expires_in || 14400) * 1000; st.broken = false; await persist();
     return st.access;
@@ -563,15 +562,20 @@ window.UnwipDropbox = (function () {
     const c = b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v))));
     return { v, c };
   }
+  // signing in to Dropbox, shared with the Scrivener import's own read-only sign-in (dbximport.js): the page to send
+  // you to, and swapping its code (or a refresh token) for a sign-in. Checked by tests/sync/dbxsignin.py.
+  const authorizeURL = (key, challenge, extra) => 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams({ client_id: key, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256', token_access_type: 'offline', ...(extra || {}) });
+  const tokenRequest = params => fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params) });
+  const exchange = (key, code, verifier, redirect) => tokenRequest({ code, grant_type: 'authorization_code', client_id: key, code_verifier: verifier, ...(redirect ? { redirect_uri: redirect } : {}) });
+  const refreshRequest = (key, refresh) => tokenRequest({ grant_type: 'refresh_token', refresh_token: refresh, client_id: key });
   // on a Home Screen app, Dropbox can't send you back into the app, so it shows a code to copy instead
   async function connect() {
     const U = window.__unwip;
     if (!KEY) { setupNeeded(); return; }
     const { v, c } = await pkce(); const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
-    const q = { client_id: KEY, response_type: 'code', code_challenge: c, code_challenge_method: 'S256', token_access_type: 'offline' };
     if (standalone()) {
       // a Home Screen app may only open another page from a direct tap, so this is a real link to tap
-      const url = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams(q);
+      const url = authorizeURL(KEY, c);
       const body = document.createElement('div');
       body.innerHTML = `<ol class="dbx-steps"><li>Tap <b>Open Dropbox</b>. Sign in and tap <b>Allow</b>.</li><li>Dropbox shows a code. Copy it.</li><li>Come back here and paste it below.</li></ol>
         <p><a class="btn primary dbx-open" href="${url}" target="_blank" rel="noopener">Open Dropbox</a></p>
@@ -581,14 +585,12 @@ window.UnwipDropbox = (function () {
       if (code) await finish(code, v, null);
     } else {
       sessionStorage.setItem('unwip-dbx', JSON.stringify({ v, state }));
-      location.href = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams({ ...q, redirect_uri: redirectUri(), state });
+      location.href = authorizeURL(KEY, c, { redirect_uri: redirectUri(), state });
     }
   }
   async function finish(code, verifier, redirect) {
     const U = window.__unwip;
-    const body = { code, grant_type: 'authorization_code', client_id: KEY, code_verifier: verifier };
-    if (redirect) body.redirect_uri = redirect;
-    const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
+    const r = await exchange(KEY, code, verifier, redirect);
     if (!r.ok) { U.toast('Dropbox didn’t accept that. Try connecting again (the code only works once, for a few minutes).', 'warn', 9000); return; }
     const j = await r.json();
     await load();
@@ -762,5 +764,6 @@ window.UnwipDropbox = (function () {
     } catch {}
   }
 
-  return { connect, disconnect, sync, check, render, fillCard, connected: () => connected(), get state() { return st; }, get lastError() { return lastError; }, hasKey: !!KEY };
+  return { connect, disconnect, sync, check, render, fillCard, connected: () => connected(), get state() { return st; }, get lastError() { return lastError; }, hasKey: !!KEY,
+    signIn: { b64url, standalone, redirectUri, pkce, authorizeURL, exchange, refreshRequest } };
 })();

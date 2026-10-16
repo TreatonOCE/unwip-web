@@ -10,10 +10,11 @@ window.UnwipDropboxImport = (function () {
   const FS = F.__fs, STATE = 'app/dropbox-import.json';
   const API = 'https://api.dropboxapi.com/2', CONTENT = 'https://content.dropboxapi.com/2';
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const b64url = a => btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const headerJSON = o => JSON.stringify(o).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
-  const standalone = () => !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
-  const redirectUri = () => location.origin + location.pathname.replace(/index\.html$/, '');
+  // signing in is shared with sync's (dropbox.js, loaded first): PKCE, the Dropbox page, swapping the code
+  const SI = (window.UnwipDropbox && window.UnwipDropbox.signIn) || null;
+  if (!SI) return null;
+  const { b64url, standalone, redirectUri } = SI;
   // back from Dropbox's sign-in page (read now, before anything tidies the address)
   const back = new URLSearchParams(location.search);
   let st = null;
@@ -25,7 +26,7 @@ window.UnwipDropboxImport = (function () {
     await load();
     if (st.access && st.exp > Date.now() + 60000) return st.access;
     if (!st.refresh) return null;
-    const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: st.refresh, client_id: KEY }) });
+    const r = await SI.refreshRequest(KEY, st.refresh);
     if (!r.ok) { st = {}; await save(); return null; }
     const j = await r.json(); st.access = j.access_token; st.exp = Date.now() + (j.expires_in || 14400) * 1000; await save();
     return st.access;
@@ -43,13 +44,11 @@ window.UnwipDropboxImport = (function () {
   // ---- signing in (once): read-only access to Dropbox
   async function signIn(after) {
     const U = window.__unwip;
-    const v = b64url(crypto.getRandomValues(new Uint8Array(48)));
-    const c = b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v))));
+    const { v, c } = await SI.pkce();
     const state = 'imp_' + b64url(crypto.getRandomValues(new Uint8Array(12)));
-    const q = { client_id: KEY, response_type: 'code', code_challenge: c, code_challenge_method: 'S256', token_access_type: 'offline' };
     const intro = `<p>To bring in a Scrivener project, Unwip needs to <b>read</b> it from your Dropbox. This is a separate, read-only permission: it can look at your Dropbox and download a project, but can’t change or delete anything. It’s only used when you import.</p>`;
     if (standalone()) {
-      const url = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams(q);
+      const url = SI.authorizeURL(KEY, c);
       const body = document.createElement('div');
       body.innerHTML = intro + `<ol class="dbx-steps"><li>Tap <b>Open Dropbox</b>. Sign in and tap <b>Allow</b>.</li><li>Dropbox shows a code. Copy it.</li><li>Come back here and paste it below.</li></ol>
         <p><a class="btn primary dbx-open" href="${url}" target="_blank" rel="noopener">Open Dropbox</a></p>
@@ -61,13 +60,11 @@ window.UnwipDropboxImport = (function () {
     const go = await U.modal({ title: 'Read your Dropbox', body: intro + '<p>Dropbox will ask you to allow it, then bring you straight back here.</p>', buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Continue to Dropbox', value: true, kind: 'primary' }] });
     if (!go) return false;
     sessionStorage.setItem('unwip-dbx-imp', JSON.stringify({ v, state, after: after || '' }));
-    location.href = 'https://www.dropbox.com/oauth2/authorize?' + new URLSearchParams({ ...q, redirect_uri: redirectUri(), state });
+    location.href = SI.authorizeURL(KEY, c, { redirect_uri: redirectUri(), state });
     return false;
   }
   async function finish(code, verifier, redirect) {
-    const body = { code, grant_type: 'authorization_code', client_id: KEY, code_verifier: verifier };
-    if (redirect) body.redirect_uri = redirect;
-    const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
+    const r = await SI.exchange(KEY, code, verifier, redirect);
     if (!r.ok) { window.__unwip.toast('Dropbox didn’t accept that. Try again (the code only works once, for a few minutes).', 'warn', 9000); return false; }
     const j = await r.json(); await load();
     Object.assign(st, { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in || 14400) * 1000 });

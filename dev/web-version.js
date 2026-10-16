@@ -1,8 +1,8 @@
 window.UNWIP_DEV = true;
 (function () { const P = 'dev:', S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem;
   S.getItem = function (k) { return g.call(this, P + k); }; S.setItem = function (k, v) { return s.call(this, P + k, v); }; S.removeItem = function (k) { return r.call(this, P + k); }; })();
-window.UNWIP_VERSION = "0.44.81";
-window.UNWIP_LATEST_NOTES = "- Behind the scenes: a tidy-up of Unwip's code, with nothing you should notice. The Moodboard and Timeline have their own files now, leftovers from older versions are gone, and [system messages] are spotted by one shared rule on the page, in e-books and in the Royal Road copy. Every check passed before and after, and 39 screens were compared pixel by pixel.\n- Maps on a phone: tapping a small building selects it again, instead of sometimes resizing it a little (from the new turn and resize handles).";
+window.UNWIP_VERSION = "0.44.82";
+window.UNWIP_LATEST_NOTES = "- Behind the scenes, with nothing you should notice: Dropbox sign-in for syncing and for importing from Scrivener now share one set of steps, and the corkboard has its own file. Both have new checks of their own first, and every check, 39 screens and 43 exported files were compared before and after.\n- Unwip Dev now runs every check before each update, not just the quick ones.";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;
