@@ -104,8 +104,10 @@ window.UnwipBuild = (function () {
     await refresh();
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const world = scope === 'world';
+    // the first time, read the Story Bible shelf before drawing, so nothing jumps when it arrives
+    if (window.UnwipBible && (world ? !phone() : phone()) && !window.UnwipBible.lastShelf) await window.UnwipBible.shelfHTML().catch(() => '');
     box.innerHTML = `
-      ${window.UnwipBible && (world ? !phone() : phone()) ? '<div id="sbb-shelf-slot"></div>' : ''}
+      ${window.UnwipBible && (world ? !phone() : phone()) ? `<div id="sbb-shelf-slot">${window.UnwipBible.lastShelf || ''}</div>` : ''}
       <div class="pl-head"><div><h1>${world ? 'Open World' : 'Build'}</h1><p>${world ? 'The deep end of your world: magic systems, rune alphabets, sigils and insignia. Like everything in Build, they belong to the world, not one book, so any book can use them.' : 'The pieces of your world: maps, coats of arms and stat systems. They belong to the world, not one book, so any book can use them.' + (U.level && U.level() >= 2 ? ' Magic, runes, sigils and insignia are in Open World.' : '')}</p></div></div>
       <div class="pl-tools bd-tools">${NEW_ORDER().filter(inScope).map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}${world && !phone() && window.UnwipCharSheet ? `<button class="pl-tool" data-csheet><span>🛡️</span><b>New character sheet</b><em>Name a character once, put them in the books they’re in, and give them gear slot by slot, chapter by chapter.</em></button>` : ''}</div>
       ${items.some(x => inScope(x.kind)) ? ORDER.filter(k => inScope(k) && by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
@@ -116,7 +118,7 @@ window.UnwipBuild = (function () {
         : `<p class="lib-empty">${world ? 'Nothing here yet. Pick something above to start.' : 'Nothing built yet. Pick something above to start: a map is a good first piece.'}</p>`}`;
     $$('[data-new]', box).forEach(b => b.onclick = () => create(b.dataset.new));
     $$('[data-csheet]', box).forEach(b => b.onclick = () => window.UnwipBible ? window.UnwipBible.newEntry({ kind: 'characters', sheet: true }) : sheetFromLibrary());
-    const shelfSlot = $('#sbb-shelf-slot', box); if (shelfSlot) window.UnwipBible.shelfHTML().then(h => { if (shelfSlot.isConnected) { shelfSlot.innerHTML = h; window.UnwipBible.wireShelf(shelfSlot); } });
+    const shelfSlot = $('#sbb-shelf-slot', box); if (shelfSlot) { if (shelfSlot.innerHTML) window.UnwipBible.wireShelf(shelfSlot); window.UnwipBible.shelfHTML().then(h => { if (shelfSlot.isConnected && shelfSlot.innerHTML !== h) { shelfSlot.innerHTML = h; window.UnwipBible.wireShelf(shelfSlot); } }); }
     $$('.bd-card', box).forEach(c => {
       const id = c.dataset.id;
       c.onclick = e => { if (e.target.closest('.bd-more')) { const r = e.target.getBoundingClientRect(); return cardMenu(id, r.left, r.bottom); } open(id); };

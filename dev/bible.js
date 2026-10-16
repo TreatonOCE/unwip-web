@@ -52,14 +52,18 @@ window.UnwipBible = (function () {
     return { series: [...series.values()].map(s => ({ ...s, books: s.books.sort((a, b) => (a.seriesNo || 999) - (b.seriesNo || 999) || (a.modified || 0) - (b.modified || 0)) })), alone };
   }
   // the Story Bible row at the top of the Open World tab
+  // the last shelf drawn, so Build can show it straight away while the books are read again (an empty slot that
+  // fills a moment later made the Build buttons jump: they flashed at the top, then dropped below)
+  let lastShelf = '';
   async function shelfHTML() {
     const sh = await shelf();
     const card = (label, sub, data) => `<button type="button" class="sbb-card" ${data}><span class="sbb-spine"></span><b>${esc(label)}</b><em>${esc(sub)}</em></button>`;
     const cards = sh.series.map(s => card(s.name, `Series · ${s.books.length} book${s.books.length === 1 ? '' : 's'}`, `data-bible-series="${esc(s.name)}"`))
       .concat(sh.alone.map(b => card(b.title, 'One book', `data-bible-book="${esc(b.slug)}"`)));
     return `<div class="sbb-shelf"><div class="pl-head"><div><h1>Story Bible</h1><p>Everything about your world in one place, for a whole series or one book: who and what is in it, where each one turns up, and when things happen.${phone() ? ' On a phone you can read it; add to it on an iPad or computer.' : ''}</p></div></div>
-      <div class="sbb-row">${cards.join('') || '<p class="lib-empty">Make a book first, then its Story Bible fills itself in.</p>'}</div></div>`;
+      <div class="sbb-row">${cards.join('') || '<p class="lib-empty sbb-empty">Make a book first, then its Story Bible fills itself in.</p>'}</div></div>`;
   }
+  const shelfHTMLSaved = async () => (lastShelf = await shelfHTML());
   function wireShelf(box) {
     $$('[data-bible-series]', box).forEach(b => b.onclick = () => open({ series: b.dataset.bibleSeries }));
     $$('[data-bible-book]', box).forEach(b => b.onclick = () => open({ slug: b.dataset.bibleBook }));
@@ -755,7 +759,7 @@ window.UnwipBible = (function () {
   // the Open World shelf behind the bible shows the series and books as they are now
   async function refreshShelf() {
     const slot = document.getElementById('sbb-shelf-slot'); if (!slot) return;
-    const h = await shelfHTML(); if (slot.isConnected) { slot.innerHTML = h; wireShelf(slot); }
+    const h = await shelfHTMLSaved(); if (slot.isConnected) { slot.innerHTML = h; wireShelf(slot); }
   }
   async function deleteFromBible(bk) {
     if (phone() || !U.deleteBook) return;
@@ -954,5 +958,5 @@ window.UnwipBible = (function () {
   if (U.api.onAddToBible) U.api.onAddToBible(t => { if (U.level() >= 2 && !phone()) addFact(t || getSelection().toString()); });
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && st && !document.querySelector('.modal-back')) { if (st.sel) { st.sel = null; draw(); } else close(); } });
-  return { open, close, reopen, shelfHTML, wireShelf, newEntry, addFact, load, parseSheet, exportHTML: inc => exportHTML(new Set(inc)), get state() { return st; } };
+  return { open, close, reopen, shelfHTML: shelfHTMLSaved, get lastShelf() { return lastShelf; }, wireShelf, newEntry, addFact, load, parseSheet, exportHTML: inc => exportHTML(new Set(inc)), get state() { return st; } };
 })();

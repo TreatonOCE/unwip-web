@@ -632,6 +632,8 @@ window.UnwipDropbox = (function () {
     st = { records: {}, localOnly: [], removedHere: [] }; await persist(); render();
   }
   function setupNeeded() {
+    // Unwip Dev (the test copy) is kept away from real books on purpose: say so, instead of a setup step that never comes
+    if (window.UNWIP_DEV) return window.__unwip.modal({ title: 'Dropbox is off in Unwip Dev', body: `<p>Unwip Dev is the test copy of Unwip. So that testing can never change your real books, it doesn’t connect to Dropbox, and its books stay on this device.</p><p>For your real books, use the normal Unwip. To try something on a real book here, bring a copy in with Import.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
     window.__unwip.modal({ title: 'Dropbox needs one setup step', body: `<p>Before this version can reach your Dropbox, Unwip has to be registered with Dropbox (a free, two-minute step on dropbox.com). Once that’s done, this button will connect straight away.</p>`, buttons: [{ label: 'OK', value: true, kind: 'primary' }] });
   }
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -639,6 +641,7 @@ window.UnwipDropbox = (function () {
   // ---------------------------------------------------------------- what you see: a status pill on the main screen and a Settings card
   const ago = t => { if (!t) return 'not yet'; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(t).toLocaleDateString(); };
   function statusText(short) {
+    if (!KEY && window.UNWIP_DEV) return { cls: 'off', text: short ? 'Off' : 'Dropbox is off in Dev' };
     if (!st || !connected()) return { cls: 'off', text: 'Connect Dropbox' };
     if (st.broken) return { cls: 'warn', text: 'Dropbox: sign in again' };
     if (st.needsUpdate && !running) return { cls: 'warn', text: short ? 'Update Unwip to sync' : 'Update Unwip to keep syncing (close and reopen it)' };

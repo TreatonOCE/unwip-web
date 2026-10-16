@@ -2384,6 +2384,7 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 /* polish: empty chart, and the main screen on smaller screens */
 .chart-empty { position: absolute; inset: 0 0 22px 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding: 0 16px; pointer-events: none; }
 .lib-empty b { color: var(--text); }
+.sbb-row .sbb-empty { padding: 6px 0 18px; text-align: left; }   /* the Story Bible's "make a book first": a line, not a big empty box */
 @media (max-width: 1000px) { .brand .brand-slogan { display: none; } .lib-total { white-space: nowrap; } }
 @media (max-width: 900px) { .lib-head-right .lib-total { display: none; } .lib-tabs { margin-left: 16px; } }
 @media (max-width: 640px) {
