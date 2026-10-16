@@ -9,7 +9,6 @@ window.UnwipTrack = (function () {
   const { $, $$, S, editor, esc, api } = U;
   const on = () => !!(S.project && S.project.track);
   const me = () => ((S.settings || {}).author || '').trim() || (api.web ? 'Me (phone)' : 'Me');
-  const isTc = el => el && el.nodeType === 1 && (el.classList.contains('tc-ins') || el.classList.contains('tc-del'));
   const up = (n, cls) => { const el = n && (n.nodeType === 3 ? n.parentNode : n); return el && el.closest ? el.closest('.' + cls) : null; };
   function mark(kind) { const e = document.createElement(kind); e.className = 'tc-' + kind; e.dataset.a = me(); e.dataset.t = String(Date.now()); return e; }
 
@@ -146,7 +145,6 @@ window.UnwipTrack = (function () {
     return true;
   }
 
-  function splitAt(n, o) { if (n.nodeType !== 3 || o <= 0 || o >= n.length) return; n.splitText(o); }
   function markDeleted(r, caret) {
     // split the ends so every text node is either fully in or fully out
     const sc = r.startContainer, so = r.startOffset, ec = r.endContainer, eo = r.endOffset;

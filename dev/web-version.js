@@ -1,8 +1,8 @@
 window.UNWIP_DEV = true;
 (function () { const P = 'dev:', S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem;
   S.getItem = function (k) { return g.call(this, P + k); }; S.setItem = function (k, v) { return s.call(this, P + k, v); }; S.removeItem = function (k) { return r.call(this, P + k); }; })();
-window.UNWIP_VERSION = "0.44.80";
-window.UNWIP_LATEST_NOTES = "- No hard feelings: a book imported from Scrivener can go back out exactly as Scrivener had it. The same folders, order, names and icons (including Scrivener's own picture icons and emoji Unwip can't show) come back. Chapters you added in Unwip go next to the one before them, and things you put in Unwip's Trash go to Scrivener's Trash. It's ticked in the No hard feelings window. This only works for books imported from now on, because Unwip has to note the layout when the book comes in.";
+window.UNWIP_VERSION = "0.44.81";
+window.UNWIP_LATEST_NOTES = "- Behind the scenes: a tidy-up of Unwip's code, with nothing you should notice. The Moodboard and Timeline have their own files now, leftovers from older versions are gone, and [system messages] are spotted by one shared rule on the page, in e-books and in the Royal Road copy. Every check passed before and after, and 39 screens were compared pixel by pixel.\n- Maps on a phone: tapping a small building selects it again, instead of sometimes resizing it a little (from the new turn and resize handles).";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;

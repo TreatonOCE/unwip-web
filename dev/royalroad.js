@@ -16,7 +16,7 @@ window.UnwipRR = (function () {
   const U = window.__unwip; if (!U) return null;
   const { $, $$, S, api } = U;
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const SYS = /^\s*\[[^\[\]]*(\][^\[\]]*\[[^\[\]]*)*\]\s*$/;            // the same test as the LitRPG boxes while writing
+  const SYS = window.FolioClip.SYSMSG;   // the same test as the LitRPG boxes while writing (clipboard.js)
   const BREAK = /^\s*([*#~•·❦⁂—–-]\s*){1,5}$/;                           // * * *, #, ❦, ⁂ and the like
   const LOOKS = {
     rr: { name: 'Royal Road’s own table look', td: 'padding: 8px 12px;', note: 'No colours of ours: Royal Road draws the box, so it suits light and dark themes.' },

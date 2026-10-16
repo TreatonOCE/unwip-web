@@ -700,8 +700,12 @@ window.UnwipMaps = (function () {
     const p = world(e), near = (e.pointerType === 'touch' ? 22 : 12) / cam.z;
     // an outline keeps its points as they were when the drag started, and its middle, so it turns and resizes cleanly
     const outline = () => { const sh = shape(sel); if (!sh) return {}; const c = shapeMid(sh); return { c, pts0: sh.pts.map(q => q.slice()), R: shapeR(sh, c) }; };
-    if (e.button === 0 && tool === 'select' && !e.altKey) { const sz = sizeHandle(), o = resizable(sel); if (sz && o && Math.hypot(p.x - sz.x, p.y - sz.y) < near) { try { cv.setPointerCapture(e.pointerId); } catch {} push(); const c = pivotOf(sel); drawing = { size: true, d0: Math.max(4, Math.hypot(p.x - c.x, p.y - c.y)), s0: o.s || 1, l0: sel.type === 'label' ? LABEL_SIZE(o) : 0, ...outline() }; return; } }
-    if (e.button === 0 && tool === 'select' && !e.altKey) { const hd = handle(); if (hd && Math.hypot(p.x - hd.x, p.y - hd.y) < near) { try { cv.setPointerCapture(e.pointerId); } catch {} push(); drawing = { turn: true, ...outline() }; return; } }
+    // a handle is only taken when the press isn't on the thing itself, or is right on the handle: on a small building
+    // tapped with a finger the handles are within reach of its middle, and a tap there must select or move it, never resize
+    const onSel = () => { const bb = sel && bounds(sel); return !!bb && p.x >= bb.x && p.x <= bb.x + bb.w && p.y >= bb.y && p.y <= bb.y + bb.h; };
+    const grab = h => h && Math.hypot(p.x - h.x, p.y - h.y) < near && (!onSel() || Math.hypot(p.x - h.x, p.y - h.y) < 7 / cam.z);
+    if (e.button === 0 && tool === 'select' && !e.altKey) { const sz = sizeHandle(), o = resizable(sel); if (sz && o && grab(sz)) { try { cv.setPointerCapture(e.pointerId); } catch {} push(); const c = pivotOf(sel); drawing = { size: true, d0: Math.max(4, Math.hypot(p.x - c.x, p.y - c.y)), s0: o.s || 1, l0: sel.type === 'label' ? LABEL_SIZE(o) : 0, ...outline() }; return; } }
+    if (e.button === 0 && tool === 'select' && !e.altKey) { const hd = handle(); if (hd && grab(hd)) { try { cv.setPointerCapture(e.pointerId); } catch {} push(); drawing = { turn: true, ...outline() }; return; } }
     // Select and Select an area: a press only selects; it becomes a move once the finger or mouse has gone a few pixels
     // (so a tap never nudges anything). Pressing on any part of a selected group moves the whole group.
     const picking = (tool === 'select' || tool === 'marquee') && e.button === 0 && !e.altKey;

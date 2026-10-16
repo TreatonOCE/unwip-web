@@ -295,7 +295,6 @@ window.FolioImport = (function () {
     // keep Scrivener's own status names (with colours from a matching palette), so nothing gets renamed
     const PALETTE = ['#9b968d', '#d39b2a', '#4a7fd0', '#7a5cc7', '#3f9a5a', '#c0392b', '#1f7a8c', '#b5651d'];
     const statusList = Object.entries(statuses).filter(([, n]) => n && !/^no status$/i.test(n)).map(([id, name], i) => ({ id: 's' + id, name, color: /done|final|complete/i.test(name) ? '#3f9a5a' : /to ?do/i.test(name) ? '#9b968d' : /first draft/i.test(name) ? '#d39b2a' : /revis/i.test(name) ? '#4a7fd0' : PALETTE[(i + 3) % PALETTE.length] }));
-    const STATUS_MAP = t => { t = (t || '').toLowerCase(); if (!t || t === 'no status') return ''; if (/to ?do/.test(t)) return 'todo'; if (/final|done|complete/.test(t)) return 'final'; if (/revis|second/.test(t)) return 'revised'; return 'draft'; };
 
     const roots = { manuscript: [], characters: [], places: [], items: [], notes: [], research: [], trash: [] };
     const rtfToHTML = rtf => rtf ? window.FolioRTF.toHTML(rtf) : '';

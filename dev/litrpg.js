@@ -27,7 +27,7 @@ window.UnwipLitRPG = (function () {
   async function setCfg(patch) { S.settings = await U.api.setSettings({ litrpg: Object.assign(cfg(), patch) }); apply(); }
 
   // ---- system messages look
-  const SYS = /^\s*\[[^\[\]]*(\][^\[\]]*\[[^\[\]]*)*\]\s*$/;   // the paragraph is [one message] (or [a] [b] side by side)
+  const SYS = window.FolioClip.SYSMSG;   // the paragraph is [one message] (or [a] [b] side by side): clipboard.js
   // A short message on its own ([I am], [System will do]) reads like the System talking, so it can have a box that fits
   // the words, or no box at all (Settings › LitRPG). Several messages in a row (a status screen) always get the full box.
   const SHORT_MAX = 70;

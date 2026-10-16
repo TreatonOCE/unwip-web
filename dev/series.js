@@ -9,7 +9,6 @@ window.UnwipSeries = (function () {
   const KINDS = { characters: 'Characters', places: 'Places', items: 'Items' };
   const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + ':' + s.length; };
   const norm = h => (h || '').trim();
-  const sheetKinds = p => (p.binder || []).filter(r => KINDS[r.kind] || r.custom).map(r => r.kind);
   const kindTitle = (p, k) => ((p.binder || []).find(r => r.kind === k) || {}).title || KINDS[k] || k;
   function walk(nodes, fn, root) { for (const n of nodes || []) { fn(n, root); if (n.children) walk(n.children, fn, root); } }
   function sheetsOf(p) {

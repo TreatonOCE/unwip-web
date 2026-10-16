@@ -75,7 +75,6 @@ window.UnwipNoHardFeelings = (function () {
     }
     return out + '}';
   }
-  const plainRTF = text => `{\\rtf1\\ansi\\ansicpg1252\\uc1\\deff0{\\fonttbl{\\f0\\fswiss\\fcharset0 Helvetica;}}\\pard\\plain\\f0\\fs24 ${rtfText(text)}\\par}`;
 
   // ------------------------------------------------------------------ building the .scriv folder
   const FRONT = /^\s*(title|title page|half[- ]title|front matter|copyright|dedication|epigraph|contents)\s*$/i;

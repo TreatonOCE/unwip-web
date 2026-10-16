@@ -325,7 +325,6 @@ window.UnwipDropbox = (function () {
     for (const k of Object.keys(st.records)) if (!cache[k] && tracked(k)) out.add(k.split('/')[0]);   // deleted on another device
     return out;
   }
-  const differs = cache => changedBooks(cache).size > 0;
   // ask Dropbox what changed since the last look (brings nothing in). true when the answer is fresh.
   let lookP = null;
   function look() {

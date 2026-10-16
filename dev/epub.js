@@ -101,7 +101,7 @@ window.FolioEPUB = (function () {
     return `<div class="opener">${num ? `<p class="num">${x(num)}</p>` : ''}${t.orn ? `<p class="orn">${x(t.orn)}</p>` : ''}<h1>${x(title)}</h1></div>\n`;
   }
   // LitRPG [system messages]: a paragraph that's all [bracketed] can go out as a box (Settings › LitRPG tools)
-  const SYSMSG = /^\s*\[[^\[\]]*(\][^\[\]]*\[[^\[\]]*)*\]\s*$/;
+  const SYSMSG = window.FolioClip.SYSMSG;
   let sysBoxes = false, sysShort = 'full';
   // a short message on its own gets a box that fits the words, or no box (Settings › LitRPG); a run of them keeps the box
   const lone = (L, i) => { const t = k => L[k] ? L[k].runs.map(r => r.text || '').join('') : ''; const s = t(i).trim(); return s.length <= 70 && !/\]\s*\[/.test(s) && !SYSMSG.test(t(i - 1)) && !SYSMSG.test(t(i + 1)); };

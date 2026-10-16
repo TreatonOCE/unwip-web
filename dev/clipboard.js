@@ -293,6 +293,9 @@
 
   // ---- write: blocks -> explicit HTML for Google Docs / Word -------------
   const SCENE_BREAK = /^\s*((\*|#|~|•|·)\s*){1,5}\s*$/;
+  // a LitRPG [system message]: the whole paragraph is [one message] (or [a] [b] side by side). One rule for the boxes
+  // while writing (litrpg.js), the EPUB (epub.js) and the Royal Road copy (royalroad.js), so they always agree.
+  const SYSMSG = /^\s*\[[^\[\]]*(\][^\[\]]*\[[^\[\]]*)*\]\s*$/;
 
   function toExportHTML(blocks, S, opts = {}) {
     // optional font swap (e.g. fonts Google Docs doesn't have -> closest one it does)
@@ -413,6 +416,6 @@
       }
       return { html: box.innerHTML.trim() || '<p><br></p>', removed, scenes };
     },
-    extract, parseHTML, SCENE_BREAK, quoteFamily
+    extract, parseHTML, SCENE_BREAK, SYSMSG, quoteFamily
   };
 })();

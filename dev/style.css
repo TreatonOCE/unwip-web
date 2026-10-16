@@ -1430,8 +1430,7 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .tb-pop { position: fixed; z-index: 700; display: flex; flex-wrap: wrap; gap: 3px; max-width: 320px; padding: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.18); }
 .tb-pop select { height: 30px; border: 1px solid var(--line); background: var(--paper); color: var(--text); border-radius: 6px; padding: 0 6px; }
 /* smaller windows: shorter labels on the right-hand buttons */
-.tb-label-short { display: none; }
-@media (max-width: 1250px) { .tb-label-long { display: none; } .tb-label-short { display: inline; } .tb-left { min-width: 120px; } }
+@media (max-width: 1250px) { .tb-left { min-width: 120px; } }
 @media (max-width: 1080px) { #btn-stuck .tb-label { display: none; } .tb-right { gap: 2px; } }
 
 /* ================================================================== + NEW, TEMPLATES, HELP */
@@ -2206,22 +2205,6 @@ button.stat-card:hover { border-color: var(--accent); }
 .tl-ev .tl-wd { font-style: normal; display: block; color: var(--muted); }
 .ev-wrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .modal .ev-wrow input[type=number] { width: 80px; flex: none; } .modal .ev-wrow select { width: auto; min-width: 150px; flex: none; }
-.cal .hint { margin-bottom: 10px; } .cal-pre { white-space: nowrap; }
-.cal-cols { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 18px; margin: 6px 0 12px; }
-.cal h4 { margin: 10px 0 6px; font: 700 12px var(--ui); text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
-.cal h4 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
-.cal-list { display: grid; gap: 5px; margin-bottom: 6px; max-height: 260px; overflow: auto; padding-right: 4px; }
-.cal-row { display: flex; gap: 5px; align-items: center; }
-.modal .cal-row input, .modal .cal-row select { min-width: 0; padding: 5px 7px; font-size: 13.5px; }
-.modal .cal-row .cal-mn, .modal .cal-row .cal-sn, .modal .cal-row .cal-on { flex: 1 1 0; width: 0; min-width: 60px; } .modal .cal-row .cal-md, .modal .cal-row .cal-sd, .modal .cal-row .cal-of { width: 60px; flex: none; } .modal .cal-row .cal-oc { width: 68px; flex: none; } .modal .cal-row .cal-sm { width: 112px; flex: none; } .cal-row > * { min-width: 0; }
-.cal-w { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
-.cal-x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; }
-.cal-x:hover { color: var(--text); }
-.cal-start { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
-.modal .cal-start input[type=number] { width: 70px; } .modal .cal-start select { width: auto; } .modal .cal-start #cal-sy { width: 90px; }
-.cal-prev { display: grid; gap: 3px; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 7%, transparent); font-size: 13.5px; }
-.cal-prev b { display: inline-block; min-width: 64px; }
-@media (max-width: 640px) { .cal-cols { grid-template-columns: 1fr; } }
 .tl-ev:has(.tl-wd) { height: 62px; }
 .tl-moon { position: absolute; bottom: 1px; transform: translateX(-50%); font-size: 9px; line-height: 1; font-weight: 400; opacity: .85; pointer-events: auto; }
 
@@ -2610,7 +2593,6 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .br-hit { stroke: transparent; stroke-width: 9; fill: none; cursor: pointer; }
 .br-hit:hover { stroke: rgba(238, 96, 56, .25); }
 .br-pv { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 3; fill: none; }
-.br-hint { color: var(--muted); font-size: 12.5px; margin: 0; }
 .br-fields { display: grid; grid-template-columns: 110px 1fr; gap: 8px 10px; align-items: end; }
 .br-fields .br-wide { grid-column: 1 / -1; }
 .br-fields input, .br-side input:not([type]), .br-side textarea, .br-side select, .ar-side select, .ar-side input:not([type]) { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 14px; outline: none; }
@@ -2654,8 +2636,6 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .ar-ex-ic { grid-area: ic; width: 28px; height: 28px; color: var(--text); } .ar-ex-ic svg { width: 28px; height: 28px; }
 .ar-ex-n { grid-area: n; font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ar-ex [data-ex-del], .ar-ex [data-sy-del] { grid-area: del; } .ar-ex .sg-rep { grid-area: t; margin: 0; font-size: 12.5px; } .ar-ex [data-sy-s] { grid-area: s; width: 100%; } .ar-ex select { grid-area: t; width: 100%; } .ar-ex input[type=range] { grid-area: s; width: 100%; }
-.in-group { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 10px 0 5px; }
-.in-sym.in-lib { font: 600 11px/1 inherit; color: var(--accent); }
 /* the shared symbol picker (symbols.js) */
 .sym-pick .sym-search { width: 100%; margin-bottom: 10px; }
 .sym-pick section { margin-bottom: 12px; } .sym-pick h4 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 6px; }
@@ -2831,8 +2811,6 @@ body.writer .pf-remind { bottom: 18px; }
 .bm-howto ol { margin: 8px 0 10px; padding-left: 22px; line-height: 1.5; }
 .bm-howto li { margin-bottom: 4px; }
 .bm-howto-show { font-size: 12.5px; margin-top: 6px; }
-.ar-shield.dragging-on svg { touch-action: none; }
-.ar-shield.dragging-on [data-chi] { cursor: grab; }
 #ar-size { width: 100%; }
 
 /* 0.44.12: letter effects that look clearly different from each other, and shown above dialogs (so the demo shows them) */
@@ -3030,9 +3008,6 @@ body.litrpg .editor p.lit-sys, body.litrpg #editor p.lit-sys { margin: .5em auto
 .in-left { position: sticky; top: 0; align-self: start; }
 .in-shot img { width: 100%; max-width: 480px; display: block; margin: 0 auto; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
 @media (max-width: 900px) { .in-page { grid-template-columns: minmax(0, 1fr); padding: 12px; } .in-left { position: static; } .in-shot img { max-width: 280px; } .in-left .bm-help { margin-top: 8px; } }
-.in-syms { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 6px; }
-.in-sym { display: flex; align-items: center; justify-content: center; padding: 5px; border: 1px solid var(--line); border-radius: 8px; background: #f6f6f4; cursor: pointer; }
-.in-sym.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .in-sch i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 2px; border: 1px solid rgba(0,0,0,.2); vertical-align: -1px; }
 .in-sch i:last-of-type { margin-right: 6px; }
 .in-toggles { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0 6px; }
