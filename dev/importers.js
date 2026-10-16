@@ -281,7 +281,7 @@ window.FolioImport = (function () {
     // Scrivener only writes <IncludeInCompile>Yes</IncludeInCompile> on what goes in the book, so in a project that uses
     // it, a manuscript item without it was unticked there and is left out of the book here too
     const usesInclude = [...xml.querySelectorAll('IncludeInCompile')].some(e => /^yes$/i.test(e.textContent.trim()));
-    const report = { documents: 0, folders: 0, skipped: [], empty: 0, withNotes: 0, missing: [], unreadable: [] };
+    const report = { documents: 0, folders: 0, skipped: [], empty: 0, withNotes: 0, missing: [], unreadable: [], trashMissing: [] };
     const docs = {};
     const noteDocs = [];
     const labels = {}, statuses = {};
@@ -330,7 +330,10 @@ window.FolioImport = (function () {
       const bodyHTML = rtfToHTML(f.content);   // cleaned at the end, once the project's main font is known
       // a text document whose file is missing, or isn't readable RTF, is named in the report rather than quietly empty
       if (!/Folder/.test(type) && !['Image', 'PDF', 'WebArchive', 'Media'].includes(type)) {
-        if (f.content == null && !(item.querySelector(':scope > Children'))) report.missing.push(title);
+        // something in Scrivener's own Trash often has no text file left (Scrivener tidies deleted items): that's
+        // expected, so it's mentioned quietly and the document still goes to Unwip's Trash
+        const inTrash = !!(item.parentElement && item.parentElement.closest && item.parentElement.closest('BinderItem[Type="TrashFolder"]'));
+        if (f.content == null && !(item.querySelector(':scope > Children'))) (inTrash ? (report.trashMissing = report.trashMissing || []) : report.missing).push(title);
         else if (f.content && !/^\s*\{\\rtf/.test(f.content)) report.unreadable.push(title);
       }
       if (f.content) layoutOf(f.content);

@@ -1,8 +1,8 @@
 window.UNWIP_DEV = true;
 (function () { const P = 'dev:', S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem;
   S.getItem = function (k) { return g.call(this, P + k); }; S.setItem = function (k, v) { return s.call(this, P + k, v); }; S.removeItem = function (k) { return r.call(this, P + k); }; })();
-window.UNWIP_VERSION = "0.44.72";
-window.UNWIP_LATEST_NOTES = "- Updates on the PC and Mac are found sooner: Unwip looks for a new version every hour and whenever you come back to it after half an hour away, not just at start-up and every six hours.\n- Once an update is installed, a \"Restart to update\" button stays on the main screen and in the status bar until you restart. Your writing is saved first.\n- Settings \u203a Updates says when Unwip last checked, or why the last check failed.";
+window.UNWIP_VERSION = "0.44.73";
+window.UNWIP_LATEST_NOTES = "- Scrivener import: a deleted document in Scrivener's Trash with no text left is no longer shown as a warning. It's mentioned quietly and goes into Unwip's Trash like the rest of the Trash. A text file missing anywhere else is still flagged.";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;
