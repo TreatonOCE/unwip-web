@@ -3710,3 +3710,29 @@ body.kit-pipetting #bd-main .kit-host, body.kit-pipetting #bd-main .kit-host *, 
 /* Restart to update (updates.js readyPill) */
 .up-pill { border: 0; border-radius: 999px; padding: 5px 12px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 #statusbar .up-pill { padding: 1px 10px; font-size: 12px; margin-right: 8px; }
+
+/* Story Bible: book menu on each book, and By book sections */
+.sbb-bk-more { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0 4px; margin-left: 2px; font-size: 14px; line-height: 1; }
+.sbb-bk-more:hover { color: var(--text); }
+.sbb-grp { flex-shrink: 0; }
+.sbb-bookh { margin-top: 18px; }
+
+/* maps and pictures on a page (pagelinks.js) */
+.pg-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.pg-link { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); font: inherit; cursor: pointer; max-width: 260px; text-align: left; }
+.pg-link:hover { border-color: var(--accent); }
+.pg-thumb { width: 44px; height: 34px; border-radius: 6px; overflow: hidden; background: var(--panel-2); display: grid; place-items: center; flex-shrink: 0; font-size: 18px; }
+.pg-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pg-t { display: flex; flex-direction: column; min-width: 0; font-size: 13px; line-height: 1.25; }
+.pg-t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-t small { color: var(--muted); font-size: 11.5px; }
+.pg-add { border: 1px dashed var(--line); border-radius: 10px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer; }
+.pg-add:hover { color: var(--accent); border-color: var(--accent); }
+.pg-pick { display: flex; flex-direction: column; gap: 10px; }
+.pg-pick-top { display: flex; gap: 8px; } .pg-pick-top .pg-q { flex: 1; min-width: 0; }
+.pg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; max-height: 46vh; overflow: auto; padding: 2px; }
+.pg-cell { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 13px; position: relative; background: var(--bg); }
+.pg-cell input { position: absolute; top: 8px; right: 8px; }
+.pg-cell .pg-thumb { width: 100%; height: 80px; }
+.pg-cell small { color: var(--muted); font-size: 11.5px; }
+.pg-cell.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

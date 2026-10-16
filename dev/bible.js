@@ -83,6 +83,7 @@ window.UnwipBible = (function () {
   }
   async function load(target) {
     const sh = await shelf();
+    if (window.UnwipBuild && window.UnwipBuild.refresh) { try { await window.UnwipBuild.refresh(); } catch {} }   // for the maps and pictures linked to pages
     let books, label, series = '';
     if (target.series) { const s = sh.series.find(x => keyName(x.name) === keyName(target.series)); if (!s) return null; books = s.books; label = s.name; series = s.name; }
     else { const b = [...sh.alone, ...sh.series.flatMap(s => s.books)].find(x => x.slug === target.slug); if (!b) return null; books = [b]; label = b.title; series = b.series || ''; }
@@ -165,6 +166,18 @@ window.UnwipBible = (function () {
         links.push({ id: String(l.id || ''), a: ea, b: eb, type: l.type, label: typeof l.label === 'string' ? l.label.slice(0, 40) : '', from: whereCh(l.ch), to: whereCh(l.end), note: typeof l.note === 'string' ? l.note.slice(0, 300) : '', book: b, at: +l.at || 0 });
       }
     }
+    // the book's own Connections (the strip at the top of a character, place or thing page): the same thing seen from the
+    // book, so they show here as relationships. Saved as { a, b, f, r } (page ids in that book, the label from a's and
+    // from b's side); ones made here also carry type, ch, end, note and id.
+    for (const b of B) {
+      (Array.isArray(b.p.links) ? b.p.links : []).forEach((l, i) => {
+        if (!l || typeof l !== 'object' || typeof l.f !== 'string') return;
+        const ea = [...E.values()].find(x => x.in.some(k => k.b === b && k.node.id === l.a)), eb = [...E.values()].find(x => x.in.some(k => k.b === b && k.node.id === l.b));
+        if (!ea || !eb || ea === eb) return;
+        links.push({ id: l.id ? String(l.id) : 'i:' + i, a: ea, b: eb, type: typeof l.type === 'string' && l.type ? l.type : 'conn', label: l.f.slice(0, 40), rlabel: typeof l.r === 'string' ? l.r.slice(0, 40) : '', conn: true,
+          from: whereCh(l.ch), to: whereCh(l.end), note: typeof l.note === 'string' ? l.note.slice(0, 300) : '', book: b, at: +l.at || 0 });
+      });
+    }
     // often seen with: the entries that share the most chapters with this one
     const list = [...E.values()];
     for (const e of list) {
@@ -177,7 +190,7 @@ window.UnwipBible = (function () {
   // ---------------------------------------------------------------- the page
   let st = null, page = null, last = null;
   // back from a Lore piece opened here: the same bible, on the Lore tab, at the same As of
-  async function reopen() { if (!last) return; const l = last; last = null; await open({ ...l.target, tab: l.tab }); if (st) { st.asOf = l.asOf; draw(); } }
+  async function reopen() { if (!last) return; const l = last; last = null; await open({ ...l.target, tab: l.tab }); if (st) { st.asOf = l.asOf; if (l.sel && st.data.entries.some(e => e.id === l.sel)) st.sel = l.sel; draw(); } }
   function progress(n, of) { const p = page && page.querySelector('.sbb-load'); if (p) p.textContent = `Reading the books… ${Math.round(n / Math.max(1, of) * 100)}%`; }
   async function open(target) {
     if (!page) { page = document.createElement('section'); page.id = 'bible'; page.className = 'sbb hidden'; document.body.appendChild(page); }
@@ -202,7 +215,7 @@ window.UnwipBible = (function () {
     page.innerHTML = `
       <div class="sbb-top"><button type="button" class="icon-btn" data-close aria-label="Back to the main screen" title="Back">‹</button>
         <div class="sbb-title"><span class="sbb-kicker">Story Bible</span><h1>${esc(D.label)}</h1></div>
-        <div class="sbb-books">${D.books.map((b, i) => `<span class="sbb-book" title="${esc(b.title)}">${multi ? `<b>${b.no}</b>` : ''}${esc(b.title)}${multi ? `<span class="sbb-mv">${i ? `<button type="button" data-bmv="-1" data-i="${i}" aria-label="Earlier in the series">‹</button>` : ''}${i < D.books.length - 1 ? `<button type="button" data-bmv="1" data-i="${i}" aria-label="Later in the series">›</button>` : ''}</span>` : ''}</span>`).join('')}
+        <div class="sbb-books">${D.books.map((b, i) => `<span class="sbb-book" title="${esc(b.title)}">${multi ? `<b>${b.no}</b>` : ''}${esc(b.title)}<button type="button" class="sbb-bk-more" data-bmore="${i}" aria-label="More for ${esc(b.title)}" title="Open, take out of the series, or delete">⋯</button>${multi ? `<span class="sbb-mv">${i ? `<button type="button" data-bmv="-1" data-i="${i}" aria-label="Earlier in the series">‹</button>` : ''}${i < D.books.length - 1 ? `<button type="button" data-bmv="1" data-i="${i}" aria-label="Later in the series">›</button>` : ''}</span>` : ''}</span>`).join('')}
           ${D.series ? '' : '<button type="button" class="link-btn" data-series>Put it in a series…</button>'}<button type="button" class="btn small" data-export title="Save the Story Bible as a Word file or PDF, up to a chapter if you like">Export…</button></div></div>
       <div class="sbb-asof"><label>As of <select class="sbb-asof-sel" aria-label="Show the bible as of">
           <option value="">the whole ${multi ? 'series' : 'book'}</option>
@@ -214,17 +227,24 @@ window.UnwipBible = (function () {
     if (!st.sel && st.tab === 'glossary') glossaryHTML().then(h => { const b = page.querySelector('.sbb-body'); if (b && st && st.tab === 'glossary' && !st.sel) { b.innerHTML = h; wireGloss(b); } });
     if (!st.sel && st.tab === 'lore') loreHTML().then(h => { const b = page.querySelector('.sbb-body'); if (b && st && st.tab === 'lore' && !st.sel) { b.innerHTML = h; wireLore(b); } });
   }
+  const byBookOn = () => { try { return localStorage.getItem('unwip-bible-bybook') === '1'; } catch { return false; } };
   function listHTML(kind) {
     const D = st.data, all = D.entries.filter(e => e.kind === kind), q = keyName(st.q);
     const list = all.filter(visible).filter(e => !q || keyName(e.title).includes(q) || e.sheet.fields.some(f => keyName(f[1]).includes(q)) || e.facts.some(f => upto(f) && keyName(f.text).includes(q)))
       .sort((a, b) => (seenNow(b).length - seenNow(a).length) || a.title.localeCompare(b.title));
     const role = e => (e.sheet.fields.find(f => /^(role|class|type|kind|occupation|what)$/i.test(f[0]) && f[1]) || [])[1] || '';
     const ini = t => esc(t.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase());
-    return `<div class="sbb-tools"><input type="search" class="sbb-q" placeholder="Find a ${KIND_ONE[kind]}…" value="${esc(st.q)}" aria-label="Find"><button type="button" class="btn primary small" data-new="${kind}">+ New ${KIND_ONE[kind]}</button></div>
-      ${list.length ? `<div class="sbb-grid">${list.map(e => `<button type="button" class="sbb-ent" data-ent="${esc(e.id)}">
+    // a series can show everyone together, or in a section per book (by the book they first turn up in)
+    const multi = D.books.length > 1, byBook = multi && byBookOn();
+    const card = e => `<button type="button" class="sbb-ent" data-ent="${esc(e.id)}">
         <span class="sbb-pic ${e.img ? '' : 'none'}">${e.img ? `<img src="${esc(e.img)}" alt="">` : kind === 'characters' ? ini(e.title) : ICO(KINDS.find(k => k[0] === kind)[2])}</span>
         <span class="sbb-ent-t"><b>${esc(e.title)}</b>${role(e) ? `<em>${esc(role(e))}</em>` : ''}
-        <small>${seenNow(e).length ? `First seen ${where(seenNow(e)[0])} · in ${seenNow(e).length} chapter${seenNow(e).length === 1 ? '' : 's'}` : 'Not named in a chapter yet'}${factsNow(e).length ? ` · ${factsNow(e).length} fact${factsNow(e).length === 1 ? '' : 's'}` : ''}${e.in.length > 1 ? ` · in ${e.in.length} books` : ''}</small></span></button>`).join('')}</div>`
+        <small>${seenNow(e).length ? `First seen ${where(seenNow(e)[0])} · in ${seenNow(e).length} chapter${seenNow(e).length === 1 ? '' : 's'}` : 'Not named in a chapter yet'}${factsNow(e).length ? ` · ${factsNow(e).length} fact${factsNow(e).length === 1 ? '' : 's'}` : ''}${e.in.length > 1 ? ` · in ${e.in.length} books` : ''}</small></span></button>`;
+    const homeBook = e => (seenNow(e)[0] || {}).b || (e.in.map(x => x.b).sort((a, b) => a.no - b.no)[0]);
+    const grid = l => `<div class="sbb-grid">${l.map(card).join('')}</div>`;
+    const body = !list.length ? '' : !byBook ? grid(list) : D.books.map(b => { const l = list.filter(e => homeBook(e) === b); return l.length ? `<h3 class="sbb-h sbb-bookh">Book ${b.no}: ${esc(b.title)} <small>${l.length} first seen here</small></h3>${grid(l)}` : ''; }).join('');
+    return `<div class="sbb-tools"><input type="search" class="sbb-q" placeholder="Find a ${KIND_ONE[kind]}…" value="${esc(st.q)}" aria-label="Find">${multi ? `<div class="chip-row sbb-grp" role="group" aria-label="Show"><button type="button" class="chip ${byBook ? '' : 'on'}" data-grp="all">All together</button><button type="button" class="chip ${byBook ? 'on' : ''}" data-grp="book">By book</button></div>` : ''}<button type="button" class="btn primary small" data-new="${kind}">+ New ${KIND_ONE[kind]}</button></div>
+      ${list.length ? body
         : `<p class="lib-empty">${all.length ? 'Nothing matches.' : `No ${KINDS.find(k => k[0] === kind)[1].toLowerCase()} yet. They come from each book’s ${kind === 'characters' ? 'Characters' : kind === 'places' ? 'Places' : 'Items'} folder, or add one here.`}</p>`}`;
   }
   function gearHTML(e) {
@@ -260,6 +280,7 @@ window.UnwipBible = (function () {
         ${e.sheet.fields.filter(f => f[1]).length ? `<dl class="sbb-fields">${e.sheet.fields.filter(f => f[1]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
         ${e.sheet.sections.filter(s => s.p.some(Boolean)).map(s => `<section class="sbb-sec">${s.h ? `<h3>${esc(s.h)}</h3>` : ''}${s.p.filter(Boolean).map(p => `<p>${esc(p)}</p>`).join('')}</section>`).join('')}
         ${!e.sheet.fields.some(f => f[1]) && !e.sheet.sections.some(s => s.p.some(Boolean)) ? '<p class="hint">Nothing written on this page yet. Open it in the book to fill it in.</p>' : ''}
+        ${piecesHTML(e)}
         ${factsHTML(e)}
         ${linksHTML(e)}
         ${e.kind === 'characters' && gearHTML(e) ? `<h3 class="sbb-h">Gear</h3>${gearHTML(e)}` : ''}
@@ -284,14 +305,23 @@ window.UnwipBible = (function () {
         ${l.length > 1 ? `<details class="sbb-was"><summary>Before: ${l.length - 1} earlier</summary>${l.slice(0, -1).reverse().map(f => `<div class="sbb-old"><p>${esc(f.text)}</p><div class="sbb-fm">${chip(f)}${del(f)}</div></div>`).join('')}</details>` : ''}</div></div>`; }).join('')}
       ${loose.map(f => `<div class="sbb-fact"><span class="sbb-ft none"></span><div><p>${esc(f.text)}</p><div class="sbb-fm">${chip(f)}${del(f)}</div></div></div>`).join('')}</div>`;
   }
+  // maps and pictures linked to the page (pagelinks.js keeps them on the page as node.build)
+  function piecesHTML(e) {
+    const idsAll = [...new Set(e.in.flatMap(x => Array.isArray(x.node.build) ? x.node.build : []))];
+    const items = (window.UnwipBuild && window.UnwipBuild.items) || [];
+    const L = idsAll.map(id => items.find(x => x.id === id)).filter(Boolean);
+    if (!L.length) return '';
+    return `<h3 class="sbb-h">Maps and pictures <small>${L.length}</small></h3><div class="pg-links">${L.map(it => `<button type="button" class="pg-link" data-lore="${esc(it.id)}"><span class="pg-thumb">${it.thumb ? `<img src="${esc(it.thumb)}" alt="">` : '🗺️'}</span><span class="pg-t"><b>${esc(it.title || 'Untitled')}</b></span></button>`).join('')}</div>`;
+  }
   // ---------------------------------------------------------------- relationships
   // A relationship holds from its Since chapter (or the start) and stops at its Until chapter: As of shows who was what
   // to whom at that point (engaged in book one, married in book two). Read from either side: "Parent of" / "Child of".
   const linkOn = l => !l.from || upto(l.from);
   const linkOver = l => !!(l.to && upto(l.to));
-  const linkGroup = l => (relDef(l.type) || [0, 0, 0, 'other'])[3];
+  const linkGroup = l => { if (l.type === 'conn') { const t = (l.label || '').toLowerCase(); for (const list of Object.values(REL)) { const d = list.find(x => x[1].toLowerCase() === t || (x[2] || '').toLowerCase() === t); if (d) return d[3]; } return /enem|rival|war|hunt|betray/.test(t) ? 'conflict' : /love|married|partner|engaged/.test(t) ? 'love' : /parent|child|sibling|related|family/.test(t) ? 'family' : /lives|born|rules|guards|near|part of/.test(t) ? 'place' : /owns|made|wants|hidden/.test(t) ? 'thing' : 'ally'; } return (relDef(l.type) || [0, 0, 0, 'other'])[3]; };
   function linkWords(l, me) {
     const d = relDef(l.type), mine = l.a === me;
+    if (l.type === 'conn') { const t = mine ? l.label : (l.rlabel || l.label); return esc(t ? t[0].toUpperCase() + t.slice(1) : 'Tied to'); }
     if (!d) return mine ? esc(l.label || 'Tied to') : `${esc(l.label || 'Tied to')} <small>(their side)</small>`;
     return esc(mine ? d[1] : (d[2] || d[1]));
   }
@@ -352,7 +382,14 @@ window.UnwipBible = (function () {
     const [a, b] = dir === 'r' ? [o, e] : [e, o];
     const ref = x => ({ node: x.node.id, key: x.id.startsWith('s:') ? x.id.slice(2) : '', kind: x.kind, title: x.title });
     const home = (from && D.books.find(bk => bk.chs.some(c => c.id === from))) || e.book;   // kept in the book it starts in
-    await editBible(home.slug, bb => { bb.links = Array.isArray(bb.links) ? bb.links : []; bb.links.push({ id: U.uid(), a: ref(a), b: ref(b), type, label, ch: from, end: to, note: norm(body.querySelector('#sbb-lnote').value).slice(0, 300), at: Date.now() }); });
+    const note = norm(body.querySelector('#sbb-lnote').value).slice(0, 300);
+    // both pages in that book: it goes in the book's own Connections (so the page's strip shows it too); otherwise
+    // (a person shared across books with someone only in another) it's kept in the bible's list
+    const na = a.in.find(x => x.b === home), nb = b.in.find(x => x.b === home);
+    if (na && nb) {
+      const d0 = relDef(type), f = type === 'other' ? label : (d0 ? d0[1] : label).toLowerCase(), r = type === 'other' ? '' : d0 && d0[2] ? d0[2].toLowerCase() : '';
+      await editBook(home.slug, p => { p.links = Array.isArray(p.links) ? p.links : []; p.links.push({ a: na.node.id, b: nb.node.id, f, ...(r ? { r } : {}), id: U.uid(), type, ch: from, end: to, note, at: Date.now() }); });
+    } else await editBible(home.slug, bb => { bb.links = Array.isArray(bb.links) ? bb.links : []; bb.links.push({ id: U.uid(), a: ref(a), b: ref(b), type, label, ch: from, end: to, note, at: Date.now() }); });
   }
   // the Web: everyone with a relationship, drawn as a map of who is tied to whom (at the As of chapter). The layout is
   // worked out the same way every time (a fixed start, then springs), so it doesn't jump about between visits.
@@ -388,8 +425,8 @@ window.UnwipBible = (function () {
       const a = P[i], b = P[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / d, uy = dy / d;
       const bend = n ? (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 56 : 0, mx = (a.x + b.x) / 2 - uy * bend, my = (a.y + b.y) / 2 + ux * bend;
       const x1 = a.x + ux * R, y1 = a.y + uy * R, x2 = b.x - ux * (R + 4), y2 = b.y - uy * (R + 4);
-      const d0 = relDef(l.type), dir = d0 ? !!d0[2] : l.type === 'other';
-      const word = l.type === 'other' ? (l.label || 'Tied to') : d0 ? d0[1] : 'Tied to';
+      const d0 = relDef(l.type), dir = d0 ? !!d0[2] : l.type === 'other' || (l.type === 'conn' && !!l.rlabel && l.rlabel !== l.label);
+      const word = l.type === 'other' || l.type === 'conn' ? (l.label || 'Tied to') : d0 ? d0[1] : 'Tied to';
       return `<g class="sbb-we g-${linkGroup(l)} ${linkOver(l) ? 'over' : ''}"><path d="M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}" ${dir ? `marker-end="url(#sbb-ar-${linkGroup(l)})"` : ''}/><text x="${((x1 + x2) / 2 * 0.5 + mx * 0.5).toFixed(1)}" y="${((y1 + y2) / 2 * 0.5 + my * 0.5 - 4).toFixed(1)}">${esc(word)}</text></g>`;
     });
     const nodes = N.map((n, i) => { const p = P[i], shape = n.kind === 'places' ? `<rect x="${(p.x - R).toFixed(1)}" y="${(p.y - R).toFixed(1)}" width="${R * 2}" height="${R * 2}" rx="7"/>` : n.kind === 'items' ? `<path d="M${p.x.toFixed(1)},${(p.y - R - 3).toFixed(1)} L${(p.x + R + 3).toFixed(1)},${p.y.toFixed(1)} L${p.x.toFixed(1)},${(p.y + R + 3).toFixed(1)} L${(p.x - R - 3).toFixed(1)},${p.y.toFixed(1)} Z"/>` : `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${R}"/>`;
@@ -429,6 +466,15 @@ window.UnwipBible = (function () {
         ${dropped.length ? `<h3 class="sbb-h">Dropped <small>${dropped.length}</small></h3>${dropped.map(card).join('')}` : ''}` : '<p class="lib-empty">No threads yet.</p>'}`;
   }
   // edit one book's bible data: the book's project.json is read, changed and saved (the book needn't be open)
+  // the same for anything else in a book's project.json (its Connections)
+  async function editBook(slug, fn) {
+    if (phone()) return;
+    const open = U.S.slug === slug && U.S.project;
+    const p = open ? U.S.project : await api.openProject(slug); if (!p) return;
+    fn(p);
+    if (open) { U.scheduleMeta(); if (window.UnwipLinks && window.UnwipLinks.render) try { window.UnwipLinks.render(); } catch {} } else await api.saveProjectMeta(slug, p);
+    if (st && st.data) { const keep = { tab: st.tab, sel: st.sel, asOf: st.asOf }; st.data = await load(st.target); Object.assign(st, keep); draw(); }
+  }
   async function editBible(slug, fn) {
     if (phone()) return;   // read only on a phone
     const open = U.S.slug === slug && U.S.project;
@@ -540,10 +586,10 @@ window.UnwipBible = (function () {
     return groups.length ? `<p class="hint">Open World and Build pieces belong to the world, so every book can use them.</p>${groups.map(([k, l]) => `<h3 class="sbb-h">${LORE[k]}</h3><div class="sbb-lore">${l.map(x => `<button type="button" class="sbb-lore-it" data-lore="${esc(x.id)}"><span>${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : ''}</span><b>${esc(x.title || 'Untitled')}</b></button>`).join('')}</div>`).join('')}`
       : '<p class="lib-empty">No magic systems, runes, sigils, insignia or maps yet. Make them in Open World and Build.</p>';
   }
-  function wireLore(box) { $$('[data-lore]', box).forEach(b => b.onclick = async () => { const id = b.dataset.lore; last = { target: st.target, tab: 'lore', asOf: st.asOf }; close(); const isLore = ['magic', 'runes', 'sigil', 'insignia'].includes(((window.UnwipBuild.items || []).find(x => x.id === id) || {}).kind); if (window.UnwipPlay) window.UnwipPlay.setTab(isLore && !phone() ? 'world' : 'build'); await window.UnwipBuild.open(id, 'bible'); }); }
+  function wireLore(box) { $$('[data-lore]', box).forEach(b => b.onclick = async () => { const id = b.dataset.lore; last = { target: st.target, tab: st.tab, sel: st.sel, asOf: st.asOf }; close(); const isLore = ['magic', 'runes', 'sigil', 'insignia'].includes(((window.UnwipBuild.items || []).find(x => x.id === id) || {}).kind); if (window.UnwipPlay) window.UnwipPlay.setTab(isLore && !phone() ? 'world' : 'build'); await window.UnwipBuild.open(id, 'bible'); }); }
   // On a phone (up to 720 px wide) the bible is for reading: everything that changes it comes out of the page, and the
   // edit functions refuse too. iPads and bigger keep all of it.
-  const EDITS = '[data-new], [data-addto], [data-newthread], [data-newterm], [data-editterm], [data-delterm], [data-delfact], [data-delthread], [data-paid], [data-drop], [data-reopen], [data-bmv], [data-series], [data-suggest], [data-rm], [data-newlink], [data-dellink]';
+  const EDITS = '[data-new], [data-addto], [data-newthread], [data-newterm], [data-editterm], [data-delterm], [data-delfact], [data-delthread], [data-paid], [data-drop], [data-reopen], [data-bmv], [data-series], [data-suggest], [data-rm], [data-newlink], [data-dellink], [data-bmore]';
   function wire() {
     const D = st.data;
     page.classList.toggle('sbb-ro', phone());
@@ -561,6 +607,12 @@ window.UnwipBible = (function () {
     const ser = page.querySelector('[data-series]'); if (ser) ser.onclick = putInSeries;
     const ex = page.querySelector('[data-export]'); if (ex) ex.onclick = exportDialog;
     $$('[data-bmv]', page).forEach(b => b.onclick = () => reorder(+b.dataset.i, +b.dataset.bmv));
+    if (st.sel) wireLore(page);
+    $$('[data-grp]', page).forEach(b => b.onclick = () => { try { localStorage.setItem('unwip-bible-bybook', b.dataset.grp === 'book' ? '1' : '0'); } catch {} draw(); });
+    $$('[data-bmore]', page).forEach(b => b.onclick = e => { const bk = D.books[+b.dataset.bmore]; if (!bk) return; const r = b.getBoundingClientRect();
+      U.showMenu(r.left, r.bottom + 4, [{ label: 'Open the book', action: () => goTo(bk.slug, null) },
+        ...(D.series ? [{ label: 'Take it out of the series', action: () => takeOut(bk) }] : []),
+        { sep: true }, { label: 'Delete the book…', danger: true, action: () => deleteFromBible(bk) }]); });
     const nt = page.querySelector('[data-newthread]'); if (nt) nt.onclick = newThread;
     $$('[data-paid]', page).forEach(b => b.onclick = () => { const [slug, id] = b.dataset.paid.split('|'); payOff(slug, id); });
     $$('[data-drop]', page).forEach(b => b.onclick = () => { const [slug, id] = b.dataset.drop.split('|'); editBible(slug, bb => { const t = findIn(bb.threads, id); if (t) { t.status = 'dropped'; t.closed = null; } }); });
@@ -568,7 +620,7 @@ window.UnwipBible = (function () {
     $$('[data-delthread]', page).forEach(b => b.onclick = async () => { const [slug, id] = b.dataset.delthread.split('|'); if (await U.confirmBox('Remove this thread?', 'It comes out of the Story Bible. Your chapters don’t change.', 'Remove')) editBible(slug, bb => { bb.threads = (bb.threads || []).filter(x => x && x.id !== id); }); });
     $$('[data-delfact]', page).forEach(b => b.onclick = () => { const [slug, id] = b.dataset.delfact.split('|'); deleteFact(slug, id); });
     $$('[data-newlink]', page).forEach(b => b.onclick = () => newLink(D.entries.find(e => e.id === st.sel)));
-    $$('[data-dellink]', page).forEach(b => b.onclick = async () => { const [slug, id] = b.dataset.dellink.split('|'); if (await U.confirmBox('Remove this relationship?', 'It comes out of the Story Bible. Your chapters don’t change.', 'Remove')) editBible(slug, bb => { bb.links = (bb.links || []).filter(x => x && x.id !== id); }); });
+    $$('[data-dellink]', page).forEach(b => b.onclick = async () => { const [slug, id] = b.dataset.dellink.split('|'); if (await U.confirmBox('Remove this relationship?', 'It comes out of the Story Bible. Your chapters don’t change.', 'Remove')) { if (id.startsWith('i:')) { const at = +id.slice(2); editBook(slug, p => { if (Array.isArray(p.links)) p.links.splice(at, 1); }); } else editBook(slug, p => { if (Array.isArray(p.links)) p.links = p.links.filter(x => !x || x.id !== id); if (p.bible && Array.isArray(p.bible.links)) p.bible.links = p.bible.links.filter(x => x && x.id !== id); }); } });
     $$('.sbb-wn', page).forEach(g => g.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); g.dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
     const asof = page.querySelector('.sbb-asof-sel'); if (asof) asof.onchange = () => { st.asOf = asof.value === '' ? null : +asof.value; draw(); };
     $$('[data-step-asof]', page).forEach(b => b.onclick = () => { const opts = [...asof.options].filter(o => o.value !== '').map(o => +o.value), i = opts.indexOf(st.asOf) + +b.dataset.stepAsof; if (i >= 0 && i < opts.length) { st.asOf = opts[i]; draw(); } });
@@ -668,6 +720,32 @@ window.UnwipBible = (function () {
     [L[i], L[j]] = [L[j], L[i]];
     for (const [k, b] of L.entries()) { b.no = k + 1; const p = await api.openProject(b.slug).catch(() => null); if (p && +p.seriesNo !== k + 1) { p.seriesNo = k + 1; await api.saveProjectMeta(b.slug, p); } b.p.seriesNo = k + 1; }
     draw();
+  }
+  // a book leaves the series: it stays a book of its own, and pages it shared stop updating with the others (each book
+  // keeps its own copy), as series.js does when the series name is changed
+  async function takeOut(bk) {
+    if (phone()) return;
+    if (!(await U.confirmBox('Take it out of the series?', `“${esc(bk.title)}” stays a book of its own, with everything in it. Pages it shares with the series stop updating together: each book keeps its own copy.`, 'Take it out'))) return;
+    const open = U.S.slug === bk.slug && U.S.project, p = open ? U.S.project : await api.openProject(bk.slug); if (!p) return;
+    p.series = ''; delete p.seriesNo;
+    walk(p.binder, n => { if (n.series && typeof n.series === 'object') delete n.series; });
+    if (open) { U.scheduleMeta(); await U.saveMetaNow(); } else await api.saveProjectMeta(bk.slug, p);
+    // the rest close up (Book 1, 2, 3…)
+    const rest = st.data.books.filter(b => b !== bk);
+    for (const [k, b] of rest.entries()) { const q = await api.openProject(b.slug).catch(() => null); if (q && +q.seriesNo !== k + 1) { q.seriesNo = k + 1; await api.saveProjectMeta(b.slug, q); } }
+    U.toast(`“${esc(bk.title)}” is out of the series.`);
+    if (rest.length) { const keep = { tab: st.tab }; st.data = await load(st.target); st.sel = null; Object.assign(st, keep); draw(); } else close();
+  }
+  async function deleteFromBible(bk) {
+    if (phone() || !U.deleteBook) return;
+    const list = await api.listProjects().catch(() => []), p = list.find(x => x.slug === bk.slug); if (!p) return;
+    const before = list.length;
+    await U.deleteBook(p);
+    const after = await api.listProjects().catch(() => []);
+    if (after.length === before) return;   // not deleted
+    const rest = st.data.books.filter(b => b !== bk && after.some(x => x.slug === b.slug));
+    if (!rest.length) { close(); return; }
+    const keep = { tab: st.tab }; st.data = await load(st.target); st.sel = null; Object.assign(st, keep); draw();
   }
   async function putInSeries() {
     const sh = await shelf(), b = st.data.books[0];

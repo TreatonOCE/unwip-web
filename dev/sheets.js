@@ -50,9 +50,56 @@ window.UnwipSheets = (function () {
     return { name, aliases: aliases.map(a => a.trim()).filter(a => a && a !== name) };
   }
   // a whole document -> [{ group, entries: [{ name, aliases, html, text }] }] plus anything that isn't part of an entry
+  // A list of abilities written as system messages: [Name: what it does] lines, the lines of one ability together and
+  // an empty line (or a ——— line) before the next. Like the system boxes in Copy for Royal Road, lines next to each
+  // other belong together, so each group is one sheet, named by its first [message]. A [Note: …] on its own after
+  // an ability stays with that ability. (Read as bold names, every bracket line used to become its own sheet.)
+  const BR = /^\s*\[/, SEPLINE = /^\s*([—–\-_=*~•·\/]\s*){2,}$/;
+  // the sheet's name: "[Sir Charge: Extract coins…]" -> Sir Charge; "[Unique Passive: Show me the Money]" -> Show me the
+  // Money (a kind of ability, then its name); "[Unique Skill]" then "[Conversion: …]" -> Conversion; "[Creature Comforts]"
+  // as it is
+  const KIND = /^(unique |new |hidden |legendary |rare |special )?(passive|active|skill|ability|abilities|spell|function|trait|perk|title|class|skill acquired|skill unlocked|ability unlocked)s?( (unlocked|acquired|gained|learned))?$/i;
+  const msg = t => ((t.match(/^\s*\[([^\]]*)\]/) || [])[1] || t.replace(/^\s*\[/, '')).replace(/\s+/g, ' ').trim();
+  function abilityName(lines) {
+    const m = msg(lines[0]), i = m.indexOf(':');
+    const before = i > 0 ? m.slice(0, i).trim() : m, after = i > 0 ? m.slice(i + 1).trim() : '';
+    let name;
+    if (i < 0 && KIND.test(m) && lines[1] && BR.test(lines[1])) return abilityName(lines.slice(1));
+    if (i > 0 && KIND.test(before) && after && after.split(/\s+/).length <= 8) name = after;
+    else if (i > 0 && before.split(/\s+/).length <= 6) name = before;
+    else name = m;
+    return name.replace(/^[“"']|[”"']$/g, '').slice(0, 80) || 'Untitled';
+  }
+  function parseAbilities(blocks) {
+    const groups = [{ group: '', entries: [] }], leftover = [];
+    let cur = [];
+    const textOf = b => b.textContent.replace(/\u00a0/g, ' ').trim();
+    const end = () => {
+      if (!cur.length) return;
+      const first = textOf(cur[0]), html = cur.map(b => b.outerHTML).join(''), text = cur.map(textOf).join(' ');
+      const g = groups[groups.length - 1], last = g.entries[g.entries.length - 1];
+      if (BR.test(first) && !(/^\s*\[\s*(side )?note\b/i.test(first) && last)) {
+        g.entries.push({ name: abilityName(cur.map(textOf)), aliases: [], html, text });
+      } else if (last) { last.html += html; last.text += ' ' + text; }
+      else leftover.push(html);
+      cur = [];
+    };
+    for (const b of blocks) {
+      const t = textOf(b);
+      if (!t || SEPLINE.test(t)) { end(); continue; }
+      // a heading (or a short bold line that isn't a [message]) starts a group of its own
+      if (/^H[1-6]$/.test(b.tagName) || (!BR.test(t) && t.length <= 60 && t.split(/\s+/).length <= 7 && leadOf(b).trim() === t && !cur.length)) { end(); groups.push({ group: t.replace(/[\s:：]+$/, ''), entries: [] }); continue; }
+      cur.push(b);
+    }
+    end();
+    const out = groups.filter(g => g.entries.length);
+    return { groups: out, count: out.reduce((a, g) => a + g.entries.length, 0), leftover, abilities: true };
+  }
   function parse(html) {
     const d = document.createElement('div'); d.innerHTML = html || '';
     const blocks = [...d.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li')].filter(b => !b.querySelector('p, li'));
+    { const lines = blocks.map(b => b.textContent.trim()).filter(Boolean), br = lines.filter(t => BR.test(t)).length;
+      if (br >= 3 && br >= lines.length * 0.5) return parseAbilities(blocks); }
     const items = [];
     for (const b of blocks) {
       const text = b.textContent.replace(/ /g, ' ').trim(); if (!text) continue;

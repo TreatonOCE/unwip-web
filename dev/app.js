@@ -729,6 +729,7 @@
       if (n.type === 'doc') items.push({ label: 'Snapshots…', action: async () => { await openDoc(n.id); snapshotsDialog(); } });
       if (n.type === 'doc' && !n.map && window.UnwipSheets && root.kind !== 'manuscript' && root.kind !== 'trash') items.push({ label: 'Turn into separate sheets…', action: () => window.UnwipSheets.convert([n.id]) });
       if (n.type === 'doc' || n.type === 'folder') items.push({ label: 'Remove empty lines…', action: () => tidyBlankLines(n.id) });
+      if (window.UnwipPageLinks && window.UnwipPageLinks.isPage(n.id) && level() >= 1) items.push({ label: 'Maps and pictures…', action: () => window.UnwipPageLinks.link(n.id) });
       if (n.type === 'doc' && n.id !== S.docId) items.push({ label: 'Open in split view', action: () => { if (S.view !== 'write') setView('write'); openSplit(n.id); } });
       if (n.type === 'doc' && !n.map && api.popoutOpen) items.push({ label: S.popped && S.popped.has(n.id) ? 'Show its window' : 'Open in a new window', action: () => popOut(n.id) });
       { const fn = findNode(n.id); const nx = fn.list[fn.index + 1];
@@ -5066,7 +5067,7 @@
   // test hooks (used by the automated checks, harmless otherwise)
   window.__folio = { S, openProject, openDoc, copyDocForDocs, compileManuscript, flushSave, addNode, setWriter, insertCleanHTML };
   window.__unwip = {
-    newEventFrom: seed => editEvent(null, seed), pageTemplate: root => sheetFor(root) ? sheetTemplate(root) : '<p><br></p>',
+    newEventFrom: seed => editEvent(null, seed), showMenu: (x, y, items) => showMenu(x, y, items), deleteBook: p => deleteBook(p), pageTemplate: root => sheetFor(root) ? sheetTemplate(root) : '<p><br></p>',
     get saveFailing() { return !!troubleRetry; }, pasteContent,
     S, api, I, $, $$, esc, fmt, makeRoom, countWords, today, editor, editorWrap, on, emit,
     modal, copyText, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
