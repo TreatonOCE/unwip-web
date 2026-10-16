@@ -53,20 +53,40 @@ window.UnwipUpdates = (function () {
   function readyToast(st) {
     notice({ title: 'An update is installed', version: st.version, notes: st.notes || lastNotes, action: 'Restart now', run: () => api.relaunch(), later: 'Restart later' });
   }
+  // Automatic checks: a little after start, every hour, and whenever Unwip comes back to the front after half an hour.
+  // (It used to check at start and then only every six hours, so an Unwip left open all day rarely saw a new version,
+  // and a failed check said nothing.) Once an update is in, a "Restart to update" button stays until you restart.
+  let lastCheck = 0, lastError = '', busy = false, offered = '';
   async function auto() {
-    let st; try { st = await api.updateState(); } catch { return; }
-    if (!st.auto || st.status === 'ready' || st.status === 'downloading') return;
-    const cfg = await settings();
-    const c = await api.updateCheck();
-    if (c.status !== 'available') return;
-    lastNotes = c.notes || '';
-    if (cfg.autoUpdate === false) { notice({ title: 'A new version of Unwip is available', version: c.version, notes: c.notes, action: 'Install', run: () => checkNow(true) }); return; }
-    const r = await api.updateInstall();
-    if (r.status === 'ready') readyToast(r);
+    if (busy) return; busy = true;
+    try {
+      let st; try { st = await api.updateState(); } catch { return; }
+      if (!st.auto) return;
+      if (st.status === 'ready') { readyPill(st.version); return; }
+      if (st.status === 'downloading') return;
+      const cfg = await settings();
+      const c = await api.updateCheck(); lastCheck = Date.now();
+      if (c.status === 'error') { lastError = c.error || 'unknown problem'; return; }
+      lastError = '';
+      if (c.status !== 'available') return;
+      lastNotes = c.notes || '';
+      if (cfg.autoUpdate === false) { if (offered !== c.version) { offered = c.version; notice({ title: 'A new version of Unwip is available', version: c.version, notes: c.notes, action: 'Install', run: () => checkNow(true) }); } return; }
+      const r = await api.updateInstall();
+      if (r.status === 'ready') { readyToast(r); readyPill(r.version); }
+      else if (r.status === 'error') lastError = r.error || 'the download didn’t finish';
+    } finally { busy = false; }
   }
+  // a small button that stays (main screen and the status bar) until Unwip restarts into the new version
+  function readyPill(version) {
+    const make = () => { const b = document.createElement('button'); b.type = 'button'; b.className = 'up-pill'; b.textContent = 'Restart to update'; b.title = `Unwip ${version} is installed. Restart to start using it (your writing is saved first).`;
+      b.onclick = async () => { try { await U.flushSave(); if (U.saveMetaNow) await U.saveMetaNow(); } catch {} api.relaunch(); }; return b; };
+    const head = document.querySelector('.lib-head-right'); if (head && !head.querySelector('.up-pill')) head.prepend(make());
+    const sb = document.querySelector('#statusbar .st-spacer'); if (sb && !document.querySelector('#statusbar .up-pill')) sb.after(make());
+  }
+  const status = () => ({ lastCheck, lastError });
   async function checkNow(install) {
     U.toast('Checking for updates…', '', 1500);
-    const c = await api.updateCheck();
+    const c = await api.updateCheck(); lastCheck = Date.now(); lastError = c.status === 'error' ? (c.error || '') : '';
     if (c.status === 'none') { U.toast(`You’re up to date (Unwip ${esc(c.current)}).`); return; }
     if (c.status === 'error') { U.toast(`Couldn’t check for updates: ${esc(c.error)}`, 'warn', 6000); return; }
     lastNotes = c.notes || '';
@@ -77,7 +97,7 @@ window.UnwipUpdates = (function () {
     }
     U.toast('Downloading the update…', '', 2500);
     const r = await api.updateInstall();
-    if (r.status === 'ready') readyToast(r);
+    if (r.status === 'ready') { readyToast(r); readyPill(r.version); }
     else U.toast(`The update didn’t install: ${esc(r.error || 'unknown problem')}`, 'warn', 8000);
   }
   // what's new, once, after an update
@@ -90,7 +110,9 @@ window.UnwipUpdates = (function () {
     }
   })();
   setTimeout(auto, 8000);
-  setInterval(auto, 6 * 60 * 60 * 1000);   // and every six hours if Unwip stays open
+  setInterval(auto, 60 * 60 * 1000);
+  const back = () => { if (!document.hidden && Date.now() - lastCheck > 30 * 60 * 1000) auto(); };
+  document.addEventListener('visibilitychange', back); window.addEventListener('focus', back);
   // Settings › What's new: this version's notes open, the ones before it folded
   function newsHTML(current) {
     const list = Array.isArray(window.UNWIP_NOTES) ? window.UNWIP_NOTES : [];
@@ -98,5 +120,5 @@ window.UnwipUpdates = (function () {
     const cur = current || window.UNWIP_VERSION || '';
     return `<div class="up-news">${list.map((x, i) => `<details class="up-n" ${i ? '' : 'open'}><summary><b>Unwip ${esc(x.v)}</b>${x.v === cur ? ' <span class="up-n-now">this version</span>' : ''}</summary><div class="up-notes up-rich">${notesList(x.notes)}</div></details>`).join('')}</div>`;
   }
-  return { checkNow, notice, notesList, newsHTML };
+  return { checkNow, notice, notesList, newsHTML, status, auto };
 })();

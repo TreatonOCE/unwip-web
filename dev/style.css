@@ -3703,3 +3703,7 @@ body.kit-pipetting #bd-main .kit-host, body.kit-pipetting #bd-main .kit-host *, 
   .kit-sv { height: 150px; }
 }
 /* ==== end of Build kit ==== */
+
+/* Restart to update (updates.js readyPill) */
+.up-pill { border: 0; border-radius: 999px; padding: 5px 12px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+#statusbar .up-pill { padding: 1px 10px; font-size: 12px; margin-right: 8px; }

@@ -3016,7 +3016,7 @@
     $('#g-tour', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.tour(); };
     $('#g-help', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipHelp && window.UnwipHelp.open(); };
     const news = $('#s-news', body); if (news && window.UnwipUpdates) news.innerHTML = window.UnwipUpdates.newsHTML();
-    api.updateState().then(st => { const l = $('#g-version', body); if (l) l.textContent = `You have Unwip ${st.current}`; if (news && window.UnwipUpdates && st.current) news.innerHTML = window.UnwipUpdates.newsHTML(st.current); }).catch(() => {});
+    api.updateState().then(st => { const l = $('#g-version', body); if (l) { const u = window.UnwipUpdates && window.UnwipUpdates.status ? window.UnwipUpdates.status() : {}; const ago = u.lastCheck ? Math.round((Date.now() - u.lastCheck) / 60000) : null; l.textContent = `You have Unwip ${st.current}` + (st.status === 'ready' ? ` · ${st.version} is installed, restart to use it` : u.lastError ? ` · the last check failed: ${u.lastError}` : ago != null ? ` · checked ${ago < 1 ? 'just now' : ago + ' min ago'}` : ''); } if (news && window.UnwipUpdates && st.current) news.innerHTML = window.UnwipUpdates.newsHTML(st.current); }).catch(() => {});
     $('#g-checkup', body).onclick = () => { window.UnwipUpdates && window.UnwipUpdates.checkNow(); };
     const ok = await modal({ title: 'Settings', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
     if (!ok) return;
