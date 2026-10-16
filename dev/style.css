@@ -3150,7 +3150,10 @@ html.m-kb-open .modal { max-height: calc(var(--vv-h, 100vh) - 16px) !important; 
 
 /* ---- page size (look.js pageZoom): the writing page alone gets bigger; the toolbars keep their size */
 #editor-wrap > .page, #pl-wrap > .page { zoom: var(--page-zoom, 1); }
-.st-zoomer { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; }
+.st-zoomer { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; }
+/* the keyboard focus ring sits inside each button, so it can't reach over the % next to it */
+.st-zoomer .st-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.st-zoomer .st-btn:focus:not(:focus-visible) { outline: none; }
 /* no negative margin here: the plain status buttons pull in 6px each side, which made the − and + hover patches lie over the % */
 .st-zoomer .st-btn { padding: 2px 8px; margin: 0; min-width: 0; }
 #st-zoom.flash { animation: np-flash .6s ease-out; border-radius: 6px; }

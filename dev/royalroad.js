@@ -1,8 +1,9 @@
 // Unwip - Copy for Royal Road. Royal Road's chapter editor keeps tables, bold, italics and alignment, but not boxes made
 // of styles, page fonts, footnotes or pasted pictures. So a chapter goes over the way Royal Road authors build it by hand:
 //   - [system messages] (a paragraph that's one bracketed message, as in litrpg.js) become a one-cell table, so the
-//     "blue box" survives. Messages next to each other share one box. Four looks: Royal Road's own table look (no
-//     colours of ours, so it follows the reader's light or dark theme), blue box, dark system window, plain border.
+//     "blue box" survives. Messages next to each other share one box. Looks: Royal Road's own table look (no colours
+//     of ours, so it follows the reader's light or dark theme), blue box, dark window, plain border and more, or one
+//     matched to each message (warnings red, quests gold…).
 //     Our colours always set both the background and the text, so a box stays readable in Royal Road's dark theme.
 //   - italics, bold, underline, strikethrough, centred lines and scene breaks come across; fonts and sizes don't
 //     (Royal Road uses its own)
@@ -21,8 +22,22 @@ window.UnwipRR = (function () {
     rr: { name: 'Royal Road’s own table look', td: 'padding: 8px 12px;', note: 'No colours of ours: Royal Road draws the box, so it suits light and dark themes.' },
     blue: { name: 'Blue box', td: 'border: 2px solid #4a7fd0; background-color: #e8f0fc; color: #13213b; padding: 8px 12px;', note: 'Light blue with dark text, the classic LitRPG blue box.' },
     dark: { name: 'Dark system window', td: 'border: 1px solid #36c5ff; background-color: #0b1626; color: #d8f3ff; padding: 8px 12px; font-family: monospace;', note: 'Dark panel, cyan line and light text, like a game interface.' },
-    plain: { name: 'Plain border', td: 'border: 1px solid #8a8f98; padding: 8px 12px;', note: 'Just a line around it, no colours.' }
+    plain: { name: 'Plain border', td: 'border: 1px solid #8a8f98; padding: 8px 12px;', note: 'Just a line around it, no colours.' },
+    // more looks (only plain borders, colours and fonts: Royal Road's source code view keeps those; shadows, gradients
+    // and rounded corners are dropped, so none are used)
+    terminal: { name: 'Green terminal', td: 'border: 1px solid #2ecc71; background-color: #04140a; color: #6dff9b; padding: 8px 12px; font-family: monospace;', note: 'Black screen, green letters, like an old computer.' },
+    arcane: { name: 'Arcane purple', td: 'border: 2px solid #8e5cd9; background-color: #1c1130; color: #eadfff; padding: 8px 12px;', note: 'Deep purple with a violet line: spells, skills and anything magical.' },
+    gold: { name: 'Golden notice', td: 'border: 3px double #b8892b; background-color: #fff6e0; color: #3a2a05; padding: 8px 12px;', note: 'Cream with a double gold line: quests, rewards, titles.' },
+    alert: { name: 'Red warning', td: 'border: 2px solid #c0392b; border-left: 8px solid #c0392b; background-color: #fdeceb; color: #4a0d08; padding: 8px 12px;', note: 'Pale red with a thick red edge, for warnings and danger.' },
+    parchment: { name: 'Parchment note', td: 'border: 1px solid #a07a46; background-color: #f4e7cc; color: #3b2a14; padding: 10px 14px; font-family: Georgia, serif;', note: 'Old paper and a serif font, for fantasy without the game screen.' },
+    steel: { name: 'Steel panel', td: 'border: 2px solid #5d6b7a; border-top: 6px solid #5d6b7a; background-color: #e9edf1; color: #1b232c; padding: 8px 12px;', note: 'Grey panel with a heavy top edge, like a status window.' },
+    dashed: { name: 'Dashed outline', td: 'border: 2px dashed #8a8f98; padding: 8px 12px;', note: 'A dashed line and no colours, so it suits light and dark themes.' },
+    auto: { name: 'Matched to each message', td: '', note: 'Each box picks a look from its first message: warnings red, quests and rewards gold, skills and spells purple, level-ups green, items on parchment, anything else blue.' }
   };
+  // "Matched to each message": the first message in a box decides its look
+  const AUTO = [[/warning|alert|danger|error|critical|caution|failed|death|dead|damage/i, 'alert'], [/quest|mission|objective|reward|title earned|achievement/i, 'gold'],
+    [/skill|spell|ability|mana|magic|class/i, 'arcane'], [/level ?up|levelled|leveled|level \d|evolution|rank up/i, 'terminal'], [/item|loot|obtained|inventory|equipment|gold coin/i, 'parchment']];
+  const autoLook = h => { const t = String(h || '').replace(/<[^>]+>/g, ''); const m = AUTO.find(([re]) => re.test(t)); return LOOKS[m ? m[1] : 'blue']; };
   const DEF = { look: 'rr', center: false, brackets: true, title: false, pics: true };
   const opts = () => Object.assign({}, DEF, (S.project && S.project.rrCopy) || {});
 
@@ -47,9 +62,10 @@ window.UnwipRR = (function () {
   function build(blocks, o, title) {
     const notes = [], pics = [], out = [], plain = [];
     let sys = null, systems = 0;
-    const L = LOOKS[o.look] || LOOKS.rr;
+    const L0 = LOOKS[o.look] || LOOKS.rr;
     const flush = () => {
       if (!sys) return;
+      const L = o.look === 'auto' ? autoLook(sys[0]) : L0;
       const inner = sys.map(h => `<p${o.center ? ' style="text-align: center;"' : ''}>${h}</p>`).join('');
       out.push(`<table style="width: 100%; border-collapse: collapse;"><tbody><tr><td style="${L.td}${o.center ? ' text-align: center;' : ''}">${inner}</td></tr></tbody></table>`);
       sys = null;

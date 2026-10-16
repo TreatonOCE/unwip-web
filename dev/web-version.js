@@ -1,8 +1,8 @@
 window.UNWIP_DEV = true;
 (function () { const P = 'dev:', S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem;
   S.getItem = function (k) { return g.call(this, P + k); }; S.setItem = function (k, v) { return s.call(this, P + k, v); }; S.removeItem = function (k) { return r.call(this, P + k); }; })();
-window.UNWIP_VERSION = "0.44.73";
-window.UNWIP_LATEST_NOTES = "- Scrivener import: a deleted document in Scrivener's Trash with no text left is no longer shown as a warning. It's mentioned quietly and goes into Unwip's Trash like the rest of the Trash. A text file missing anywhere else is still flagged.";
+window.UNWIP_VERSION = "0.44.74";
+window.UNWIP_LATEST_NOTES = "- Copy for Royal Road: more looks for system message boxes. Green terminal, arcane purple, golden notice, red warning, parchment note, steel panel and dashed outline, as well as the four from before.\n- New \"Matched to each message\" look: each box picks its look from its first message. Warnings go red, quests and rewards gold, skills and spells purple, level-ups green, items on parchment, and anything else blue.\n- Fixed: the page size \u2212 button could still look as if it sat on the percentage after you clicked it.";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;
