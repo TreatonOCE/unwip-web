@@ -5093,8 +5093,10 @@
     head.classList.remove('lh-two');
     const right = head.querySelector('.lib-head-right'), edge = head.getBoundingClientRect().right - (parseFloat(getComputedStyle(head).paddingRight) || 0);
     const last = right && [...right.children].filter(k => k.offsetParent).pop();
-    const over = (last && last.getBoundingClientRect().right > edge + 1) || head.scrollWidth > head.clientWidth + 1;
-    head.classList.toggle('lh-two', over);
+    // always two rows on a computer or tablet: switching level used to snap the header between one row and two
+    // (Lore adds Open World), which jumped the page. The measuring is kept for the right-hand side wrapping.
+    void last; void edge;
+    head.classList.add('lh-two');
     busy = false;
   }
   let t = null; const soon = () => { clearTimeout(t); t = setTimeout(fit, 30); };
