@@ -113,12 +113,12 @@ window.UnwipUpdates = (function () {
   setInterval(auto, 60 * 60 * 1000);
   const back = () => { if (!document.hidden && Date.now() - lastCheck > 30 * 60 * 1000) auto(); };
   document.addEventListener('visibilitychange', back); window.addEventListener('focus', back);
-  // Settings › What's new: this version's notes open, the ones before it folded
+  // Settings › What's new: the latest three versions, this one open and the two before it folded
   function newsHTML(current) {
     const list = Array.isArray(window.UNWIP_NOTES) ? window.UNWIP_NOTES : [];
     if (!list.length) return '<div class="hint">The notes for each version show here.</div>';
     const cur = current || window.UNWIP_VERSION || '';
-    return `<div class="up-news">${list.map((x, i) => `<details class="up-n" ${i ? '' : 'open'}><summary><b>Unwip ${esc(x.v)}</b>${x.v === cur ? ' <span class="up-n-now">this version</span>' : ''}</summary><div class="up-notes up-rich">${notesList(x.notes)}</div></details>`).join('')}</div>`;
+    return `<div class="up-news">${list.slice(0, 3).map((x, i) => `<details class="up-n" ${i ? '' : 'open'}><summary><b>Unwip ${esc(x.v)}</b>${x.v === cur ? ' <span class="up-n-now">this version</span>' : ''}</summary><div class="up-notes up-rich">${notesList(x.notes)}</div></details>`).join('')}</div>`;
   }
   return { checkNow, notice, notesList, newsHTML, status, auto };
 })();

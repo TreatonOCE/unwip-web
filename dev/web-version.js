@@ -1,8 +1,8 @@
 window.UNWIP_DEV = true;
 (function () { const P = 'dev:', S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem;
   S.getItem = function (k) { return g.call(this, P + k); }; S.setItem = function (k, v) { return s.call(this, P + k, v); }; S.removeItem = function (k) { return r.call(this, P + k); }; })();
-window.UNWIP_VERSION = "0.44.76";
-window.UNWIP_LATEST_NOTES = "- The main screen's header stays on two rows (logo and buttons, then the level switch and tabs) at every level, so it no longer jumps when you switch between Focus, Detail and Lore.";
+window.UNWIP_VERSION = "0.44.77";
+window.UNWIP_LATEST_NOTES = "- Settings \u203a What's new shows the latest three versions.";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;
