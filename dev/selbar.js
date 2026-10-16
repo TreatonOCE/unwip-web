@@ -19,7 +19,7 @@ window.UnwipSelBar = (function () {
     '<span class="sb-sep"></span>',
     btn('#btn-comment', 'Comment (Ctrl+Alt+M)', I.comment + '<span>Comment</span>', true),
     '<span class="sb-full sb-group">' + btn('#btn-footnote', 'Footnote (Ctrl+Alt+F)', 'Footnote', true) + '</span>',
-    '<span class="sb-lore sb-group"><span class="sb-sep"></span>' + btn('#btn-add-sheet', 'Add to a character sheet', 'Add to sheet', true) + '</span>'
+    '<span class="sb-lore sb-group"><span class="sb-sep"></span>' + btn('#btn-add-sheet', 'Add to a character sheet', 'Add to sheet', true) + btn('#btn-add-fact', 'Add to the Story Bible as a fact', 'Add to bible', true) + '</span>'
   ].join('');
   document.body.appendChild(bar);
   // clicking the bar must not lose the selection

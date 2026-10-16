@@ -8,7 +8,7 @@ window.UnwipTownFactory = function (M) {
   const { W, H, MW, MH, K } = M;
   const ICON = (d, c = '#3a3a3a') => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const TOOLS = [
-    ['select', '✋', 'Move & select: drag things around, double-click a label or pin to edit it, Delete removes it. Drag empty space to pan; scroll to zoom'],
+    ['select', '✋', 'Select and move: tap or click a thing to select it, then drag it to move it. Double-click a label or pin to edit it. Delete or 🗑 removes it. Drag empty space to move around; scroll or pinch to zoom'],
     ['street', ICON('<path d="M4 20 C8 13 12 11 20 4" stroke-width="5" stroke="#a08560"/><path d="M4 20 C8 13 12 11 20 4" stroke-width="1.5" stroke="#fff" stroke-dasharray="2 3"/>'), 'Street: drag to draw. Streets join up where they meet. Pick alley, street or main road above'],
     ['building', ICON('<rect x="4" y="9" width="7" height="10" fill="#c79a6b"/><rect x="13" y="5" width="7" height="14" fill="#b98a5e"/>'), 'Building: drag to draw one, or click inside a block of streets to fill it with buildings'],
     ['wall', ICON('<path d="M3 17 L12 7 L21 12" stroke-width="3.5"/><circle cx="3" cy="17" r="2.6" fill="#fff"/><circle cx="12" cy="7" r="2.6" fill="#fff"/><circle cx="21" cy="12" r="2.6" fill="#fff"/>'), 'Town wall: drag to draw. Towers appear along it and gates where streets cross. Finish near the start to close it'],
@@ -111,13 +111,15 @@ window.UnwipTownFactory = function (M) {
   // Painted areas of the same kind that overlap become one shape: only their outside edge gets a line (no lines
   // criss-crossing where two strokes of park or field meet).
   function areaEdges(g, list, P, k) {
-    const sc = Math.max(1, Math.abs(g.getTransform().a) || 1), o = document.createElement('canvas'); o.width = Math.ceil(W * sc); o.height = Math.ceil(H * sc);
-    const x = o.getContext('2d'); x.scale(sc, sc);
+    // worked out over the areas' own box, so areas moved past the map's edge keep their outline
+    const bb = bbox(list.flatMap(a => a.pts)), bx = Math.floor(bb.x) - 4, by = Math.floor(bb.y) - 4, bw = Math.ceil(bb.w) + 8, bh = Math.ceil(bb.h) + 8;
+    const sc = Math.max(1, Math.abs(g.getTransform().a) || 1), o = document.createElement('canvas'); o.width = Math.ceil(bw * sc); o.height = Math.ceil(bh * sc);
+    const x = o.getContext('2d'); x.scale(sc, sc); x.translate(-bx, -by);
     x.strokeStyle = P.ink; x.lineWidth = (k === 'market' ? 1 : 1.3) * 2; x.lineJoin = 'round'; if (k === 'field') x.setLineDash([4, 3]);
     for (const a of list) { poly(x, a.pts); x.stroke(); }
     x.setLineDash([]); x.globalCompositeOperation = 'destination-out'; x.fillStyle = '#000';
     for (const a of list) { poly(x, a.pts); x.fill(); }
-    g.save(); g.globalAlpha = k === 'market' ? 0.4 : 0.7; g.drawImage(o, 0, 0, W, H); g.restore();
+    g.save(); g.globalAlpha = k === 'market' ? 0.4 : 0.7; g.drawImage(o, bx, by, bw, bh); g.restore();
   }
   function line(g, pts) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); }
   function drawStreets(g, P, list) {
@@ -167,7 +169,7 @@ window.UnwipTownFactory = function (M) {
     g.restore();
   }
   function renderUnder(g, P, skip) {
-    const S2 = st(), sk = (t, i) => skip && skip.type === t && skip.i === i;
+    const S2 = st(), sk = (t, i) => M.skips(skip, t, i);
     // overlapping areas of one kind are drawn as one shape: all the colour, then the trees or marks across the whole
     // shape (so none are cut in half where two strokes meet), then one outline round the outside
     const kinds = {};
@@ -374,39 +376,46 @@ window.UnwipTownFactory = function (M) {
     for (let i = 0; i < D.length; i++) if (D[i] >= 1e6) D[i] = 0;
     return D;
   }
-  // buildings face the streets around the block, in a row (and a second row inside big blocks), leaving yards behind
+  // buildings face the streets around the block, in a row (and more rows inside big blocks), leaving yards behind.
+  // Sparse: one row of houses set back from the street, wide gaps (gardens) between them, some plots left empty.
+  // Normal: two rows, small gaps. Dense: rows all the way in with no yards, then the leftover gaps filled with small
+  // buildings, so the block is packed.
+  const DENS = {
+    sparse: { keep: 0.75, rings: 1, pad: 6, front: 4, lane: 4, w: 0.85 },
+    normal: { keep: 0.9, rings: 2, pad: 1, front: 1.2, lane: 3, w: 1 },
+    dense: { keep: 1, rings: 12, pad: 0.15, front: 0.6, lane: 0.3, w: 1, infill: true }
+  };
   function placeIn(reg, density, r, opts = {}) {
-    const D = distance(reg), occ = new Uint8Array(GW * GH), S2 = st();
-    const dens = { sparse: 0.45, normal: 0.85, dense: 1 }[density] || 0.85;
-    const depth = (opts.depth || 20) / GS, gapF = 1.2;
+    const D = distance(reg), occ = new Uint8Array(GW * GH), S2 = st(), cfg = DENS[density] || DENS.normal;
+    const depth = (opts.depth || 20) / GS;
     let maxD = 0; for (let i = 0; i < D.length; i++) if (D[i] > maxD) maxD = D[i];
-    // rows of buildings working inward from the streets, with a narrow lane or yard between every second row
-    const rings = [], most = { sparse: 1, normal: 2, dense: 12 }[density] || 2;
-    for (let t = gapF + depth / 2, k = 0; k < most && t < maxD - depth * 0.35; k++) { rings.push(t); t += depth + (k % 2 ? 4 : 1.2); }
+    const rings = [];
+    for (let t = cfg.front + depth / 2, k = 0; k < cfg.rings && t < maxD - depth * 0.35; k++) { rings.push(t); t += depth + (k % 2 ? cfg.lane : Math.min(cfg.lane, 1.2)); }
     let added = 0;
+    const tryPlace = (i, wid, dep, pad) => {
+      const x = i % GW, y = (i / GW) | 0;
+      let nx = D[i + 1] - D[i - 1], ny = D[i + GW] - D[i - GW]; const L = Math.hypot(nx, ny); if (!L) return false; nx /= L; ny /= L;
+      const ang = Math.atan2(nx, -ny);     // the frontage runs along the street
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      for (let u = -0.5; u <= 0.5; u += 0.25) for (let v = -0.5; v <= 0.5; v += 0.25) {
+        const px = Math.round(x + u * wid * ca - v * dep * sa), py = Math.round(y + u * wid * sa + v * dep * ca), j = py * GW + px;
+        if (px < 1 || py < 1 || px >= GW - 1 || py >= GH - 1 || !reg[j] || D[j] < 0.7 || occ[j]) return false;
+      }
+      // keep a gap to the neighbours (wide for sparse: that's the yard)
+      const w2 = wid / 2 + pad, d2 = dep / 2 + Math.min(pad, 1.5);
+      for (let u = -w2; u <= w2; u += 0.5) for (let v = -d2; v <= d2; v += 0.5) { const px = Math.round(x + u * ca - v * sa), py = Math.round(y + u * sa + v * ca); if (px >= 0 && py >= 0 && px < GW && py < GH) occ[py * GW + px] = 1; }
+      if (r() > cfg.keep) return true;
+      S2.buildings.push({ pts: rect(x * GS, y * GS, wid * GS, dep * GS, ang), big: wid * dep * GS * GS > 900 && r() < 0.3 });
+      added++; return true;
+    };
+    const shuffled = list => { for (let k = list.length - 1; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [list[k], list[j]] = [list[j], list[k]]; } return list; };
     for (const target of rings) {
       const cand = []; for (let i = 0; i < D.length; i++) if (reg[i] && Math.abs(D[i] - target) < 0.75) cand.push(i);
-      for (let k = cand.length - 1; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [cand[k], cand[j]] = [cand[j], cand[k]]; }
-      for (const i of cand) {
-        if (occ[i]) continue;
-        const x = i % GW, y = (i / GW) | 0;
-        let nx = D[i + 1] - D[i - 1], ny = D[i + GW] - D[i - GW]; const L = Math.hypot(nx, ny); if (!L) continue; nx /= L; ny /= L;
-        const wid = (opts.minW || 12) / GS + r() * ((opts.varW || 14) / GS), dep = depth * (0.85 + r() * 0.3);
-        const ang = Math.atan2(nx, -ny);     // the frontage runs along the street
-        const ca = Math.cos(ang), sa = Math.sin(ang), corners = [];
-        let ok = true;
-        for (let u = -0.5; u <= 0.5 && ok; u += 0.25) for (let v = -0.5; v <= 0.5; v += 0.25) {
-          const px = Math.round(x + u * wid * ca - v * dep * sa), py = Math.round(y + u * wid * sa + v * dep * ca), j = py * GW + px;
-          if (px < 1 || py < 1 || px >= GW - 1 || py >= GH - 1 || !reg[j] || D[j] < 0.7 || occ[j]) { ok = false; break; }
-        }
-        if (!ok) continue;
-        // keep a small gap to the neighbours
-        const pad = 0.8, w2 = wid / 2 + pad, d2 = dep / 2 + pad;
-        for (let u = -w2; u <= w2; u += 0.5) for (let v = -d2; v <= d2; v += 0.5) { const px = Math.round(x + u * ca - v * sa), py = Math.round(y + u * sa + v * ca); if (px >= 0 && py >= 0 && px < GW && py < GH) occ[py * GW + px] = 1; }
-        if (r() > dens) continue;
-        S2.buildings.push({ pts: rect(x * GS, y * GS, wid * GS, dep * GS, ang), big: wid * dep * GS * GS > 900 && r() < 0.3 });
-        added++;
-      }
+      for (const i of shuffled(cand)) if (!occ[i]) tryPlace(i, ((opts.minW || 12) / GS + r() * ((opts.varW || 14) / GS)) * cfg.w, depth * (0.85 + r() * 0.3), cfg.pad);
+    }
+    if (cfg.infill) {   // whatever room is left, smaller buildings
+      const cand = []; for (let i = 0; i < D.length; i++) if (reg[i] && !occ[i] && D[i] > 2) cand.push(i);
+      for (const i of shuffled(cand)) if (!occ[i]) tryPlace(i, 5 + r() * 3, 5 + r() * 2.5, 0.15);
     }
     return added;
   }
@@ -423,34 +432,48 @@ window.UnwipTownFactory = function (M) {
   }
 
   // ---------------------------------------------------------------- 🎲 random village, town or city
-  function generate(size) {
-    const S2 = st(); M.push();
-    const seed = Math.floor(Math.random() * 1e9); S2.seed = seed;
+  // opts.add: keep everything on the map and put the new town on top, round opts.at (the middle of the view), with its
+  // river kept near it. Without it the section starts again: everything goes, frames and fog too.
+  // Either way the new town comes in selected (as a group with its own water), ready to drag into place.
+  const KINDS = { streets: 'street', buildings: 'building', walls: 'wall', areas: 'area', stamps: 'stamp', labels: 'label', pins: 'pin' };
+  function generate(size, opts = {}) {
+    const S2 = st(), add = !!opts.add; M.push();
+    const seed = Math.floor(Math.random() * 1e9); if (!add) S2.seed = seed;
     const r = M.rng(seed), n = M.noise2(seed + 1);
-    S2.streets = []; S2.buildings = []; S2.walls = []; S2.areas = []; S2.stamps = []; S2.labels = []; S2.pins = [];
-    M.mctx.clearRect(0, 0, MW, MH);
+    const before = {}; for (const k of Object.keys(KINDS)) before[k] = add ? (S2[k] || []).length : 0;
+    if (!add) { S2.streets = []; S2.buildings = []; S2.walls = []; S2.areas = []; S2.stamps = []; S2.labels = []; S2.pins = []; S2.paths = []; S2.boxes = []; S2.fog = []; M.mctx.clearRect(0, 0, MW, MH); }
+    const wc = document.createElement('canvas'); wc.width = MW; wc.height = MH; const wx = wc.getContext('2d');   // this town's own water
     const cfg = { village: { R: 190, roads: 3 + Math.floor(r() * 2), rings: [], wall: false, dens: 'normal' }, town: { R: 300, roads: 4 + Math.floor(r() * 2), rings: [0.55], wall: r() < 0.7, dens: 'normal' }, city: { R: 430, roads: 6 + Math.floor(r() * 2), rings: [0.38, 0.68], wall: true, dens: 'dense' } }[size];
-    const cx = W / 2 + (r() - 0.5) * 120, cy = H / 2 + (r() - 0.5) * 60;
+    const at = opts.at || { x: W / 2, y: H / 2 }, cx = at.x + (r() - 0.5) * (add ? 30 : 120), cy = at.y + (r() - 0.5) * (add ? 20 : 60);
+    const far = cfg.R * 1.9;   // how far an added town's roads and river reach
     const RR = a => cfg.R * (0.88 + M.fbm(n, Math.cos(a) * 1.5 + 5, Math.sin(a) * 1.5 + 5, 3) * 0.3);
 
     // water: a river through the middle, or the sea along one side (a harbour town)
     const water = r(); let river = null;
     if (water < 0.55) {
       const horiz = r() < 0.5, pts = [];
-      for (let t = -0.05; t <= 1.05; t += 0.02) { const off = (M.fbm(n, t * 3, 9.5, 3) - 0.5) * 320 + (r() - 0.5) * 6; pts.push(horiz ? [t * W, cy + 120 + off] : [cx + 160 + off, t * H]); }
+      // across the whole map, or (added on top) from a little before the town to a little after it
+      const t0 = add ? ((horiz ? cx : cy) - far) / (horiz ? W : H) : -0.05, t1 = add ? ((horiz ? cx : cy) + far) / (horiz ? W : H) : 1.05;
+      for (let t = t0; t <= t1; t += 0.02) { const off = (M.fbm(n, t * 3, 9.5, 3) - 0.5) * 320 + (r() - 0.5) * 6; pts.push(horiz ? [t * W, cy + 120 + off] : [cx + 160 + off, t * H]); }
       const wid = size === 'village' ? 9 : 13;
-      M.mctx.strokeStyle = '#000'; M.mctx.lineCap = 'round'; M.mctx.lineJoin = 'round'; M.mctx.lineWidth = wid; M.mctx.beginPath(); pts.forEach(([x, y], i) => i ? M.mctx.lineTo(x / K, y / K) : M.mctx.moveTo(x / K, y / K)); M.mctx.stroke();
+      wx.strokeStyle = '#000'; wx.lineCap = 'round'; wx.lineJoin = 'round';
+      if (!add) { wx.lineWidth = wid; wx.beginPath(); pts.forEach(([x, y], i) => i ? wx.lineTo(x / K, y / K) : wx.moveTo(x / K, y / K)); wx.stroke(); }
+      else for (let i = 1; i < pts.length; i++) {   // an added town's river narrows to a stream at both ends
+        const e = Math.min(i, pts.length - i) / (pts.length * 0.22); wx.lineWidth = wid * Math.max(0.3, Math.min(1, e));
+        wx.beginPath(); wx.moveTo(pts[i - 1][0] / K, pts[i - 1][1] / K); wx.lineTo(pts[i][0] / K, pts[i][1] / K); wx.stroke();
+      }
       river = pts;
-    } else if (water < 0.8 && size !== 'village') {
-      const side = Math.floor(r() * 4); M.mctx.fillStyle = '#000'; M.mctx.beginPath();
-      for (let t = 0; t <= 1.001; t += 0.01) { const o = 0.16 + M.fbm(n, t * 4, 3.3, 3) * 0.12; const p = side === 0 ? [t * MW, MH * (1 - o)] : side === 1 ? [t * MW, MH * o] : side === 2 ? [MW * o, t * MH] : [MW * (1 - o), t * MH]; t ? M.mctx.lineTo(p[0], p[1]) : M.mctx.moveTo(p[0], p[1]); }
-      if (side === 0) { M.mctx.lineTo(MW, MH); M.mctx.lineTo(0, MH); } else if (side === 1) { M.mctx.lineTo(MW, 0); M.mctx.lineTo(0, 0); } else if (side === 2) { M.mctx.lineTo(0, MH); M.mctx.lineTo(0, 0); } else { M.mctx.lineTo(MW, MH); M.mctx.lineTo(MW, 0); }
-      M.mctx.fill();
+    } else if (water < 0.8 && size !== 'village' && !add) {
+      const side = Math.floor(r() * 4); wx.fillStyle = '#000'; wx.beginPath();
+      for (let t = 0; t <= 1.001; t += 0.01) { const o = 0.16 + M.fbm(n, t * 4, 3.3, 3) * 0.12; const p = side === 0 ? [t * MW, MH * (1 - o)] : side === 1 ? [t * MW, MH * o] : side === 2 ? [MW * o, t * MH] : [MW * (1 - o), t * MH]; t ? wx.lineTo(p[0], p[1]) : wx.moveTo(p[0], p[1]); }
+      if (side === 0) { wx.lineTo(MW, MH); wx.lineTo(0, MH); } else if (side === 1) { wx.lineTo(MW, 0); wx.lineTo(0, 0); } else if (side === 2) { wx.lineTo(0, MH); wx.lineTo(0, 0); } else { wx.lineTo(MW, MH); wx.lineTo(MW, 0); }
+      wx.fill();
     }
+    M.mctx.globalCompositeOperation = 'source-over'; M.mctx.drawImage(wc, 0, 0);
     const mdata = M.mctx.getImageData(0, 0, MW, MH).data;
     const wet = (x, y) => { const mx = Math.floor(x / K), my = Math.floor(y / K); return mx >= 0 && my >= 0 && mx < MW && my < MH && mdata[(my * MW + mx) * 4 + 3] > 100; };
     // keep the middle of town on dry land
-    let ox = cx, oy = cy; for (let t = 0; t < 60 && wet(ox, oy); t++) { ox = cx + (r() - 0.5) * 400; oy = cy + (r() - 0.5) * 300; }
+    let ox = cx, oy = cy; for (let t = 0; t < 60 && wet(ox, oy); t++) { ox = cx + (r() - 0.5) * (add ? 240 : 400); oy = cy + (r() - 0.5) * (add ? 180 : 300); }
 
     // the square in the middle
     const sqR = size === 'village' ? 34 : size === 'town' ? 46 : 62, sq = [];
@@ -462,7 +485,7 @@ window.UnwipTownFactory = function (M) {
     for (let k = 0; k < cfg.roads; k++) {
       let a = a0 + k / cfg.roads * Math.PI * 2 + (r() - 0.5) * 0.4, x = ox + Math.cos(a) * sqR * 0.9, y = oy + Math.sin(a) * sqR * 0.9;
       const pts = [[r1(x), r1(y)]]; let wetRun = 0;
-      for (let step = 0; step < 120 && x > -20 && y > -20 && x < W + 20 && y < H + 20; step++) {
+      for (let step = 0; step < 120 && x > -20 && y > -20 && x < W + 20 && y < H + 20 && (!add || Math.hypot(x - ox, y - oy) < far); step++) {
         a += (M.fbm(n, x / 180 + k * 3, y / 180, 2) - 0.5) * 0.32; x += Math.cos(a) * 26; y += Math.sin(a) * 26;
         if (wet(x, y)) wetRun++; else wetRun = 0;
         if (wetRun > (river ? 3 : 0)) { pts.splice(pts.length - (wetRun - 1)); break; }       // a road crosses a river on a bridge, but stops at the sea or a long stretch of water
@@ -496,7 +519,7 @@ window.UnwipTownFactory = function (M) {
       if (cur.length > 1) S2.walls.push({ pts: cur });
     }
     // bridges where roads cross the river
-    if (river) for (const s of S2.streets) for (let i = 1; i < s.pts.length; i++) for (let j = 1; j < river.length; j++) { const x = segX(s.pts[i - 1], s.pts[i], river[j - 1], river[j]); if (x && S2.stamps.filter(q => q.k === 't-bridge').every(q => Math.hypot(q.x - x[0], q.y - x[1]) > 40)) S2.stamps.push({ k: 't-bridge', x: r1(x[0]), y: r1(x[1]), rot: r1(x[2]), s: 1, len: size === 'village' ? 52 : 70 }); }
+    if (river) for (const s of S2.streets.slice(before.streets)) for (let i = 1; i < s.pts.length; i++) for (let j = 1; j < river.length; j++) { const x = segX(s.pts[i - 1], s.pts[i], river[j - 1], river[j]); if (x && S2.stamps.filter(q => q.k === 't-bridge').every(q => Math.hypot(q.x - x[0], q.y - x[1]) > 40)) S2.stamps.push({ k: 't-bridge', x: r1(x[0]), y: r1(x[1]), rot: r1(x[2]), s: 1, len: size === 'village' ? 52 : 70 }); }
 
     // landmarks
     S2.stamps.push({ k: 't-well', x: r1(ox + (r() - 0.5) * 16), y: r1(oy + (r() - 0.5) * 16), s: 1 });
@@ -542,17 +565,23 @@ window.UnwipTownFactory = function (M) {
       }
     }
     // names
-    const nm = S2.name && !/^(Main map|Section \d+|Map \d+)$/i.test(S2.name.trim()) ? S2.name.trim() : M.name(r);
-    S2.labels.push({ x: W / 2, y: 70, text: nm.toUpperCase(), k: 'region', size: size === 'city' ? 46 : 40 });
+    const nm = !add && S2.name && !/^(Main map|Section \d+|Map \d+|Town)$/i.test(S2.name.trim()) ? S2.name.trim() : M.name(r);
+    S2.labels.push(add ? { x: r1(ox), y: r1(Math.max(40, oy - cfg.R * 0.92 - 34)), text: nm.toUpperCase(), k: 'region', size: size === 'city' ? 40 : 34 } : { x: W / 2, y: 70, text: nm.toUpperCase(), k: 'region', size: size === 'city' ? 46 : 40 });
     if (river) { const p = river[Math.floor(river.length * 0.18)]; S2.labels.push({ x: r1(p[0]), y: r1(p[1] - 22), text: 'River ' + M.name(r), k: 'sea', size: 22 }); }
-    S2.stamps.sort((a, b) => a.y - b.y);
+    S2.stamps = S2.stamps.slice(0, before.stamps).concat(S2.stamps.slice(before.stamps).sort((a, b) => a.y - b.y));
+    const items = []; for (const [k, t] of Object.entries(KINDS)) for (let i = before[k]; i < (S2[k] || []).length; i++) items.push({ type: t, i });
+    M.selectGroup(items, wc);
     M.landDirty(); M.changed(); M.schedule();
-    return { buildings: S2.buildings.length, streets: S2.streets.length };
+    return { buildings: S2.buildings.length - before.buildings, streets: S2.streets.length - before.streets, centre: [r1(ox), r1(oy)] };
   }
   async function randomDialog() {
-    const size = await M.U.modal({ title: '🎲 Random town', body: `<p>Rolls a new town from fixed rules and random numbers, like dice (no AI): streets, a market square, buildings, a wall, a river or harbour, and a name. It replaces this map section; Undo brings back what was there. Everything can be edited after.</p>`,
+    const has = M.hasContent(); let el;
+    const size = await M.U.modal({ title: '🎲 Random town', onOpen: x => { el = x; }, body: `<p>Rolls a new town from fixed rules and random numbers, like dice (no AI): streets, a market square, buildings, maybe a wall and a river, and a name. Everything can be edited after, and Undo takes it away again.</p>`
+        + (has ? `<div class="chip-row" id="mp-gen-mode" style="margin-top:8px"><button type="button" class="chip on" data-v="add">Add it to this map (keep what’s here)</button><button type="button" class="chip" data-v="replace">Replace this map</button></div><p class="hint" style="margin-top:8px">An added town lands in the middle of what you can see, already selected. Drag it into place.</p>` : ''),
       buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Village', value: 'village', kind: 'ghost' }, { label: 'Town', value: 'town', kind: 'ghost' }, { label: 'City', value: 'city', kind: 'primary' }] });
-    if (size) generate(size);
+    if (!size) return;
+    const mode = el && el.querySelector('#mp-gen-mode .chip.on');
+    generate(size, { add: has && (!mode || mode.dataset.v === 'add'), at: M.viewCentre() });
   }
 
   return { TOOLS, LISTS, renderBase, renderUnder, stamp, stampBounds, hit, bounds, moveBy, drawOne, pointerDown, pointerMove, pointerUp, drawPreview, optionsBar, brushy, fillBlock, generate, randomDialog,

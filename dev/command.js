@@ -66,6 +66,7 @@ window.UnwipCommand = (function () {
     ['Detail level', 'detailed mode more planning outline corkboard build', '', () => U.setMode('detailed'), inProject],
     ['Character sheets (every character)', 'character sheets all characters gear lore list', '', () => { if (U.level() < 2) U.setMode('lore'); window.UnwipCharSheet && window.UnwipCharSheet.browse(); }, roomy(inProject)],
     ['Open World: magic, runes, sigils and insignia', 'open world magic system rune runes sigil insignia emblem lore deep end', '', () => { if (U.level() < 2) U.setMode('lore'); window.UnwipBuild && window.UnwipBuild.fromBook('world'); }, roomy(inProject)],
+    ['Story Bible: add the selected words as a fact', 'story bible fact pin add note continuity series', '', () => { if (U.level() < 2) U.setMode('lore'); window.UnwipBible && window.UnwipBible.addFact(getSelection().toString()); }, roomy(inProject)],
     ['Lore level', 'lore unhinged deep end character sheets niche everything', '', () => U.setMode('lore'), roomy(inProject)],
     ['Outline', 'plan synopsis list', '', detailed(() => U.setView('outline')), inProject],
     ['Corkboard', 'cards index plan', '', detailed(() => U.setView('cork')), desk(inProject)],

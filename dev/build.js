@@ -80,9 +80,17 @@ window.UnwipBuild = (function () {
     return c;
   }
   const canvasBytes = async c => new Uint8Array(await (await new Promise(r => c.toBlob(r, 'image/png'))).arrayBuffer());
-  async function copyCanvas(c) {
-    try { const blob = await new Promise(r => c.toBlob(r, 'image/png')); await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); U.toast('Copied. Paste it into any chapter with Ctrl+V.'); }
-    catch { U.toast('Couldn’t copy the picture on this device. Try Save PNG instead.', 'warn'); }
+  // The PC/Mac app copies through its own clipboard (the window isn't allowed to write pictures to it). The web hands
+  // the clipboard a picture still being made, inside the click: Safari only allows copying during the click itself.
+  function copyCanvas(c, msg) {
+    const ok = () => U.toast(msg || 'Copied. Paste it into any chapter with Ctrl+V.'), fail = () => U.toast('Couldn’t copy the picture on this device. Try Save PNG instead.', 'warn');
+    if (api.clipboardImage) return canvasBytes(c).then(b => api.clipboardImage(b)).then(r => r ? ok() : fail(), fail);
+    try {
+      const blob = new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('no picture')), 'image/png'));
+      return navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(ok, async () => {
+        try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': await blob })]); ok(); } catch { fail(); }   // browsers that want the finished picture
+      });
+    } catch { fail(); return Promise.resolve(); }
   }
   async function savePNG(c, name) { await api.exportBinary(await canvasBytes(c), name || 'Picture', 'png', 'PNG picture'); }
 
@@ -97,8 +105,9 @@ window.UnwipBuild = (function () {
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const world = scope === 'world';
     box.innerHTML = `
+      ${world && window.UnwipBible && !phone() ? '<div id="sbb-shelf-slot"></div>' : ''}
       <div class="pl-head"><div><h1>${world ? 'Open World' : 'Build'}</h1><p>${world ? 'The deep end of your world: magic systems, rune alphabets, sigils and insignia. Like everything in Build, they belong to the world, not one book, so any book can use them.' : 'The pieces of your world: maps, coats of arms and stat systems. They belong to the world, not one book, so any book can use them.' + (U.level && U.level() >= 2 ? ' Magic, runes, sigils and insignia are in Open World.' : '')}</p></div></div>
-      <div class="pl-tools bd-tools">${NEW_ORDER().filter(inScope).map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}${world && !phone() && window.UnwipCharSheet ? `<button class="pl-tool" data-csheet><span>🛡️</span><b>New character sheet</b><em>Gear in slots round a figure or your own picture, chapter by chapter. Lives with the character, in their book.</em></button>` : ''}</div>
+      <div class="pl-tools bd-tools">${NEW_ORDER().filter(inScope).map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}${world && !phone() && window.UnwipCharSheet ? `<button class="pl-tool" data-csheet><span>🛡️</span><b>New character sheet</b><em>Name a character once, put them in the books they’re in, and give them gear slot by slot, chapter by chapter.</em></button>` : ''}</div>
       ${items.some(x => inScope(x.kind)) ? ORDER.filter(k => inScope(k) && by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
         <div class="bd-grid">${by(k).map(x => `<div class="bd-card" data-id="${x.id}" tabindex="0">
           <div class="bd-thumb ${x.thumb ? '' : 'empty'}">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : `<span>${KINDS[k].icon}</span>`}</div>
@@ -106,7 +115,8 @@ window.UnwipBuild = (function () {
           ${viewOnly(k) ? '' : '<button class="icon-btn small bd-more" title="More">⋯</button>'}</div>`).join('')}</div>`).join('')
         : `<p class="lib-empty">${world ? 'Nothing here yet. Pick something above to start.' : 'Nothing built yet. Pick something above to start: a map is a good first piece.'}</p>`}`;
     $$('[data-new]', box).forEach(b => b.onclick = () => create(b.dataset.new));
-    $$('[data-csheet]', box).forEach(b => b.onclick = () => sheetFromLibrary());
+    $$('[data-csheet]', box).forEach(b => b.onclick = () => window.UnwipBible ? window.UnwipBible.newEntry({ kind: 'characters', sheet: true }) : sheetFromLibrary());
+    const shelfSlot = $('#sbb-shelf-slot', box); if (shelfSlot) window.UnwipBible.shelfHTML().then(h => { if (shelfSlot.isConnected) { shelfSlot.innerHTML = h; window.UnwipBible.wireShelf(shelfSlot); } });
     $$('.bd-card', box).forEach(c => {
       const id = c.dataset.id;
       c.onclick = e => { if (e.target.closest('.bd-more')) { const r = e.target.getBoundingClientRect(); return cardMenu(id, r.left, r.bottom); } open(id); };

@@ -390,7 +390,7 @@ Next: the captain’s log of the Demeter, found on board and read at the inquest
     ['#lib-mode', 'Levels', 'Focus is just your books. Detail unlocks Play and Build here, and planning tools inside a book. Lore adds character sheets and the Open World tab. Switching never changes your books.', null, null, { lib: 'write' }],
     ['#lib-tabs [data-tab="play"]', 'Play', 'Warm-ups, story dice, a style mimic, and exercises with rules Unwip checks as you write (no adverbs, only dialogue…). Nothing here touches your books.', null, null, { lib: 'play' }],
     ['#lib-tabs [data-tab="build"]', 'Build', 'Everything you build lives here, for all your books: maps, coats of arms and stat systems. Link any of them into any book.', null, null, { lib: 'build' }],
-    ['#lib-tabs [data-tab="world"]', 'Open World', 'The deep end, at the Lore level: magic systems, rune alphabets, sigils and insignia, for all your books.', null, null, { lib: 'world' }],
+    ['#lib-tabs [data-tab="world"]', 'Open World', 'The deep end, at the Lore level: the Story Bible for each series or book (everyone and everything in it, where they turn up, facts, threads and a glossary), and magic systems, rune alphabets, sigils and insignia.', null, null, { lib: 'world' }],
     ['#library .dbx-pill', 'Sync', 'Connect Dropbox to have the same books on your PC, Mac, iPhone and iPad. Changes go both ways, and nothing is saved over: if two devices change the same chapter, both versions are kept.', null, null, { lib: 'write' }]
   ];
   let tEls = null;

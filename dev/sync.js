@@ -333,6 +333,20 @@ window.UnwipSync = (function () {
             const ok = await U.modal({ title: 'Different on the other device', body: box, wide: true, buttons: [{ label: 'Keep mine', value: false, kind: 'ghost' }, { label: 'Use the ticked ones', value: true, kind: 'primary' }] });
             if (ok) box.querySelectorAll('[data-d]:checked').forEach(cb => { const d = diffs[+cb.dataset.d]; if (d.key === 'gear') Object.assign(d.me, JSON.parse(JSON.stringify(d.te))); else d.n[d.key] = d.key === 'title' ? d.other : (d.other === '(none)' ? '' : d.other); changed++; });
           }
+          // Story Bible facts: facts pinned on the other device come in (each fact has its own id; none are lost)
+          if (other.bible && Array.isArray(other.bible.facts) && other.bible.facts.length) {
+            const B = S.project.bible = (S.project.bible && typeof S.project.bible === 'object') ? S.project.bible : {};
+            B.facts = Array.isArray(B.facts) ? B.facts : [];
+            const have = new Set(B.facts.map(f => f && f.id));
+            for (const f of other.bible.facts) if (f && typeof f === 'object' && f.id && !have.has(f.id)) { B.facts.push(JSON.parse(JSON.stringify(f))); changed++; }
+          }
+          // threads and glossary words work the same way: anything with an id this device hasn't got comes in
+          for (const k of ['threads', 'glossary']) if (other.bible && Array.isArray(other.bible[k]) && other.bible[k].length) {
+            const B = S.project.bible = (S.project.bible && typeof S.project.bible === 'object') ? S.project.bible : {};
+            B[k] = Array.isArray(B[k]) ? B[k] : [];
+            const have = new Set(B[k].map(x => x && x.id));
+            for (const x of other.bible[k]) if (x && typeof x === 'object' && x.id && !have.has(x.id)) { B[k].push(JSON.parse(JSON.stringify(x))); changed++; }
+          }
           // character sheets: gear added on the other device comes in (a slot's change at the same chapter keeps this one's)
           let sheetsIn = 0;
           U.walkTree(S.project.binder, n => {

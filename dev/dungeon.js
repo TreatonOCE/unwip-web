@@ -10,7 +10,7 @@ window.UnwipDungeonFactory = function (M) {
   const st = () => M.st;
   const ICON = (d, c = '#3a3a3a') => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const TOOLS = [
-    ['select', '✋', 'Move & select: drag stairs, doors and labels around; R turns the selected one. Drag empty space to pan; scroll to zoom'],
+    ['select', '✋', 'Select and move: tap or click stairs, doors or labels to select them, then drag to move them. R turns the selected one. Drag empty space to move around; scroll or pinch to zoom'],
     ['room', ICON('<rect x="4" y="5" width="16" height="14" fill="#d9cba8"/><path d="M4 9h16M8 5v14" stroke-width="1" stroke-dasharray="1 2"/>'), 'Room: drag out a rectangle of floor'],
     ['corridor', ICON('<path d="M3 18h7V7h11" stroke-width="5" stroke="#d9cba8"/><path d="M3 18h7V7h11" stroke-width="1"/>'), 'Corridor: drag to carve a passage. Width below'],
     ['rock', ICON('<path d="M4 18 8 9l5 4 3-7 4 12z" fill="#8a8172"/>'), 'Fill with rock: drag over floor to turn it back into solid rock'],

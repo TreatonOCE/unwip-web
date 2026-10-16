@@ -23,8 +23,11 @@ window.UnwipMaps = (function () {
   const MARK_ICON = '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3 20 12 12 21 4 12z" fill="#ffd36b" stroke="#3a3a3a" stroke-width="1.6"/><circle cx="12" cy="12" r="2.5" fill="#3a3a3a"/></svg>';
   const FOG_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3a3a3a" stroke-linecap="round"><path d="M3 10c3-3 6-3 9 0s6 3 9 0M3 15c3-3 6-3 9 0s6 3 9 0" stroke-width="2.2"/></svg>';
   const MARKS = [['waypoint', 'Waypoint'], ['quest', 'Quest'], ['dungeon', 'Dungeon'], ['safe', 'Safe zone'], ['boss', 'Boss'], ['shop', 'Shop'], ['respawn', 'Respawn']];
+  const MARQ_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="15" height="12" stroke-dasharray="3 3"/><path d="M13 12l7 7m0-5v5h-5"/></svg>';
+  const MARQ_TIP = 'Select an area: drag a box round things to select them all, then drag any of them to move them together. Delete or 🗑 removes them. Tap empty space or press Esc to let go';
   const TOOLS = [
-    ['select', '✋', 'Move & select: drag things around, double-click a label or pin to edit it, Delete removes it. To turn a landmark or label, drag the round handle that appears when it’s selected (it turns in small steps; hold Shift to turn it freely), or press R and Shift+R. To make one bigger or smaller, drag the square corner handle, or press + and −. Drag a bridge’s end to turn and stretch it. Drag empty space to pan; scroll to zoom'],
+    ['select', '✋', 'Select and move: tap or click a thing to select it, then drag it to move it. Double-click a label or pin to edit it. Delete or 🗑 removes it. To turn a landmark or label, drag the round handle that appears when it’s selected (it turns in small steps; hold Shift to turn it freely), or press R and Shift+R. To make one bigger or smaller, drag the square corner handle, or press + and −. Drag a bridge’s end to turn and stretch it. Drag empty space to move around; scroll or pinch to zoom'],
+    ['marquee', MARQ_ICON, MARQ_TIP],
     ['land', '🟫', 'Paint land'], ['water', '🌊', 'Water: paint over land to make lakes, bays and rivers (the sea around the land is already water)'],
     ['forest', '🌲', 'Forest: drag to scatter trees'], ['mountain', '⛰️', 'Mountains: drag to place a range'], ['hill', '🏔️', 'Hills: drag to scatter'],
     ['town', '🏠', 'Town: click to place'], ['city', '🏰', 'City or castle: click to place'], ['tower', '🗼', 'Tower: click to place'], ['ruin', '🏚️', 'Ruins: click to place'],
@@ -146,7 +149,9 @@ window.UnwipMaps = (function () {
     }
     mctx.putImageData(img, 0, 0); landDirty = true; itemsDirty = true;
     // scatter: mountains on the highest ground, forests on middle ground, towns near coasts
-    if (!add) { st.stamps = []; st.paths = []; st.labels = []; st.pins = []; }
+    // Replace starts the section again (frames and fog too); Add keeps everything and selects what's new
+    if (!add) { st.stamps = []; st.paths = []; st.labels = []; st.pins = []; st.boxes = []; st.fog = []; fogDirty = true; }
+    const had = { stamps: new Set(st.stamps), paths: st.paths.length, labels: st.labels.length };
     const isLand = (x, y) => x >= 0 && y >= 0 && x < MW && y < MH && (add ? fresh[y * MW + x] === 1 : img.data[(y * MW + x) * 4 + 3] > 0);
     for (let i = 0; i < 2600; i++) {
       const x = Math.floor(r() * MW), y = Math.floor(r() * MH); if (!isLand(x, y)) continue;
@@ -194,6 +199,15 @@ window.UnwipMaps = (function () {
       const sea = 'The ' + name(r) + ' Sea'; st.labels.push({ x: Math.max(180, 70 + sea.length * 11), y: H - 140, text: sea, k: 'sea' });   // centred, so a long name (or the wider Holo lettering) mustn't run off the left edge
     }
     st.stamps.sort((a, b) => a.y - b.y);
+    if (add) {
+      const items = [], g = document.createElement('canvas'); g.width = MW; g.height = MH; const gx = g.getContext('2d'), gi = gx.createImageData(MW, MH);
+      for (let i = 0; i < fresh.length; i++) if (fresh[i]) gi.data[i * 4 + 3] = 255;
+      gx.putImageData(gi, 0, 0);
+      st.stamps.forEach((s, i) => { if (!had.stamps.has(s)) items.push({ type: 'stamp', i }); });
+      for (let i = had.paths; i < st.paths.length; i++) items.push({ type: 'path', i });
+      for (let i = had.labels; i < st.labels.length; i++) items.push({ type: 'label', i });
+      selectGroup(items, g);
+    }
     changed(); schedule();
   }
 
@@ -356,19 +370,22 @@ window.UnwipMaps = (function () {
     }
   }
   // skip: an item being dragged, drawn separately on top
+  // skip: one thing ({ type, i }) or a group ({ type: 'group', keys }) that is drawn separately
+  const skips = (skip, t, i) => !!skip && (skip.keys ? skip.keys.has(t + ':' + i) : skip.type === t && skip.i === i);
   function renderItems(g, P, skip) {
-    st.paths.forEach((p, i) => { if (!(skip && skip.type === 'path' && skip.i === i)) drawPath(g, p, P); });
+    st.paths.forEach((p, i) => { if (!skips(skip, 'path', i)) drawPath(g, p, P); });
     if (isTown()) T.renderUnder(g, P, skip);
-    st.stamps.map((s, i) => [s, i]).sort((a, b) => ((a[0].z || 0) - (b[0].z || 0)) || a[0].y - b[0].y).forEach(([s, i]) => { if (!(skip && skip.type === 'stamp' && skip.i === i)) stamp(g, s, P); });
-    (st.boxes || []).forEach((b, i) => { if (!(skip && skip.type === 'box' && skip.i === i)) drawRectFrame(g, P, b.x, b.y, b.w, b.h, b.f); });
-    st.labels.forEach((l, i) => { if (!(skip && skip.type === 'label' && skip.i === i)) drawLabel(g, l, P); });
-    st.pins.forEach((p, i) => { if (!(skip && skip.type === 'pin' && skip.i === i)) drawPin(g, p, P); });
+    st.stamps.map((s, i) => [s, i]).sort((a, b) => ((a[0].z || 0) - (b[0].z || 0)) || a[0].y - b[0].y).forEach(([s, i]) => { if (!skips(skip, 'stamp', i)) stamp(g, s, P); });
+    (st.boxes || []).forEach((b, i) => { if (!skips(skip, 'box', i)) drawRectFrame(g, P, b.x, b.y, b.w, b.h, b.f); });
+    st.labels.forEach((l, i) => { if (!skips(skip, 'label', i)) drawLabel(g, l, P); });
+    st.pins.forEach((p, i) => { if (!skips(skip, 'pin', i)) drawPin(g, p, P); });
     drawFog(g, P);
     if (st.compass) { g.save(); g.translate(W - 110, H - 120); g.strokeStyle = P.ink; g.fillStyle = P.ink; g.lineWidth = 1.5; g.beginPath(); g.arc(0, 0, 44, 0, 7); g.stroke(); for (let k = 0; k < 4; k++) { g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, -58); g.lineTo(9, 0); g.lineTo(0, 9); g.lineTo(-9, 0); g.closePath(); k % 2 ? g.stroke() : g.fill(); } g.font = 'bold 18px Bookhaven, Georgia, serif'; g.textAlign = 'center'; g.fillText('N', 0, -64); g.restore(); }
     drawFrame(g, P);
   }
   function drawOne(g, s, P) {
     if (!s) return;
+    if (s.type === 'group') { s.items.forEach(x => drawOne(g, x, P)); return; }
     if (s.type === 'stamp' && st.stamps[s.i]) stamp(g, st.stamps[s.i], P);
     if (s.type === 'path' && st.paths[s.i]) drawPath(g, st.paths[s.i], P);
     if (s.type === 'label' && st.labels[s.i]) drawLabel(g, st.labels[s.i], P);
@@ -378,8 +395,50 @@ window.UnwipMaps = (function () {
   }
   // for saving a picture
   function renderAll(g, P) { renderBase(g, P); renderItems(g, P); }
+  // Frames, labels and moved towns can sit past the map's edge. The things on top are drawn over everything they
+  // cover (up to LIM past the edge), and a picture grows to take them in, with plain paper round the map.
+  const LIM = 800;
+  const ptsBox = pts => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const [x, y] of pts) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; } return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; };
+  const padBox = (b, d) => ({ x: b.x - d, y: b.y - d, w: b.w + d * 2, h: b.h + d * 2 });
+  function eachItem(fn) {
+    for (const [t, key] of Object.entries(LIST_OF())) { const list = st[key]; if (Array.isArray(list)) for (let i = 0; i < list.length; i++) fn({ type: t, i }); }
+  }
+  function itemBox(s) {
+    if (s.type === 'path') { const p = st.paths[s.i]; return p && p.pts.length ? padBox(ptsBox(p.pts), 6) : null; }
+    if (T && T.LISTS[s.type]) { const o = (st[T.LISTS[s.type]] || [])[s.i]; return o && o.pts && o.pts.length ? padBox(ptsBox(o.pts), s.type === 'street' ? 15 : s.type === 'wall' ? 12 : 4) : null; }
+    const b = bounds(s); if (!b) return null;
+    if (s.type === 'pin') { const o = st.pins[s.i], lw = o && o.label ? o.label.length * 5 : 0; return { x: b.x - lw, y: b.y, w: b.w + lw * 2, h: b.h }; }
+    const o = turnable(s);
+    if (o && o.rot) { const r = Math.hypot(b.w, b.h) / 2 + 4, cx = b.x + b.w / 2, cy = b.y + b.h / 2; return { x: cx - r, y: cy - r, w: r * 2, h: r * 2 }; }
+    return padBox(b, 6);
+  }
+  // forPicture: how far a saved picture reaches. Frames always count in full. Roads, rivers, streets, walls and areas
+  // that run off the edge (rolled ones always do) only count once their middle is off the map, and anything else
+  // has to stick out by more than a nick, so a map with nothing outside it stays exactly the map.
+  function contentExtent(forPicture) {
+    const e = [0, 0, W, H], f = [0, 0, W, H];
+    eachItem(s => {
+      const b = itemBox(s); if (!b) return;
+      if (forPicture && ['path', 'street', 'wall', 'area'].includes(s.type) && inBox({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, { x: 0, y: 0, w: W, h: H })) return;
+      const a = forPicture && s.type === 'box' ? f : e;
+      a[0] = Math.min(a[0], b.x); a[1] = Math.min(a[1], b.y); a[2] = Math.max(a[2], b.x + b.w); a[3] = Math.max(a[3], b.y + b.h);
+    });
+    if (forPicture) { const nick = 24; if (e[0] > -nick) e[0] = 0; if (e[1] > -nick) e[1] = 0; if (e[2] < W + nick) e[2] = W; if (e[3] < H + nick) e[3] = H; }
+    const x0 = Math.max(-LIM, Math.floor(Math.min(e[0], f[0]))), y0 = Math.max(-LIM, Math.floor(Math.min(e[1], f[1]))), x1 = Math.min(W + LIM, Math.ceil(Math.max(e[2], f[2]))), y1 = Math.min(H + LIM, Math.ceil(Math.max(e[3], f[3])));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  // the whole picture at `scale` (kept under 16 million pixels, which iPhone and iPad can still draw)
+  function picture(scale = 2) {
+    const P = STYLES[st.style] || STYLES.parchment, e = contentExtent(true);
+    const k = Math.min(scale, Math.sqrt(16e6 / (e.w * e.h)));
+    const c = document.createElement('canvas'); c.width = Math.round(e.w * k); c.height = Math.round(e.h * k);
+    const g = c.getContext('2d'); g.scale(k, k); g.translate(-e.x, -e.y);
+    g.fillStyle = P.paper; g.fillRect(e.x, e.y, e.w, e.h);
+    renderAll(g, P);
+    return c;
+  }
 
-  let baseCache = null, itemsCache = null, baseKey = '', quick = null, seaCache = null;
+  let baseCache = null, itemsCache = null, baseKey = '', quick = null, seaCache = null, ext = { x: 0, y: 0, w: W, h: H };
   const layer = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
   // while painting: a quick soft-edged land preview instead of the full coastline treatment
   function quickLand(P) {
@@ -399,8 +458,13 @@ window.UnwipMaps = (function () {
       if (!baseCache) baseCache = layer(); const g = baseCache.getContext('2d'); g.clearRect(0, 0, W, H); renderBase(g, P); baseKey = key;
       if (!seaCache) seaCache = layer(); const sg = seaCache.getContext('2d'); sg.fillStyle = P.sea; sg.fillRect(0, 0, W, H);
     }
-    const moving = drawing && drawing.move && sel ? sel : null;
-    if (!itemsCache || itemsDirty) { if (!itemsCache) itemsCache = layer(); const g = itemsCache.getContext('2d'); g.clearRect(0, 0, W, H); renderItems(g, P, moving); itemsDirty = false; itemsSkip = moving; }
+    const moving = drawing && drawing.move && drawing.live && sel ? sel : null;
+    if (!itemsCache || itemsDirty) {
+      ext = contentExtent();
+      if (!itemsCache || itemsCache.width !== ext.w || itemsCache.height !== ext.h) { itemsCache = document.createElement('canvas'); itemsCache.width = ext.w; itemsCache.height = ext.h; }
+      const g = itemsCache.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, ext.w, ext.h); g.setTransform(1, 0, 0, 1, -ext.x, -ext.y);
+      renderItems(g, P, moving); itemsDirty = false; itemsSkip = moving;
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = P.paper; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.setTransform(cam.z * dpr, 0, 0, cam.z * dpr, cam.x * dpr, cam.y * dpr);
     if (isTown() && T.busy && tool === 'water') {
@@ -410,10 +474,12 @@ window.UnwipMaps = (function () {
       // plain sea with the live land on top; the full coastline is drawn again when you let go
       ctx.drawImage(seaCache, 0, 0); ctx.drawImage(quickLand(P), 0, 0, W, H);
     } else ctx.drawImage(baseCache, 0, 0);
-    ctx.drawImage(itemsCache, 0, 0);
+    if (moving && moving.tint) { ctx.save(); ctx.globalAlpha = 0.85; ctx.imageSmoothingEnabled = true; ctx.drawImage(moving.tint, drawing.done.x, drawing.done.y, W, H); ctx.restore(); }
+    ctx.drawImage(itemsCache, ext.x, ext.y);
     if (itemsSkip) drawOne(ctx, itemsSkip, P);
     // selection and brush outline
-    if (sel) {
+    if (sel && sel.type === 'group') drawGroupSel(ctx);
+    else if (sel) {
       if (sel.type === 'path' && st.paths[sel.i]) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.globalAlpha = 0.35; ctx.lineWidth = 10; ctx.lineCap = 'round'; smoothPath(ctx, st.paths[sel.i].pts); ctx.stroke(); ctx.restore(); }
       else { const b = bounds(sel), o = turnable(sel); if (b) { ctx.save(); if (o && o.rot && sel.type === 'label') { ctx.translate(o.x, o.y); ctx.rotate(o.rot); ctx.translate(-o.x, -o.y); } ctx.strokeStyle = '#3d7bd9'; ctx.setLineDash([5, 4]); ctx.lineWidth = 2; ctx.strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8); ctx.restore(); } }
       const sz = sizeHandle(); if (sz) { ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 2 / cam.z; const hs = 11 / cam.z; ctx.fillRect(sz.x - hs / 2, sz.y - hs / 2, hs, hs); ctx.strokeRect(sz.x - hs / 2, sz.y - hs / 2, hs, hs); ctx.restore(); }
@@ -423,6 +489,7 @@ window.UnwipMaps = (function () {
     if (drawing && drawing.path) drawPath(ctx, drawing.path, P);
     if (drawing && drawing.fog) { ctx.save(); ctx.globalAlpha = drawing.fog.on ? 0.45 : 0.6; ctx.strokeStyle = drawing.fog.on ? '#5d5a55' : '#3d7bd9'; ctx.lineWidth = drawing.fog.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); drawing.fog.pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); if (drawing.fog.pts.length === 1) ctx.lineTo(drawing.fog.pts[0][0] + 0.1, drawing.fog.pts[0][1]); ctx.stroke(); ctx.restore(); }
     if (drawing && drawing.box) { const b = norm(drawing.box); drawRectFrame(ctx, P, b.x, b.y, b.w, b.h, b.f); }
+    if (drawing && drawing.marq) { const b = norm(drawing.marq); ctx.save(); ctx.fillStyle = 'rgba(61,123,217,0.08)'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 1.5 / cam.z; ctx.setLineDash([6 / cam.z, 4 / cam.z]); ctx.strokeRect(b.x, b.y, b.w, b.h); ctx.restore(); }
     if (isTown()) T.drawPreview(ctx, P);
     syncFrameSelect(); renderSelBar();
     if ((BRUSHY.includes(tool) || tool === 'fog' || (isTown() && T.brushy(tool))) && hover) { ctx.save(); ctx.strokeStyle = '#3d7bd9'; ctx.lineWidth = 1.5 / cam.z; ctx.beginPath(); ctx.arc(hover.x, hover.y, brush * K / 2, 0, 7); ctx.stroke(); ctx.restore(); }
@@ -484,6 +551,13 @@ window.UnwipMaps = (function () {
     if (isTown()) { const h = T.hit(x, y); if (h && h.type !== 'area') return h; const b = hitBox(x, y); if (b) return b; return h; }
     return hitBox(x, y);
   }
+  // a fingertip is wide: on touch, also look a little way round the point pressed
+  function hitAt(p, e) {
+    let h = hit(p.x, p.y); if (h || !e || e.pointerType !== 'touch') return h;
+    const r = 12 / cam.z;
+    for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r], [r, r], [-r, -r], [r, -r], [-r, r]]) { h = hit(p.x + dx, p.y + dy); if (h) return h; }
+    return null;
+  }
   function hitBox(x, y) {
     // frames: grab them by their lines (so clicking inside one still reaches what's in it)
     const near = 12 / Math.max(0.5, cam.z);
@@ -491,6 +565,83 @@ window.UnwipMaps = (function () {
       const inX = x > b.x - near && x < b.x + b.w + near, inY = y > b.y - near && y < b.y + b.h + near;
       if ((inY && (Math.abs(x - b.x) < near || Math.abs(x - b.x - b.w) < near)) || (inX && (Math.abs(y - b.y) < near || Math.abs(y - b.y - b.h) < near))) return { type: 'box', i }; }
     return null;
+  }
+
+  // ================================================================== GROUPS (Select an area, and a new random town)
+  // A group is several things selected together: { type: 'group', items: [{ type, i }], keys, ground }. ground (when
+  // there is one) is the group's own land or water, as a mask-sized picture, so a rolled town takes its river along.
+  function makeGroup(items, ground) {
+    const g = { type: 'group', items, keys: new Set(items.map(s => s.type + ':' + s.i)), ground: ground || null, gb: null };
+    if (ground) {
+      const d = ground.getContext('2d').getImageData(0, 0, MW, MH).data; let x0 = MW, y0 = MH, x1 = -1, y1 = -1;
+      for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (d[(y * MW + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (x1 < 0) g.ground = null; else g.gb = { x: x0 * K, y: y0 * K, w: (x1 - x0 + 1) * K, h: (y1 - y0 + 1) * K };
+    }
+    return g;
+  }
+  function groupBox(g) {
+    let b = g.gb ? { ...g.gb } : null;
+    for (const s of g.items) { const c = itemBox(s); if (!c) continue; if (!b) b = { ...c }; else { const x1 = Math.max(b.x + b.w, c.x + c.w), y1 = Math.max(b.y + b.h, c.y + c.h); b.x = Math.min(b.x, c.x); b.y = Math.min(b.y, c.y); b.w = x1 - b.x; b.h = y1 - b.y; } }
+    return b;
+  }
+  const inBox = (p, b) => !!b && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+  function moveSel(s, dx, dy) {
+    if (s.type === 'group') { s.items.forEach(x => moveSel(x, dx, dy)); return; }
+    if (T && T.LISTS[s.type]) { T.moveBy(s, dx, dy); return; }
+    if (s.type === 'path') { const p = st.paths[s.i]; if (p) p.pts.forEach(q => { q[0] += dx; q[1] += dy; }); return; }
+    const key = { stamp: 'stamps', pin: 'pins', label: 'labels', box: 'boxes' }[s.type], o = key && st[key][s.i];
+    if (o) { o.x += dx; o.y += dy; }
+  }
+  // the group's land or water comes off the map while it's dragged (shown as a light shape), and goes back where it's let go
+  function liftGround(g) {
+    mctx.globalCompositeOperation = 'destination-out'; mctx.drawImage(g.ground, 0, 0); mctx.globalCompositeOperation = 'source-over';
+    const t = document.createElement('canvas'); t.width = MW; t.height = MH; const x = t.getContext('2d');
+    x.drawImage(g.ground, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = isTown() ? '#7fa7c7' : (STYLES[st.style] || STYLES.parchment).land; x.fillRect(0, 0, MW, MH);
+    g.tint = t; landDirty = true;
+  }
+  function dropGround(g, done) {
+    const n = document.createElement('canvas'); n.width = MW; n.height = MH; n.getContext('2d').drawImage(g.ground, Math.round(done.x / K), Math.round(done.y / K));
+    mctx.drawImage(n, 0, 0); g.ground = n; g.tint = null; if (g.gb) { g.gb.x += done.x; g.gb.y += done.y; } landDirty = true;
+  }
+  // a box dragged with Select an area: everything whose middle is inside it (and, if asked, the land or water in it)
+  let takeGround = false;
+  function groupIn(b) {
+    const items = [];
+    eachItem(s => { const c = itemBox(s); if (c && inBox({ x: c.x + c.w / 2, y: c.y + c.h / 2 }, b)) items.push(s); });
+    let ground = null;
+    if (takeGround && !isDungeon()) {
+      ground = document.createElement('canvas'); ground.width = MW; ground.height = MH; const g = ground.getContext('2d');
+      g.drawImage(mask, 0, 0); g.globalCompositeOperation = 'destination-in'; g.fillStyle = '#000'; g.fillRect(Math.floor(b.x / K), Math.floor(b.y / K), Math.ceil(b.w / K) + 1, Math.ceil(b.h / K) + 1);
+    }
+    const grp = makeGroup(items, ground);
+    if (!grp.items.length && !grp.ground) return null;
+    return grp.items.length === 1 && !grp.ground ? grp.items[0] : grp;
+  }
+  function drawGroupSel(g) {
+    const z = cam.z, b = groupBox(sel); if (!b) return;
+    g.save(); g.strokeStyle = '#3d7bd9'; g.lineJoin = 'round'; g.lineCap = 'round';
+    for (const s of sel.items) {
+      const key = LIST_OF()[s.type], o = key && st[key] && st[key][s.i]; if (!o) continue;
+      if (o.pts && (s.type === 'path' || s.type === 'street' || s.type === 'wall')) { g.globalAlpha = 0.3; g.lineWidth = 7 / z + (s.type === 'street' ? 10 : 0); g.beginPath(); o.pts.forEach((q, k) => k ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.stroke(); }
+      else if (o.pts) { g.globalAlpha = 0.9; g.lineWidth = 1.6 / z; g.beginPath(); o.pts.forEach((q, k) => k ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.stroke(); }
+      else { const c = itemBox(s); if (c) { g.globalAlpha = 0.9; g.lineWidth = 1.5 / z; g.strokeRect(c.x, c.y, c.w, c.h); } }
+    }
+    g.globalAlpha = 1; g.fillStyle = 'rgba(61,123,217,0.07)'; g.fillRect(b.x - 6, b.y - 6, b.w + 12, b.h + 12);
+    g.lineWidth = 2 / z; g.setLineDash([7 / z, 5 / z]); g.strokeRect(b.x - 6, b.y - 6, b.w + 12, b.h + 12);
+    g.restore();
+  }
+  function selectGroup(items, ground) {
+    sel = makeGroup(items, ground);
+    if (!sel.items.length && !sel.ground) sel = null;
+    if (view && tool !== 'select' && tool !== 'marquee') setTool('select');
+    renderSelBar();
+  }
+  function hasContent() { let any = false; eachItem(() => { any = true; }); return any || !!(mask && maskData()); }
+  // the middle of what's on screen, on the map
+  function viewCentre() {
+    const s = view && view.querySelector('.mp-stage'); if (!s) return { x: W / 2, y: H / 2 };
+    const r = s.getBoundingClientRect();
+    return { x: Math.max(0, Math.min(W, (r.width / 2 - cam.x) / cam.z)), y: Math.max(0, Math.min(H, (r.height / 2 - cam.y) / cam.z)) };
   }
 
   // ================================================================== EDITING
@@ -506,14 +657,20 @@ window.UnwipMaps = (function () {
   const changed = () => { itemsDirty = true; fogDirty = true; redraw(); };
   function pointerDown(e) {
     if (e.button !== 0 && e.button !== 1) return;
-    const p = world(e);
-    if (e.button === 0 && tool === 'select' && !e.altKey) { const sz = sizeHandle(), o = turnable(sel); if (sz && o && Math.hypot(p.x - sz.x, p.y - sz.y) < 12 / cam.z) { cv.setPointerCapture(e.pointerId); push(); drawing = { size: true, d0: Math.max(4, Math.hypot(p.x - o.x, p.y - o.y)), s0: o.s || 1, l0: sel.type === 'label' ? LABEL_SIZE(o) : 0 }; return; } }
-    if (e.button === 0 && tool === 'select' && !e.altKey) { const hd = handle(); if (hd && Math.hypot(p.x - hd.x, p.y - hd.y) < 12 / cam.z) { cv.setPointerCapture(e.pointerId); push(); drawing = { turn: true }; return; } }
-    if (e.button === 1 || (tool === 'select' && !hit(p.x, p.y)) || e.altKey) { drawing = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; sel = null; redraw(); return; }
-    cv.setPointerCapture(e.pointerId);
+    const p = world(e), near = (e.pointerType === 'touch' ? 22 : 12) / cam.z;
+    if (e.button === 0 && tool === 'select' && !e.altKey) { const sz = sizeHandle(), o = turnable(sel); if (sz && o && Math.hypot(p.x - sz.x, p.y - sz.y) < near) { try { cv.setPointerCapture(e.pointerId); } catch {} push(); drawing = { size: true, d0: Math.max(4, Math.hypot(p.x - o.x, p.y - o.y)), s0: o.s || 1, l0: sel.type === 'label' ? LABEL_SIZE(o) : 0 }; return; } }
+    if (e.button === 0 && tool === 'select' && !e.altKey) { const hd = handle(); if (hd && Math.hypot(p.x - hd.x, p.y - hd.y) < near) { try { cv.setPointerCapture(e.pointerId); } catch {} push(); drawing = { turn: true }; return; } }
+    // Select and Select an area: a press only selects; it becomes a move once the finger or mouse has gone a few pixels
+    // (so a tap never nudges anything). Pressing on any part of a selected group moves the whole group.
+    const picking = (tool === 'select' || tool === 'marquee') && e.button === 0 && !e.altKey;
+    const h = picking ? hitAt(p, e) : null, grp = sel && sel.type === 'group' ? sel : null;
+    const inGrp = !!grp && (h ? grp.keys.has(h.type + ':' + h.i) : tool === 'marquee' && inBox(p, groupBox(grp)));
+    if (picking && tool === 'marquee' && !inGrp) { try { cv.setPointerCapture(e.pointerId); } catch {} drawing = { marq: { x0: p.x, y0: p.y, x1: p.x, y1: p.y } }; sel = null; redraw(); return; }
+    if (e.button === 1 || e.altKey || (tool === 'select' && !h && !inGrp)) { drawing = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; sel = null; redraw(); return; }
+    try { cv.setPointerCapture(e.pointerId); } catch {}
     // resize the selected frame by its corner
-    if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i]; if (Math.abs(p.x - b.x - b.w) < 14 / cam.z && Math.abs(p.y - b.y - b.h) < 14 / cam.z) { push(); drawing = { resize: b }; return; } }
-    if (tool === 'select') { sel = hit(p.x, p.y); push(); drawing = { move: true, last: p }; itemsDirty = true; redraw(); return; }
+    if (sel && sel.type === 'box' && st.boxes[sel.i]) { const b = st.boxes[sel.i]; if (Math.abs(p.x - b.x - b.w) < near && Math.abs(p.y - b.y - b.h) < near) { push(); drawing = { resize: b }; return; } }
+    if (picking) { if (!inGrp) sel = h; drawing = { move: true, start: p, sx: e.clientX, sy: e.clientY, slop: e.pointerType === 'touch' ? 10 : 4, live: false, done: { x: 0, y: 0 } }; redraw(); return; }
     push();
     if (tool === 'mark') { st.stamps.push({ k: 'm-' + markK, x: p.x, y: p.y, s: 1 }); sel = { type: 'stamp', i: st.stamps.length - 1 }; changed(); schedule(); return; }
     if (tool === 'fog') { drawing = { fog: { on: fogOn, w: brush * K, pts: [[p.x, p.y]] } }; if (st.fogHide) { st.fogHide = false; syncFogBar(); } changed(); return; }
@@ -544,13 +701,19 @@ window.UnwipMaps = (function () {
     if (T && T.busy) { T.pointerMove(p); return; }
     if (!drawing) { if (BRUSHY.includes(tool) || tool === 'fog') redraw(); else if (tool === 'select') { const hd = handle(), sz = sizeHandle(); cv.style.cursor = sz && Math.hypot(p.x - sz.x, p.y - sz.y) < 12 / cam.z ? 'nwse-resize' : hd && Math.hypot(p.x - hd.x, p.y - hd.y) < 12 / cam.z ? 'grab' : 'default'; } return; }
     if (drawing.pan) { cam.x = drawing.cx + e.clientX - drawing.sx; cam.y = drawing.cy + e.clientY - drawing.sy; redraw(); return; }
+    if (drawing.marq) { drawing.marq.x1 = p.x; drawing.marq.y1 = p.y; redraw(); return; }
     if (drawing.move && sel) {
-      const dx = p.x - drawing.last.x, dy = p.y - drawing.last.y; drawing.last = p;
-      if (T && T.LISTS[sel.type]) { T.moveBy(sel, dx, dy); redraw(); return; }
-      const o = sel.type === 'path' ? null : st[{ stamp: 'stamps', pin: 'pins', label: 'labels', box: 'boxes' }[sel.type]][sel.i];
-      if (o) { o.x += dx; o.y += dy; } else if (sel.type === 'path') st.paths[sel.i].pts.forEach(q => { q[0] += dx; q[1] += dy; });
-      redraw(); return;                      // the dragged item is drawn on its own layer, so nothing else is redrawn
+      if (!drawing.live) {
+        if (Math.hypot(e.clientX - drawing.sx, e.clientY - drawing.sy) < drawing.slop) return;
+        drawing.live = true; push(); if (sel.type === 'group' && sel.ground) liftGround(sel); itemsDirty = true;
+      }
+      let tx = p.x - drawing.start.x, ty = p.y - drawing.start.y;
+      if (sel.ground) { tx = Math.round(tx / K) * K; ty = Math.round(ty / K) * K; }   // land and water move in whole mask steps, so they stay under what's on them
+      const dx = tx - drawing.done.x, dy = ty - drawing.done.y; drawing.done = { x: tx, y: ty };
+      if (dx || dy) moveSel(sel, dx, dy);
+      redraw(); return;                      // what's dragged is drawn on its own, over the rest, so nothing else is redrawn
     }
+    if (drawing.move) return;
     if (drawing.box) { drawing.box.x1 = p.x; drawing.box.y1 = p.y; redraw(); return; }
     if (drawing.fog) { const l = drawing.fog.pts[drawing.fog.pts.length - 1]; if (Math.hypot(p.x - l[0], p.y - l[1]) > 6) { drawing.fog.pts.push([p.x, p.y]); redraw(); } return; }
     if (drawing.turn) { turnTo(p, e.shiftKey); itemsDirty = true; redraw(); return; }
@@ -564,6 +727,9 @@ window.UnwipMaps = (function () {
     if (T && T.busy) { T.pointerUp(); return; }
     if (!drawing) return;
     const d = drawing; drawing = null;
+    if (d.marq) { const b = norm(d.marq); sel = b.w * cam.z > 6 || b.h * cam.z > 6 ? groupIn(b) : null; redraw(); return; }
+    if (d.move && !d.live) { redraw(); return; }   // a tap: selected, nothing moved, nothing to undo
+    if (d.move && sel && sel.type === 'group' && sel.ground) dropGround(sel, d.done);
     if (d.brush) {
       landDirty = true;
       // water painted where there was no land changes nothing you can see: say how the tool works instead of seeming broken
@@ -573,13 +739,14 @@ window.UnwipMaps = (function () {
     if (d.path) { if (d.path.pts.length >= 2) st.paths.push(d.path); else undo.pop(); }
     if (d.fog) { (st.fog = st.fog || []).push(d.fog); fogDirty = true; }
     if (d.box) { const b = norm(d.box); if (b.w > 20 && b.h > 20) { st.boxes = st.boxes || []; st.boxes.push(b); sel = { type: 'box', i: st.boxes.length - 1 }; } else undo.pop(); }
-    if (d.move && !sel) undo.pop();
     itemsDirty = true; itemsSkip = null; redraw(); if (!d.pan) schedule();
   }
   function wheel(e) {
     e.preventDefault();
     const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-    const z = Math.min(4, Math.max(minZ(), cam.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+    // a mouse wheel click is about 100; a trackpad sends many small steps (with Ctrl held for a pinch), so go by size
+    const d = Math.max(-60, Math.min(60, e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY));
+    const z = Math.min(4, Math.max(minZ(), cam.z * Math.exp(-d * (e.ctrlKey ? 0.01 : 0.0019))));
     cam.x = mx - (mx - cam.x) * z / cam.z; cam.y = my - (my - cam.y) * z / cam.z; cam.z = z; redraw();
   }
   function places() { const out = []; if (!host.inBook || !S.project) return out; const r = S.project.binder.find(n => n.root && n.kind === 'places'); if (r) U.walkTree(r.children || [], n => { if (n.type === 'doc' && !n.map) out.push(n); }); return out; }
@@ -649,11 +816,19 @@ window.UnwipMaps = (function () {
   // a small bar over the map while something is selected: layers and delete (also on right-click, and [ ] keys)
   function renderSelBar() {
     const bar = view && view.querySelector('.mp-selbar'); if (!bar) return;
-    const show = !!(sel && tool === 'select' && LIST_OF()[sel.type]);
-    bar.classList.toggle('hidden', !show);
+    const grp = !!(sel && sel.type === 'group');
+    const show = !!(sel && (tool === 'select' || tool === 'marquee') && (grp || LIST_OF()[sel.type]));
+    bar.classList.toggle('hidden', !show); bar.classList.toggle('grp', grp);
+    const n = bar.querySelector('.mp-selcount'); if (n) n.textContent = grp ? (sel.items.length === 1 ? '1 thing selected' : `${sel.items.length} things selected`) : '';
   }
   function removeSel() {
     if (!sel) return; push();
+    if (sel.type === 'group') {
+      const by = {}; sel.items.forEach(s => (by[s.type] = by[s.type] || []).push(s.i));
+      for (const [t, is] of Object.entries(by)) { const list = st[LIST_OF()[t]]; if (list) is.sort((a, b) => b - a).forEach(i => list.splice(i, 1)); }
+      if (sel.ground) { mctx.globalCompositeOperation = 'destination-out'; mctx.drawImage(sel.ground, 0, 0); mctx.globalCompositeOperation = 'source-over'; landDirty = true; }
+      sel = null; changed(); schedule(); renderSelBar(); return;
+    }
     const list = { stamp: 'stamps', pin: 'pins', label: 'labels', path: 'paths', box: 'boxes', ...(T ? T.LISTS : {}) }[sel.type];
     st[list].splice(sel.i, 1); sel = null; changed(); schedule(); renderSelBar();
   }
@@ -676,9 +851,7 @@ window.UnwipMaps = (function () {
     try {
       for (const r of ready) {
         st = r.s; mask = r.mk; mctx = r.mg; landCache = null; landDirty = true; syncT(); fogDirty = true;
-        const c = document.createElement('canvas'); c.width = W; c.height = H;
-        renderAll(c.getContext('2d'), STYLES[st.style] || STYLES.parchment);
-        out.push({ name: r.name, canvas: c });
+        out.push({ name: r.name, canvas: picture(1) });
       }
     } finally { ({ st, mask, mctx, landCache, landDirty, itemsDirty } = keep); syncT(); fogDirty = true; baseKey = ''; }
     return out;
@@ -686,13 +859,12 @@ window.UnwipMaps = (function () {
 
   // ================================================================== SCREEN
   async function exportPNG(copy) {
-    const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2; const g = c.getContext('2d'); g.scale(2, 2);
-    renderAll(g, STYLES[st.style] || STYLES.parchment);
+    const c = picture(2);
+    // copied straight from the click (Safari only allows that), through the PC app's own clipboard on a PC or Mac
+    if (copy) return window.UnwipBuild ? window.UnwipBuild.copyCanvas(c, 'Map copied. Paste it into any chapter with Ctrl+V.') : null;
     const blob = await new Promise(r => c.toBlob(r, 'image/png'));
-    if (copy) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); U.toast('Map copied. Paste it into any chapter with Ctrl+V.'); } catch { U.toast('Couldn’t copy the picture.', 'warn'); } return; }
     await api.exportBinary(new Uint8Array(await blob.arrayBuffer()), host.title(nodeId) || 'Map', 'png', 'PNG picture');
   }
-  // how far out you can zoom: at least to half the size of the whole map on screen (a phone needs further out than a PC)
   function syncGridBtn() {
     const b = view && $('#mp-grid', view), sel = view && $('#mp-gridsel', view); if (!b || !sel) return;
     const dg = isDungeon();
@@ -700,18 +872,26 @@ window.UnwipMaps = (function () {
     b.classList.toggle('on', !st.noGrid); b.textContent = '▦ Grid'; b.dataset.tip = 'The square grid on the floor (one square is a room tile)';
     sel.value = gridMode();
   }
-  function minZ() { const st2 = view && view.querySelector('.mp-stage'); if (!st2) return 0.25; const r = st2.getBoundingClientRect(); return Math.min(0.25, Math.min(r.width / W, r.height / H) * 0.5); }
+  // how far out you can zoom: to under a third of the map's fitted size (room to see frames and towns past the edge)
+  function minZ() { const st2 = view && view.querySelector('.mp-stage'); if (!st2) return 0.12; const r = st2.getBoundingClientRect(); return Math.min(0.15, Math.min(r.width / W, r.height / H) * 0.3); }
   function fit() { const r = view.querySelector('.mp-stage').getBoundingClientRect(); const z = Math.min(r.width / W, r.height / H) * 0.96; cam = { z, x: (r.width - W * z) / 2, y: (r.height - H * z) / 2 }; }
   function resize() { if (!cv) return; const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; draw(); }
   function buildTools() {
     const box = view && $('.mp-toollist', view); if (!box) return;
-    box.innerHTML = (isTown() ? T.TOOLS : TOOLS).map(([t, ic, tip]) => `<button class="mp-tool" data-t="${t}" data-tip="${esc(tip)}">${ic}</button>`).join('');
+    const list = (isTown() ? T.TOOLS : TOOLS).slice();
+    if (!list.some(t => t[0] === 'marquee')) list.splice(list.findIndex(t => t[0] === 'select') + 1, 0, ['marquee', MARQ_ICON, MARQ_TIP]);
+    box.innerHTML = list.map(([t, ic, tip]) => `<button class="mp-tool" data-t="${t}" data-tip="${esc(tip)}">${ic}</button>`).join('');
     $$('.mp-tool', box).forEach(b => b.onclick = () => setTool(b.dataset.t));
     const gen = $('#mp-gen', view); if (gen && isDungeon()) { gen.textContent = '🎲 Random floor…'; gen.dataset.tip = 'Roll a random dungeon floor: rooms, corridors, stairs, doors, a boss room and loot, from fixed rules and random numbers (no AI). You can edit everything after'; }
     else if (gen) { gen.textContent = isTown() ? '🎲 Random town…' : '🎲 Random map…'; gen.dataset.tip = isTown() ? 'Roll a random village, town or city: streets, buildings, walls and water, from fixed rules and random numbers (no AI). You can edit everything after' : 'Roll a random coastline, mountains, forests, rivers and towns, like rolling dice. Made by fixed rules and random numbers on this device, no AI. You can edit everything after'; }
     const clr = $('#mp-clear', view); if (clr) clr.dataset.tip = isDungeon() ? 'Start this floor again from solid rock' : isTown() ? 'Start this town again from empty ground' : 'Start this map section again from empty sea';
   }
   let markK = 'waypoint', fogOn = true;
+  function marqOpts(o) {
+    o.classList.remove('hidden');
+    o.innerHTML = (isDungeon() ? '' : `<button type="button" class="chip ${takeGround ? 'on' : ''}" data-tg="1" title="Also move the ${isTown() ? 'water' : 'land'} inside the box">Take the ${isTown() ? 'water' : 'land'} too</button>`) + '<span class="mp-opt-h mp-marq-h">Drag a box round things, then drag them to move them together</span>';
+    const b = o.querySelector('[data-tg]'); if (b) b.onclick = () => { takeGround = !takeGround; marqOpts(o); };
+  }
   function syncFogBar() { const o = view && $('#mp-opts', view); if (o && tool === 'fog') commonOpts('fog', o); }
   function commonOpts(t, o) {
     o.classList.remove('hidden');
@@ -722,7 +902,8 @@ window.UnwipMaps = (function () {
     o.querySelectorAll('[data-fa]').forEach(b => b.onclick = () => { const a = b.dataset.fa; push(); if (a === 'cover') { st.fog = [{ all: 1, on: true }]; st.fogHide = false; } else if (a === 'clear') st.fog = []; else st.fogHide = !st.fogHide; fogDirty = true; changed(); schedule(); commonOpts(t, o); });
   }
   function setTool(t) { tool = t;
-    { const o = view && $('#mp-opts', view); if (o) { if (t === 'mark' || t === 'fog') commonOpts(t, o); else if (isTown()) T.optionsBar(t, o); else { o.innerHTML = ''; o.classList.add('hidden'); } } } if (t === 'frame' && sel && sel.type === 'box') { sel = null; if (cv) redraw(); } $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; $('.mp-brush', view).classList.toggle('dim', t === 'fog' ? false : isTown() ? !T.brushy(t) && t !== 'water' : !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); syncFrameSelect(); }
+    if (sel && sel.type === 'group' && t !== 'select' && t !== 'marquee') sel = null;
+    { const o = view && $('#mp-opts', view); if (o) { if (t === 'mark' || t === 'fog') commonOpts(t, o); else if (t === 'marquee') marqOpts(o); else if (isTown()) T.optionsBar(t, o); else { o.innerHTML = ''; o.classList.add('hidden'); } } } if (t === 'frame' && sel && sel.type === 'box') { sel = null; if (cv) redraw(); } $$('.mp-tool', view).forEach(b => b.classList.toggle('on', b.dataset.t === t)); cv.style.cursor = t === 'select' ? 'default' : 'crosshair'; renderSelBar(); if (cv) redraw(); $('.mp-brush', view).classList.toggle('dim', t === 'fog' ? false : isTown() ? !T.brushy(t) && t !== 'water' : !['land', 'water', 'forest', 'mountain', 'hill'].includes(t)); syncFrameSelect(); }
   // a small picture of the map, for the Build page
   function thumb() {
     if (!st || !mask) return '';
@@ -754,7 +935,7 @@ window.UnwipMaps = (function () {
       <div class="mp-tabs" id="mp-tabs"></div>
       <div class="mp-body"><div class="mp-tools"><div class="mp-toollist"></div>
         <div class="mp-brush" data-tip="Brush size: how big the land, water, forest and mountain brushes paint"><span class="mp-brush-ic">🖌️</span><input type="range" id="mp-size" min="4" max="60" value="${brush}" orient="vertical"><span class="mp-brush-n" id="mp-size-n">${brush}</span></div></div>
-        <div class="mp-stage"><canvas></canvas><div class="mp-opts hidden" id="mp-opts"></div><div class="mp-selbar hidden"><button type="button" class="btn small" data-layer="front" title="Bring to front (Shift+])">⇈ Front</button><button type="button" class="btn small" data-layer="up" title="Bring forward (])">↑ Forward</button><button type="button" class="btn small" data-layer="down" title="Send backward ([)">↓ Backward</button><button type="button" class="btn small" data-layer="back" title="Send to back (Shift+[)">⇊ Back</button><button type="button" class="btn small ghost" data-layer="del" title="Delete">🗑</button></div><div class="mp-hint">Scroll to zoom · drag empty space to move around · double-click a pin or label to edit it</div></div></div>`;
+        <div class="mp-stage"><canvas></canvas><div class="mp-opts hidden" id="mp-opts"></div><div class="mp-selbar hidden"><span class="mp-selcount"></span><button type="button" class="btn small" data-layer="front" title="Bring to front (Shift+])">⇈ Front</button><button type="button" class="btn small" data-layer="up" title="Bring forward (])">↑ Forward</button><button type="button" class="btn small" data-layer="down" title="Send backward ([)">↓ Backward</button><button type="button" class="btn small" data-layer="back" title="Send to back (Shift+[)">⇊ Back</button><button type="button" class="btn small ghost" data-layer="del" title="Delete">🗑</button></div><div class="mp-hint">Scroll to zoom · drag empty space to move around · double-click a pin or label to edit it</div></div></div>`;
     host.mount(view);
     if (window.UnwipProof && window.UnwipProof.renderStatus) window.UnwipProof.renderStatus();   // fill in the Record button (or the timer if a video is going)
     cv = $('canvas', view); ctx = cv.getContext('2d');
@@ -768,7 +949,7 @@ window.UnwipMaps = (function () {
         touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (touches.size >= 2) {
           if (!pinch) {
-            const busy = !!((T && T.busy) || (drawing && !drawing.pan));
+            const busy = !!((T && T.busy) || (drawing && !drawing.pan && !drawing.marq && !(drawing.move && !drawing.live)));
             if (T && T.busy && T.cancel) T.cancel();
             drawing = null;
             if (busy) { const last = undo.pop(); if (last) restore(last); }
@@ -959,12 +1140,12 @@ window.UnwipMaps = (function () {
     W, H, MW, MH, K, STYLES, U, rng, noise2, fbm, name, shade,
     get st() { return st; }, get mask() { return mask; }, get mctx() { return mctx; }, get brush() { return brush; },
     paint: (x, y, on, from) => paint(x, y, on, from), push: () => push(), changed: () => changed(), schedule: () => schedule(), redraw: () => redraw(),
-    undoPop: () => undo.pop(), select: s => { sel = s; }, landDirty: () => { landDirty = true; baseKey = ''; }, toast: (m, k) => U.toast(m, k || '', 6000)
+    undoPop: () => undo.pop(), select: s => { sel = s; }, skips, selectGroup, viewCentre, hasContent, landDirty: () => { landDirty = true; baseKey = ''; }, toast: (m, k) => U.toast(m, k || '', 6000)
   };
   if (window.UnwipTownFactory) TW = window.UnwipTownFactory(MOD);
   if (window.UnwipDungeonFactory) DG = window.UnwipDungeonFactory(MOD);
   T = TW;
   const bookOnly = () => { if (host.inBook) close(true); };
   U.on('leave', bookOnly); U.on('doc', bookOnly); U.on('view', bookOnly);
-  return { open, create, thumb, placeName: () => name(Math.random), blank: (style, kind) => blank(style, kind), close, pictures, townGen: k => T && T.generate(k), dungeonGen: k => isDungeon() && DG.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
+  return { open, create, thumb, placeName: () => name(Math.random), blank: (style, kind) => blank(style, kind), close, pictures, townGen: (k, o) => T && T.generate(k, o), picture, selectGroup, get sel() { return sel; }, get tool() { return tool; }, setTool: t => setTool(t), removeSel, fillBlock: (x, y, d) => isTown() && T.fillBlock ? T.fillBlock(x, y, d) : 0, dungeonGen: k => isDungeon() && DG.generate(k), generate: (k, add) => generate(k, add), addSection, switchTo, get state() { return st; }, get doc() { return docData; }, get cam() { return cam; } };
 })();
