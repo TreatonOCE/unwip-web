@@ -1330,7 +1330,7 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .in-mini .c { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .in-mini .c s { background: #f6efd2; border-radius: 3px; border: 1px solid #e3d9b4; }
 .in-mini .n { width: 18%; background: var(--panel-2); }
-.in-mini.dark { background: #1b1c1f; border-color: #1b1c1f; }
+.in-mini.dark { background: #1b1c1f; border-color: var(--line); }   /* (the Insights chart once shared this class name and squashed these pictures flat) */
 .in-mini.dark .p { background-color: #25262a; border-color: #25262a; background-image: repeating-linear-gradient(to bottom, transparent 0 9px, #3a3b40 9px 10px); }
 .in-tree { margin: 0 0 8px; height: 104px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 12px/1.45 var(--ui-font, system-ui); color: var(--muted); white-space: pre; overflow: hidden; }
 .in-row { margin: 14px 0; }
@@ -2286,9 +2286,9 @@ body.book-font .doc-synopsis, body.book-font .ol-syn, body.book-font .ck-card, b
 .tsx-cap { position: absolute; left: 8%; right: 8%; bottom: 14px; text-align: center; font: italic 12px/1.35 var(--ui); color: #8a857c; pointer-events: none; }
 
 /* Insights in the side panel */
-.in-mini { display: flex; align-items: flex-end; gap: 2px; height: 70px; margin: 6px 0 14px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; }
-.in-mini button { flex: 1; min-width: 2px; border: 0; padding: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 2px 2px 0 0; cursor: pointer; }
-.in-mini button:hover { background: var(--accent); }
+.ins-mini { display: flex; align-items: flex-end; gap: 2px; height: 70px; margin: 6px 0 14px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; }
+.ins-mini button { flex: 1; min-width: 2px; border: 0; padding: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 2px 2px 0 0; cursor: pointer; }
+.ins-mini button:hover { background: var(--accent); }
 #insights-panel .side-foot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 /* six side-panel tabs: wrap onto two lines rather than hide any */
 .side-tabs { flex-wrap: wrap; overflow: visible; row-gap: 2px; padding-right: 36px; position: relative; }
@@ -3191,7 +3191,7 @@ body:not(.detailed) #btn-build-book { display: none; }
 .cs-when span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .cs-nav { width: 40px; height: 40px; border-radius: 9px; border: 1px solid var(--line); background: var(--paper); color: var(--text); font-size: 18px; cursor: pointer; }
 .cs-nav:disabled { opacity: .35; cursor: default; }
-.cs-track { flex: 2 1 200px; position: relative; height: 40px; margin: 0 14px; }
+.cs-track { flex: 2 1 160px; position: relative; height: 40px; margin: 0 14px; }
 .cs-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1.5px; background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 10px); }
 .cs-track i { position: absolute; left: 0; top: 50%; height: 3px; margin-top: -1.5px; background: var(--accent); }
 .cs-stop { position: absolute; top: 50%; width: 32px; height: 32px; margin: -16px 0 0 -16px; border: 0; background: transparent; padding: 0; cursor: pointer; }
@@ -3463,6 +3463,7 @@ html.flavor-dev .sbb { border-top: 3px solid #e8590c; }
 .sbb-title h1 { margin: 0; font: 600 26px/1.15 var(--serif, Georgia, serif); }
 .sbb-books { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-left: auto; }
 .sbb-book { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--paper); font-size: 13px; max-width: 240px; }
+.sbb-bk-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* one line: a long title doesn't make its pill taller */
 .sbb-book > b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; flex: 0 0 auto; }
 .sbb-mv { display: inline-flex; }
 .sbb-mv button { border: 0; background: none; color: var(--muted); cursor: pointer; width: 18px; font-size: 14px; }
@@ -3731,9 +3732,14 @@ body.kit-pipetting #bd-main .kit-host, body.kit-pipetting #bd-main .kit-host *, 
 .ip-own input { width: 100%; max-width: 440px; font-size: 16px; }
 .ip-found .ip-grid { max-height: 168px; overflow: auto; }
 /* character sheet: "Looking back" is a button back to the latest chapter */
-button.cs-when { flex-basis: 360px; cursor: pointer; font: inherit; color: var(--text); text-align: left; }
-button.cs-when:hover, button.cs-when:focus-visible { border-color: var(--accent); }
-.cs-when .cs-now { margin-left: auto; font-style: normal; font-size: 12.5px; color: var(--accent); flex: 0 0 auto; padding-left: 8px; }
+.cs-when.back { flex-basis: 300px; border-color: var(--accent); }
+.cs-when .cs-chlink { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: none; padding: 0; font: inherit; color: var(--text); cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.cs-when .cs-chlink:hover, .cs-when .cs-chlink:focus-visible { color: var(--accent); text-decoration-color: currentColor; }
+.cs-when .cs-now { margin-left: auto; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--accent); flex: 0 0 auto; padding: 6px 0 6px 8px; cursor: pointer; }
+.cs-others { display: flex; justify-content: space-between; gap: 8px; margin: -6px 0 2px; }
+.cs-others button { max-width: 45%; min-width: 0; display: inline-flex; gap: 4px; }
+.cs-others button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-others .nx { margin-left: auto; }
 .cs-when > span:last-of-type { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* a short [message] on its own (Settings › LitRPG): a box that fits the words, starting where the full boxes start, or no box */
 body.litrpg .editor p.lit-sys.lit-fit, body.litrpg #editor p.lit-sys.lit-fit { width: fit-content; max-width: 92%; margin-left: 4%; margin-right: auto; }

@@ -215,7 +215,7 @@ window.UnwipBible = (function () {
     page.innerHTML = `
       <div class="sbb-top"><button type="button" class="icon-btn" data-close aria-label="Back to the main screen" title="Back">‹</button>
         <div class="sbb-title"><span class="sbb-kicker">Story Bible</span><h1>${esc(D.label)}</h1></div>
-        <div class="sbb-books">${D.books.map((b, i) => `<span class="sbb-book" title="${esc(b.title)}">${multi ? `<b>${b.no}</b>` : ''}${esc(b.title)}<button type="button" class="sbb-bk-more" data-bmore="${i}" aria-label="More for ${esc(b.title)}" title="Open, take out of the series, or delete">⋯</button>${multi ? `<span class="sbb-mv">${i ? `<button type="button" data-bmv="-1" data-i="${i}" aria-label="Earlier in the series">‹</button>` : ''}${i < D.books.length - 1 ? `<button type="button" data-bmv="1" data-i="${i}" aria-label="Later in the series">›</button>` : ''}</span>` : ''}</span>`).join('')}
+        <div class="sbb-books">${D.books.map((b, i) => `<span class="sbb-book" title="${esc(b.title)}">${multi ? `<b>${b.no}</b>` : ''}<span class="sbb-bk-t">${esc(b.title)}</span><button type="button" class="sbb-bk-more" data-bmore="${i}" aria-label="More for ${esc(b.title)}" title="Open, take out of the series, or delete">⋯</button>${multi ? `<span class="sbb-mv">${i ? `<button type="button" data-bmv="-1" data-i="${i}" aria-label="Earlier in the series" title="Move this book earlier in the series (Book ${b.no - 1})">‹</button>` : ''}${i < D.books.length - 1 ? `<button type="button" data-bmv="1" data-i="${i}" aria-label="Later in the series" title="Move this book later in the series (Book ${b.no + 1})">›</button>` : ''}</span>` : ''}</span>`).join('')}
           ${D.series ? '<button type="button" class="link-btn" data-endseries title="Every book stays, as a book of its own">End the series…</button>' : '<button type="button" class="link-btn" data-series>Put it in a series…</button>'}<button type="button" class="btn small" data-export title="Save the Story Bible as a Word file or PDF, up to a chapter if you like">Export…</button></div></div>
       <div class="sbb-asof"><label>As of <select class="sbb-asof-sel" aria-label="Show the bible as of">
           <option value="">the whole ${multi ? 'series' : 'book'}</option>
@@ -721,6 +721,7 @@ window.UnwipBible = (function () {
     [L[i], L[j]] = [L[j], L[i]];
     for (const [k, b] of L.entries()) { b.no = k + 1; const p = await api.openProject(b.slug).catch(() => null); if (p && +p.seriesNo !== k + 1) { p.seriesNo = k + 1; await api.saveProjectMeta(b.slug, p); } b.p.seriesNo = k + 1; }
     draw();
+    U.toast(`“${esc(L[j].title)}” is now Book ${j + 1} of the series.`);
   }
   // a book leaves the series: it stays a book of its own, and pages it shared stop updating with the others (each book
   // keeps its own copy), as series.js does when the series name is changed

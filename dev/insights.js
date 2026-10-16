@@ -201,7 +201,7 @@ window.UnwipInsights = (function () {
     const f = findings(chs, stats);
     const max = Math.max(...f.words, 1);
     box.innerHTML = `<p class="side-lead">${esc(f.sum)}</p>
-      <div class="in-mini" title="Chapter lengths, in order. Click one to open it">${chs.map((n, i) => `<button style="height:${Math.max(3, f.words[i] / max * 100)}%" data-i="${i}" title="${esc(n.title || 'Untitled')}: ${f.words[i].toLocaleString()} words"></button>`).join('')}</div>
+      <div class="ins-mini" title="Chapter lengths, in order. Click one to open it">${chs.map((n, i) => `<button style="height:${Math.max(3, f.words[i] / max * 100)}%" data-i="${i}" title="${esc(n.title || 'Untitled')}: ${f.words[i].toLocaleString()} words"></button>`).join('')}</div>
       <div class="in-notes"><h4>Worth a look</h4>${f.notes.length ? f.notes.slice(0, 8).map(x => `<button class="in-note k-${x[0]}" data-i="${x[1]}">${x[2]}</button>`).join('') : '<p class="in-ok">Nothing unusual.</p>'}</div>
       ${f.glance.length ? `<div class="in-notes in-glance"><h4>At a glance</h4>${f.glance.map(x => `<p class="in-note k-g">${x[2]}</p>`).join('')}</div>` : ''}
       <div class="side-foot"><button class="btn small" data-full="pacing">Open the full charts</button><button class="btn small ghost" data-full="chars">Characters by chapter</button></div>`;

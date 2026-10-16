@@ -1,10 +1,12 @@
 // Unwip - fonts: publishing favourites, installed fonts, imported font files, Google Docs check.
 window.FolioFonts = (function () {
   // Fonts commonly used for manuscripts and book interiors.
+  // (Lora and Libre Baskerville aren't here: Unwip has them as Larkspur and Bookhaven. If they're installed on this
+  // computer they still show under "All installed fonts".)
   const FAVOURITES = [
     'Times New Roman', 'Garamond', 'EB Garamond', 'Georgia', 'Palatino Linotype', 'Book Antiqua',
-    'Baskerville Old Face', 'Libre Baskerville', 'Caslon', 'Adobe Caslon Pro', 'Minion Pro', 'Sabon',
-    'Crimson Pro', 'Crimson Text', 'Lora', 'Merriweather', 'Literata', 'Cambria', 'Constantia',
+    'Baskerville Old Face', 'Caslon', 'Adobe Caslon Pro', 'Minion Pro', 'Sabon',
+    'Crimson Pro', 'Crimson Text', 'Merriweather', 'Literata', 'Cambria', 'Constantia',
     'Courier New', 'Courier Prime', 'Arial', 'Calibri', 'Segoe UI', 'Larkspur', 'Bookhaven', 'Cinzel', 'Oswald'
   ];
   // fonts that come with Unwip (SIL Open Font License). Larkspur and Bookhaven are our cuts of Lora and Libre Baskerville:

@@ -73,7 +73,7 @@ window.UnwipCharSheet = (function () {
   const tooSmall = () => { if (!window.matchMedia('(max-width: 720px)').matches) return false; U.toast('Character sheets are part of Lore, which needs an iPad or computer.'); return true; };
   // On a phone a sheet filled in on a bigger screen opens view only: the timeline, stats, inventory and skills as
   // usual, the gear as a list instead of slots round a figure, and nothing to change.
-  async function open(id) {
+  async function open(id, tab) {
     const ro = phoneNow();
     if (ro && !hasSheet(id)) { tooSmall(); return; }
     const f = id && U.findNode(id); if (!f || !isChar(id)) { U.toast('Open a character in the Characters folder first.'); return; }
@@ -87,14 +87,18 @@ window.UnwipCharSheet = (function () {
     const pos = new Map(chs.map((c, i) => [c.id, i]));
     const at = ch => (pos.has(ch) ? pos.get(ch) : -1);   // a chapter that's gone counts as "from the start"
     const ledgerNames = L ? [...new Set([...L.stats.map(s => s.who || ''), ...L.got.map(g => g.who || '')])] : [];
-    const st = { tab: 'char', sel: 'main', ci: null, editing: null };
+    const st = { tab: ['char', 'stats', 'inv', 'skills'].includes(tab) ? tab : 'char', sel: 'main', ci: null, editing: null };
+    // the characters either side, so the sheet can step through them without closing (view only: those with a sheet)
+    const others = characters().filter(c => !ro || hasSheet(c.id)), me = others.findIndex(c => c.id === node.id);
+    const prevC = me > 0 ? others[me - 1] : null, nextC = me >= 0 && me < others.length - 1 ? others[me + 1] : null;
+    const closeSheet = () => $$('.modal-back').forEach(mb => { if (mb.contains(body)) { const c = mb.querySelector('.m-foot .btn'); if (c) c.click(); } });
     let systems = [];
     try { systems = window.UnwipBuild ? (await window.UnwipBuild.all('stats')).filter(x => x && x.data) : []; } catch (e) { console.warn(e); }
 
     const save = () => { if (ro) return; node.csheet = JSON.parse(JSON.stringify(sh)); U.scheduleMeta(); };
     let sh = sheetOf(node);
 
-    const whoNow = () => (sh.who !== undefined && sh.who !== null ? sh.who : matchWho(node.title, ledgerNames.filter(Boolean)) ?? (ledgerNames.length === 1 ? ledgerNames[0] : null));
+    const whoNow = () => (sh.who === null ? null : sh.who !== undefined ? sh.who : matchWho(node.title, ledgerNames.filter(Boolean)) ?? (ledgerNames.length === 1 ? ledgerNames[0] : null));
     function mine() {
       const w = whoNow(); if (w === null || !L) return { stats: [], got: [] };
       return { stats: L.stats.filter(s => (s.who || '') === w), got: L.got.filter(g => (g.who || '') === w) };
@@ -156,9 +160,10 @@ window.UnwipCharSheet = (function () {
         : st.tab === 'inv' ? (items.length ? `<div class="cs-rows">${items.map(g => `<div class="cs-row"><span>${esc(g.name)}</span><small>${esc(chName(g.ch))}</small></div>`).join('')}</div>` : `<p class="hint">No items yet at this chapter. Items come from messages like <b>[Item Obtained: Rusty Key]</b> in your chapters. Gear you put in a slot shows on the Character tab.</p>`)
         : (skills.length ? `<div class="cs-chips">${skills.map(g => `<span class="cs-chip">${esc(g.name)} <small>${esc(g.kind)}, ${esc(chName(g.ch))}</small></span>`).join('')}</div>` : `<p class="hint">No skills yet at this chapter. Skills come from messages like <b>[New Skill Acquired: Shadow Step]</b> in your chapters.</p>`);
       body.innerHTML = `
+        ${others.length > 1 ? `<div class="cs-others">${prevC ? `<button type="button" class="btn small ghost" data-other="${esc(prevC.id)}" title="${esc(prevC.title || 'Untitled')}">‹ <span>${esc(prevC.title || 'Untitled')}</span></button>` : ''}${nextC ? `<button type="button" class="btn small ghost nx" data-other="${esc(nextC.id)}" title="${esc(nextC.title || 'Untitled')}"><span>${esc(nextC.title || 'Untitled')}</span> ›</button>` : ''}</div>` : ''}
         <div class="cs-head"><div class="cs-name">${esc(node.title || 'Untitled')}</div><div class="cs-sub">${lv ? `Level ${U.fmt(lv.v)}` : ''}${lv && chs.length ? ' · ' : ''}${chs.length ? esc(chName(ci)) : ''}</div></div>
         <div class="cs-time">
-          <${si === last ? 'div' : 'button type="button" data-now title="Looking at the sheet as it was at this chapter. Click to go back to the latest chapter."'} class="cs-when">${svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', 16)}<b>${si === last ? 'Up to date' : 'Looking back'}</b><span>·</span><span>${chs.length ? `Ch ${ci + 1}: ${esc(chName(ci))}` : 'No chapters yet'}</span>${si === last ? '' : '<em class="cs-now">Back to latest</em>'}</${si === last ? 'div' : 'button'}>
+          <div class="cs-when ${si === last ? '' : 'back'}">${svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', 16)}<b>${si === last ? 'Up to date' : 'Looking back'}</b><span>·</span>${chs[ci] ? `<button type="button" class="cs-chlink" data-goch="${esc(chs[ci].id)}" title="Close the sheet and open this chapter">Ch ${ci + 1}: ${esc(chName(ci))}</button>` : `<span>${chs.length ? `Ch ${ci + 1}: ${esc(chName(ci))}` : 'No chapters yet'}</span>`}${si === last ? '' : '<button type="button" class="cs-now" data-now title="Back to the sheet as it is at the latest chapter">Back to latest</button>'}</div>
           <button type="button" class="cs-nav" data-step="-1" ${si <= 0 ? 'disabled' : ''} aria-label="Earlier">‹</button>
           <div class="cs-track"><i style="width:${last > 0 ? si / last * 100 : 100}%"></i>${SP.map((c, i) => `<button type="button" class="cs-stop ${i === si ? 'on' : ''}" style="left:${last > 0 ? i / last * 100 : 50}%" data-stop="${c}" title="${esc('Ch ' + (c + 1) + ': ' + chName(c))}" aria-label="${esc('Chapter ' + (c + 1))}"><span></span></button>`).join('')}</div>
           <button type="button" class="cs-nav" data-step="1" ${si >= last ? 'disabled' : ''} aria-label="Later">›</button>
@@ -219,7 +224,8 @@ window.UnwipCharSheet = (function () {
       $$('[data-fig]', body).forEach(b => b.onclick = () => { sh.fig = b.dataset.fig; save(); render(); });
       const clr = $('[data-clearimg]', body); if (clr) clr.onclick = () => { sh.img = ''; save(); render(); };
       const file = $('.cs-file', body); if (file) file.onchange = async () => { const fl = file.files && file.files[0]; if (!fl) return; try { sh.img = await shrink(fl); sh.fig = 'own'; save(); render(); } catch (e) { console.error(e); U.toast('That picture couldn’t be read. Try a JPEG or PNG.'); } };
-      const go = $('[data-goch]', body); if (go) go.onclick = () => { const cid = go.dataset.goch; $$('.modal-back').forEach(mb => { if (mb.contains(body)) { const c = mb.querySelector('.m-foot .btn'); if (c) c.click(); } }); U.setView && U.setView('write'); U.openDoc(cid); };
+      $$('[data-goch]', body).forEach(go => go.onclick = () => { const cid = go.dataset.goch; closeSheet(); U.setView && U.setView('write'); U.openDoc(cid); });
+      $$('[data-other]', body).forEach(b => b.onclick = () => { const id = b.dataset.other; closeSheet(); setTimeout(() => open(id, st.tab), 0); });
       const ed = $('[data-edit]', body); if (ed) ed.onclick = () => { st.editing = ed.dataset.edit; render(); const n = $('.cs-in-name', body); if (n) n.focus(); };
       const cancel = $('[data-cancel]', body); if (cancel) cancel.onclick = () => { st.editing = null; render(); };
       const sv = $('[data-saveslot]', body); if (sv) sv.onclick = () => {

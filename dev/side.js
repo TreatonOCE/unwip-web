@@ -1,6 +1,7 @@
 // Unwip - one side panel with labelled tabs: Revise · Insights · Comments · Changes · Snapshots · Style.
 // They all share the same slot on the right, so panels never stack, and each is one click from the others.
-// The panel button at the top right opens the tab you used last; Revise and F7 still go straight to Revise.
+// The panel button at the top right opens the tab you used last other than Revise (Insights, Comments, Changes,
+// Snapshots or Style); Revise and F7 go straight to Revise, so the two buttons don't do the same thing.
 window.UnwipSide = (function () {
   'use strict';
   const U = window.__unwip; if (!U) return;
@@ -8,7 +9,7 @@ window.UnwipSide = (function () {
   const main = $('#workspace .main');
   const TABS = [['revise', 'Revise'], ['insights', 'Insights'], ['comments', 'Comments'], ['changes', 'Changes'], ['snapshots', 'Snapshots'], ['style', 'Style']];
   const LS = 'unwip-side-tab';
-  let last = (() => { try { return localStorage.getItem(LS) || 'comments'; } catch { return 'comments'; } })();
+  let last = (() => { try { const v = localStorage.getItem(LS); return v && v !== 'revise' ? v : 'comments'; } catch { return 'comments'; } })();
   let busy = false;
 
   // the two new panels live beside the existing Revise and Comments panels
@@ -52,16 +53,16 @@ window.UnwipSide = (function () {
       else if (tab === 'snapshots') { P.snapshots.classList.remove('hidden'); renderSnaps(); }
       else if (tab === 'insights') { P.insights.classList.remove('hidden'); if (window.UnwipInsights) window.UnwipInsights.compact($('.side-body', P.insights)); }
       else if (tab === 'style') { P.style.classList.remove('hidden'); renderStyle(); }
-      last = tab; try { localStorage.setItem(LS, tab); } catch {}
+      if (tab !== 'revise') { last = tab; try { localStorage.setItem(LS, tab); } catch {} }
     } finally { busy = false; sync(); }
   }
   function close() { hideAllBut(null); sync(); }
-  function toggle() { if (current()) close(); else open(last); }
+  function toggle() { const c = current(); if (c && c !== 'revise') close(); else open(last); }
 
   // keep the panel button and the tabs' counts in step with whatever opened a panel
   function sync() {
     const c = current();
-    const pb = $('#btn-panel'); if (pb) pb.classList.toggle('on', !!c);
+    const pb = $('#btn-panel'); if (pb) pb.classList.toggle('on', !!c && c !== 'revise');
     if (c && U.makeRoom) U.makeRoom(false);
     const n = new Set($$('#editor span.cmt[data-cid]').map(x => x.dataset.cid)).size + $$('#editor sup.fn').length;
     $$('[data-n]').forEach(x => { x.textContent = n ? ` ${n}` : ''; });
@@ -72,7 +73,7 @@ window.UnwipSide = (function () {
     for (const m of muts) {
       const el = m.target; if (!visible(el)) continue;
       const k = Object.keys(P).find(x => P[x] === el); if (!k) continue;
-      busy = true; try { hideAllBut(k); last = k; } finally { busy = false; }
+      busy = true; try { hideAllBut(k); if (k !== 'revise') last = k; } finally { busy = false; }
     }
     sync();
   }).observe(main, { subtree: true, attributes: true, attributeFilter: ['class'] });
@@ -111,6 +112,14 @@ window.UnwipSide = (function () {
     let t = null;
     const apply = () => { clearTimeout(t); t = setTimeout(() => { U.applyStyleNow(f.read()); $('#side-style-undo', box).disabled = false; }, 120); };
     f.body.addEventListener('input', apply); f.body.addEventListener('change', apply);
+    // text that carries its own font (pasted, imported, or picked in the toolbar) doesn't follow the Style font: say so
+    const fontSel = $('#s-font', f.body);
+    if (fontSel) fontSel.addEventListener('change', () => {
+      const want = fontSel.value, own = new Set();
+      U.editor.querySelectorAll('[style*="font-family"], font[face]').forEach(el => { const fam = (el.style.fontFamily || el.getAttribute('face') || '').split(',')[0].replace(/["']/g, '').trim(); if (fam && fam !== want) own.add(fam); });
+      if (!own.size || !window.UnwipBookFont) return;
+      U.toastAction(`Some text in this chapter has its own font (${esc([...own].slice(0, 2).join(', '))}), so it stays as it is. Font for the whole book can clear those and use ${esc(want)} everywhere.`, 'Font for the whole book…', async () => { await window.UnwipBookFont.open(); renderStyle(); }, 12000);
+    });
     $('#side-style-undo', box).onclick = () => { U.applyStyleNow(JSON.parse(JSON.stringify(styleBefore))); renderStyle(); };
   }
 
