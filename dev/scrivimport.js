@@ -165,6 +165,10 @@ window.UnwipScriv = (function () {
       tpl.binder.splice(tpl.binder.findIndex(x => x.kind === 'trash'), 0, { id: 'root-' + k, type: 'folder', kind: k, root: true, custom: true, open: false, children: ns.children, title: t, singular: t.replace(/ies$/i, 'y').replace(/(?<!s)s$/i, ''), fields: ['Name', 'Aliases'], sections: ['Description', 'Notes'], icon: '🗂️' });
     }
     tpl.importedFrom = 'Scrivener';
+    // how Scrivener's binder was laid out, so No hard feelings can put it back (and the titles as Unwip has them now,
+    // to tell a chapter renamed here from one only tidied on the way in)
+    if (res.tops) tpl.scrivOrigin = { tops: res.tops, at: Date.now() };
+    U.walkTree(Object.values(res.roots).flat().concat(...(res.newSections || []).map(x => x.children)), n => { if (n.sx && n.sx.u) n.sx.tn = n.title; });
     tpl.style = { ...(tpl.style || {}), blankLines: v.blank === 'tidy' ? 'tidy' : 'keep' };
     // the book's own title and author from Scrivener, for the title page
     { const sc = FI.scrivenerScan(data); if (sc.projectTitle || sc.author) tpl.book = { ...(tpl.book || {}), ...(sc.projectTitle ? { title: sc.projectTitle } : {}), ...(sc.author ? { author: sc.author } : {}) }; }
@@ -224,5 +228,5 @@ window.UnwipScriv = (function () {
     if (window.UnwipSheets) await window.UnwipSheets.offerAfterImport().catch(() => {});
   }
 
-  return { start, TARGETS };
+  return { start, TARGETS, _test: { importNow } };
 })();
