@@ -139,6 +139,7 @@ select, input { font: inherit; color: inherit; }
 .tree-row.selected { background: var(--accent-soft); color: var(--accent); }
 .tree-row.selected .tr-icon { color: var(--accent); }
 .tree-row.no-book .tr-title { opacity: .5; font-style: italic; }
+.tree-row.no-book .tr-count::before { content: 'left out · '; font-style: italic; }   /* says why it's faded: touch screens never see the tooltip */
 .tree-row .tr-chev { width: 16px; height: 16px; display: inline-grid; place-items: center; color: var(--faint); flex-shrink: 0; transition: transform .12s; }
 .tree-row .tr-chev svg { width: 13px; height: 13px; }
 .tree-row .tr-chev.open { transform: rotate(90deg); }
@@ -3605,7 +3606,11 @@ html.flavor-dev .sbb { border-top: 3px solid #e8590c; }
 .mp-selbar.grp .mp-selcount { display: inline; }
 .mp-selbar.grp [data-layer]:not([data-layer=del]) { display: none; }
 .mp-selbar.grp [data-layer=del]::after { content: " Delete"; }
-@media (max-width: 720px) { .mp-selbar { top: auto; bottom: 12px; } }
+@media (max-width: 720px) {   /* a phone: a small square of arrows near the tools, clear of the screen's rounded corner */
+  .mp-selbar { top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 8px; transform: none; gap: 2px; padding: 4px; }
+  .mp-selbar .mp-sl { display: none; }
+  .mp-selbar .btn.small { min-width: 38px; min-height: 38px; padding: 0 8px; justify-content: center; }
+}
 @media (max-width: 720px) { .mp-marq-h { display: none; } }
 
 /* ==== Build kit (buildkit.js): shared symbol chooser, colour row, handles on the picture, ribbons. Oct 2026. ==== */
@@ -3745,3 +3750,15 @@ body.kit-pipetting #bd-main .kit-host, body.kit-pipetting #bd-main .kit-host *, 
 /* a short [message] on its own (Settings › LitRPG): a box that fits the words, starting where the full boxes start, or no box */
 body.litrpg .editor p.lit-sys.lit-fit, body.litrpg #editor p.lit-sys.lit-fit { width: fit-content; max-width: 92%; margin-left: 4%; margin-right: auto; }
 body.litrpg .editor p.lit-sys.lit-plain, body.litrpg #editor p.lit-sys.lit-plain { border: 0; background: none; padding: 0; margin: .4em 4%; max-width: none; font-family: inherit; font-size: inherit; font-weight: 700; letter-spacing: 0; }
+
+/* Build below Lore: Open World pieces get their own heading, so it's clear why they're here and not at Lore */
+.bd-from { display: flex; flex-direction: column; gap: 2px; margin: 26px 0 -4px; padding-top: 14px; border-top: 1px solid var(--line); }
+.bd-from b { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.bd-from span { color: var(--muted); font-size: 13.5px; }
+/* Build › Character of the world (buildperson.js): a page like a character page in a book */
+.bp-page { max-width: 760px; margin: 0 auto; padding: 22px 20px 60px; display: flex; flex-direction: column; gap: 14px; }
+.bp-lead { margin: 0; }
+.bp-sheet { background: var(--page-bg, var(--paper)); color: var(--page-ink, var(--text)); border: 1px solid var(--line); border-radius: 10px; padding: 28px 34px; min-height: 50vh; outline: none; font-family: var(--page-font, Georgia, serif); font-size: 16px; line-height: 1.6; box-shadow: var(--shadow); }
+.bp-sheet h2 { font-size: 1.2em; margin: 1.1em 0 .3em; }
+.bp-sheet p { margin: 0 0 .4em; }
+@media (max-width: 720px) { .bp-page { padding: 12px 10px 40px; } .bp-sheet { padding: 18px; } }

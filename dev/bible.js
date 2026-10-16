@@ -849,7 +849,8 @@ window.UnwipBible = (function () {
     const kind = o.kind || 'characters';
     const sh = await shelf();
     const all = [...sh.series.flatMap(s => s.books), ...sh.alone];
-    if (!all.length) { U.toast('Make a book first: people, places and things live in your books.'); return; }
+    const loose = kind === 'characters' && window.UnwipBuild && window.UnwipBuild.newPerson;   // a person can wait in Open World until a book needs them
+    if (!all.length && !loose) { U.toast('Make a book first: people, places and things live in your books.'); return; }
     // which books: a search over every book (there may be hundreds), with the ones picked shown as chips. In a series'
     // bible its latest book starts picked and "All N books" is one tap; from the main screen nothing is picked until you
     // choose (it used to tick only the last book opened, and listing every book wouldn't work with 500 of them).
@@ -857,12 +858,18 @@ window.UnwipBible = (function () {
     const body = document.createElement('div'); body.className = 'sbb-new';
     body.innerHTML = `<div class="field"><label>Name</label><input type="text" id="sbb-nname" maxlength="80" placeholder="${kind === 'characters' ? 'e.g. Wren Tallow' : kind === 'places' ? 'e.g. Tallow Street' : 'e.g. The brass wick-hook'}"></div>
       <div class="field"><label>Put it in</label><div class="sbb-bp-slot"></div></div>
-      <p class="hint">It goes in each book’s ${({ characters: 'Characters', places: 'Places', items: 'Items' }[kind])} folder. In more than one book the page is shared: change it in any of them and the others follow.${o.sheet ? ' Its character sheet opens next.' : ''}</p>`;
+      <p class="hint">It goes in each book’s ${({ characters: 'Characters', places: 'Places', items: 'Items' }[kind])} folder. In more than one book the page is shared: change it in any of them and the others follow.${kind === 'characters' ? ' No book for them yet? Leave it empty: they wait in Open World until you add them to one.' : ''}${o.sheet ? ' Its character sheet opens next.' : ''}</p>`;
     body.querySelector('.sbb-bp-slot').appendChild(picker.el);
     const ok = await U.modal({ title: `New ${KIND_ONE[kind]}`, body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Make it', value: true, kind: 'primary' }],
-      onOpen: back => { const go = back.querySelector('.m-foot .btn.primary'); picker.onChange(n => { if (go) go.disabled = !n; }); setTimeout(() => back.querySelector('#sbb-nname').focus(), 50); } });
+      onOpen: back => { const go = back.querySelector('.m-foot .btn.primary'); picker.onChange(n => { if (go) go.disabled = !n && !loose; }); setTimeout(() => back.querySelector('#sbb-nname').focus(), 50); } });
     const name = ok ? norm(body.querySelector('#sbb-nname').value).slice(0, 80) : '';
     const picks = picker.get();
+    if (name && !picks.length && loose) {
+      // no book: a character of the world, kept in Open World with the maps and coats of arms
+      await window.UnwipBuild.newPerson(name, sheetHTML(U.newProjectTemplate(), 'characters', name));
+      U.toast(`<b>${esc(name)}</b> is in Open World › Characters of the world. Add them to a book whenever you like (Add to book… at the top).`, '', 7000);
+      return;
+    }
     if (!name || !picks.length) return;
     const key = picks.length > 1 ? U.uid() + U.uid() : null;
     let firstSlug = null, firstId = null;

@@ -14,17 +14,18 @@ window.UnwipBuild = (function () {
     sigil: { icon: '✴️', name: 'Sigil', plural: 'Sigils', blurb: 'Draw in one slice and it repeats around the circle. Add a ring of runes.' },
     arms: { icon: '🛡️', name: 'Coat of arms', plural: 'Coats of arms', blurb: 'Shield, colours, symbols and a motto, with the herald’s description written for you.' },
     stats: { icon: '📊', name: 'Stat system', plural: 'Stat systems', blurb: 'LitRPG stats and how they grow each level, an XP curve, and a status screen at any level.' },
-    insignia: { icon: '⬢', name: 'Insignia', plural: 'Insignia', blurb: 'Emblems for corporations, gangs and units: a hard frame, a line symbol, flat colours and a name.' }
+    insignia: { icon: '⬢', name: 'Insignia', plural: 'Insignia', blurb: 'Emblems for corporations, gangs and units: a hard frame, a line symbol, flat colours and a name.' },
+    person: { icon: '👤', name: 'Character', plural: 'Characters of the world', blurb: 'Someone who belongs to your world before any book. Add them to a book whenever you like.' }
   };
-  const ORDER = ['map', 'magic', 'runes', 'sigil', 'arms', 'insignia', 'stats'];
+  const ORDER = ['map', 'magic', 'runes', 'sigil', 'arms', 'insignia', 'stats', 'person'];
   // new magic systems, rune alphabets, sigils and insignia are offered at the Lore level; ones you already made always show
-  const LORE_KINDS = new Set(['magic', 'runes', 'sigil', 'insignia']);
+  const LORE_KINDS = new Set(['magic', 'runes', 'sigil', 'insignia', 'person']);
   // phones stop at Detail: Open World pieces (Lore) made on an iPad or computer are listed in Build there and open
   // as a picture, view only; new ones are made on a bigger screen. Only the web version counts as a phone, so a narrow
   // window on a PC or Mac (the Build window can be 480 px) still edits as normal.
   const phone = () => document.documentElement.classList.contains('web') && window.matchMedia('(max-width: 720px)').matches;
   const below = k => !LORE_KINDS.has(k) || phone() || !U.level || U.level() < 2;   // shown in Build (not Open World)
-  const NEW_ORDER = () => ORDER.filter(k => !LORE_KINDS.has(k) || !U.level || U.level() >= 2);
+  const NEW_ORDER = () => ORDER.filter(k => k !== 'person' && (!LORE_KINDS.has(k) || !U.level || U.level() >= 2));
   // the main screen's Build tab has maps, coats of arms and stat systems; at Lore, the Open World tab has the
   // deep-end pieces (magic, runes, sigils, insignia). Below Lore, ones you already made still show in Build.
   let scope = 'build';
@@ -50,6 +51,8 @@ window.UnwipBuild = (function () {
     const data = kind === 'map' ? { v: 2, active: 0, sections: [{ name: 'Main map', ...M.blank('parchment', 'world') }] } : (ed && ed.blank ? ed.blank() : {});
     return { id: U.uid(), kind, title, created: Date.now(), updated: Date.now(), thumb: '', data };
   }
+  // a character of the world, not in any book yet (New person / New character sheet with no book picked)
+  async function newPerson(title, html) { const it = make('person', title); it.data.html = html || ''; await put(it); await open(it.id); return it.id; }
   // a Build map linked into a book is read and saved through here
   async function readMap(id) { const it = await get(id); return it && it.data ? JSON.stringify(it.data) : null; }
   async function writeMap(id, json, thumb) {
@@ -110,7 +113,7 @@ window.UnwipBuild = (function () {
       ${window.UnwipBible && (world ? !phone() : phone()) ? `<div id="sbb-shelf-slot">${window.UnwipBible.lastShelf || ''}</div>` : ''}
       <div class="pl-head"><div><h1>${world ? 'Open World' : 'Build'}</h1><p>${world ? 'The deep end of your world: magic systems, rune alphabets, sigils and insignia. Like everything in Build, they belong to the world, not one book, so any book can use them.' : 'The pieces of your world: maps, coats of arms and stat systems. They belong to the world, not one book, so any book can use them.' + (U.level && U.level() >= 2 ? ' Magic, runes, sigils and insignia are in Open World.' : '')}</p></div></div>
       <div class="pl-tools bd-tools">${NEW_ORDER().filter(inScope).map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}${world && !phone() && window.UnwipCharSheet ? `<button class="pl-tool" data-csheet><span>🛡️</span><b>New character sheet</b><em>Name a character once, put them in the books they’re in, and give them gear slot by slot, chapter by chapter.</em></button>` : ''}</div>
-      ${items.some(x => inScope(x.kind)) ? ORDER.filter(k => inScope(k) && by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
+      ${items.some(x => inScope(x.kind)) ? ORDER.filter(k => inScope(k) && by(k).length).map((k, i, shown) => `${!world && LORE_KINDS.has(k) && shown.findIndex(x => LORE_KINDS.has(x)) === i ? `<div class="bd-from"><b>From Open World</b><span>${phone() ? 'Made on an iPad or computer. On a phone they show here, view only.' : 'These belong to Open World, which shows at Lore. They’re listed here so nothing goes missing at Focus and Detail.'}</span></div>` : ''}<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
         <div class="bd-grid">${by(k).map(x => `<div class="bd-card" data-id="${x.id}" tabindex="0">
           <div class="bd-thumb ${x.thumb ? '' : 'empty'}">${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : `<span>${KINDS[k].icon}</span>`}</div>
           <div class="bd-ct"><b>${esc(x.title || 'Untitled')}</b><span>${esc(KINDS[k].name)} · ${viewOnly(k) ? 'View only' : ago(x.updated || x.created || 0)}</span></div>
@@ -359,7 +362,7 @@ window.UnwipBuild = (function () {
     const list = await api.listProjects();
     if (!list.length) { U.toast('Make a book first.'); return; }
     const isMap = it.kind === 'map';
-    const ROOT = { map: 'places', magic: 'notes', runes: 'notes', sigil: 'notes', arms: 'notes' }[it.kind];
+    const ROOT = { map: 'places', magic: 'notes', runes: 'notes', sigil: 'notes', arms: 'notes', person: 'characters' }[it.kind];
     const body = document.createElement('div');
     body.innerHTML = `<div class="field"><label>Book</label><select id="ab-p">${list.map(p => `<option value="${esc(p.slug)}">${esc(p.title)}</option>`).join('')}</select></div>
       ${isMap ? `<div class="field" style="margin-top:12px"><label>How</label>
@@ -393,5 +396,5 @@ window.UnwipBuild = (function () {
   async function all(kind) { await refresh(); const out = []; for (const h of items.filter(x => !kind || x.kind === kind)) { const it = await get(h.id); if (it) out.push(it); } return out; }
 
   { const bb = document.getElementById('btn-build-book'); if (bb) { bb.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V9l3-2 3 2v3h4V9l3-2 3 2v12z"/><path d="M10 21v-4a2 2 0 0 1 4 0v4"/><path d="M7 7V3M17 7V3"/></svg><span class="tb-label">Build</span>'; bb.onclick = () => fromBook(); } }
-  return { KINDS, editors, render, refresh, open, close, create, fromBook, flush, get from() { return ret; }, readMap, writeMap, get, put, all, svgCanvas, svgURL, loadFonts, copyCanvas, savePNG, canvasBytes, addToBook, get items() { return items; } };
+  return { KINDS, editors, render, refresh, open, close, create, newPerson, fromBook, flush, get from() { return ret; }, readMap, writeMap, get, put, all, svgCanvas, svgURL, loadFonts, copyCanvas, savePNG, canvasBytes, addToBook, get items() { return items; } };
 })();
