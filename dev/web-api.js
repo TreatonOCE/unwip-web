@@ -209,7 +209,14 @@
   // ------------------------------------------------------------------ settings (kept separately from projects, like the PC's settings.json)
   const SETTINGS = 'app/settings.json';
   const loadSettings = () => FS.json(SETTINGS, {});
-  async function setSettings(patch) { const st = { ...(await loadSettings()), ...(patch || {}) }; await FS.write(SETTINGS, JSON.stringify(st)); return st; }
+  // one at a time: two changes made at once (ticking boxes quickly, or a background save) each read the file, and the
+  // one written last dropped the other's change
+  let settingsQ = Promise.resolve();
+  function setSettings(patch) {
+    const run = settingsQ.then(async () => { const st = { ...(await loadSettings()), ...(patch || {}) }; await FS.write(SETTINGS, JSON.stringify(st)); return st; });
+    settingsQ = run.catch(() => {});
+    return run;
+  }
 
   // ------------------------------------------------------------------ printing (PDF): the browser's own print, which can save a PDF
   async function printHTML(html, pageSize, opts = {}) {
