@@ -40,7 +40,10 @@ window.UnwipSymbols = (function () {
   const icon = (key, col) => `<svg viewBox="-50 -50 100 100" width="34" height="34">${g(key, col || 'currentColor')}</svg>`;
 
   // ---- the picker: sections, a search box; resolves with the key picked (or null)
+  // (the Build tools use the shared chooser in buildkit.js: a dropdown of sections with Recent and All)
   async function pick(opts = {}) {
+    const K = window.UnwipKit;
+    if (K) return K.pickSymbol({ id: opts.id || 'lib', title: opts.title, current: opts.current, cats: K.libCats(opts.sections), note: 'The animals and objects are by artists at game-icons.net: free to use, even commercially, with a short credit when you publish (Build shows the line).' });
     const body = document.createElement('div'); body.className = 'sym-pick';
     const only = opts.sections ? SECTIONS.filter(([s]) => opts.sections.includes(s)) : SECTIONS;
     body.innerHTML = `<input class="sym-search" type="search" placeholder="Find a symbol: lion, crow, skull, IV…" aria-label="Find a symbol">

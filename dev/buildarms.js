@@ -62,7 +62,10 @@
   if (SYM) for (const [k, v] of Object.entries(CH)) SYM.register(k, { label: v[0], section: SECT[k] || 'shapes', b1: v[1], b2: v[2], paths: v[3], evenodd: !!v[4], cut: v[5] || '' });
   const symDef = k => CH[k] ? { b1: CH[k][1], b2: CH[k][2], label: CH[k][0] } : SYM && SYM.get(k);
   const article = w => /^[aeiou]/i.test(w) ? 'an' : 'a';
-  const blank = () => ({ shape: 'heater', div: 'plain', t1: 'azure', t2: 'or', ord: 'none', t3: 'or', charge: 'mullet', count: 3, t4: 'argent', ref: null, motto: '', mottoOn: true, mottoCol: 'argent', layout: 'auto', size: 1, pos: null, extras: [] });
+  // rot (turn of the main symbols, degrees), ribbon (its shape), ribbonHex and mottoInk (free colours for the ribbon
+  // and its letters; empty means the old tincture, mottoCol, and letters that suit it) were added later: old arms keep
+  // working without them. Extra symbols can carry r (their own turn).
+  const blank = () => ({ shape: 'heater', div: 'plain', t1: 'azure', t2: 'or', ord: 'none', t3: 'or', charge: 'mullet', count: 3, t4: 'argent', ref: null, motto: '', mottoOn: true, mottoCol: 'argent', layout: 'auto', size: 1, pos: null, extras: [], rot: 0, ribbon: 'swallow', ribbonHex: '', mottoInk: '' });
 
   // ================================================================== DRAWING
   const col = t => (T[t] || T.argent)[2];
@@ -178,28 +181,57 @@
       else if (SYM && SYM.get(d.charge)) inner = SYM.g(d.charge, c, line, 2.2);
       else return '';
     }
-    return fitSpots(d, spots(d) || []).map(([x, y, s], i) => `<g data-chi="${i}" data-x="${x}" data-y="${y}" data-s="${s}" transform="translate(${x} ${y}) scale(${s})">${inner}</g>`).join('');
+    const rot = +d.rot || 0;
+    return fitSpots(d, spots(d) || []).map(([x, y, s], i) => `<g data-chi="${i}" data-x="${x}" data-y="${y}" data-s="${s}" transform="translate(${x} ${y})${rot ? ` rotate(${rot})` : ''} scale(${s})">${inner}</g>`).join('');
   }
   // more symbols, as many as you like: each with its own colour and size, wherever it's dragged to
   function extrasG(d) {
     if (!SYM || !Array.isArray(d.extras)) return '';
     return d.extras.map((e, i) => { const c = col(e.t), line = e.t === 'sable' ? '#6b6b6b' : '#1d1d1f';
-      return `<g data-exi="${i}" data-x="${e.x}" data-y="${e.y}" data-s="${e.s}" transform="translate(${e.x} ${e.y}) scale(${e.s})">${SYM.g(e.k, c, line, 2.2)}</g>`; }).join('');
+      return `<g data-exi="${i}" data-x="${e.x}" data-y="${e.y}" data-s="${e.s}" transform="translate(${e.x} ${e.y})${+e.r ? ` rotate(${+e.r})` : ''} scale(${e.s})">${SYM.g(e.k, c, line, 2.2)}</g>`; }).join('');
+  }
+  // ---- the motto's ribbon: a few shapes, drawn here. Each keeps to the space under the shield (y 240 to 290).
+  const RIBBONS = { swallow: 'Swallowtail', scroll: 'Scroll', straight: 'Straight', arched: 'Arched' };
+  const ribbonCol = d => /^#[0-9a-f]{6}$/i.test(d.ribbonHex || '') ? d.ribbonHex : col(d.mottoCol || 'argent');
+  const lum = h => { const n = parseInt(h.slice(1), 16); return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; };
+  const DARK_T = ['sable', 'gules', 'azure', 'vert', 'purpure', 'sanguine'];
+  const inkOn = (d, mc) => /^#[0-9a-f]{6}$/i.test(d.mottoInk || '') ? d.mottoInk
+    : /^#[0-9a-f]{6}$/i.test(d.ribbonHex || '') ? (lum(mc) < 0.55 ? '#f2f1ec' : '#1d1d1f') : DARK_T.includes(d.mottoCol) ? '#f2f1ec' : '#1d1d1f';
+  // a little darker, for the parts of the ribbon that turn away
+  const shade = h => '#' + [16, 8, 0].map(sh => Math.round((parseInt(h.slice(1), 16) >> sh & 255) * 0.72).toString(16).padStart(2, '0')).join('');
+  function ribbonSVG(kind, lines, fs, mc, tc, id) {
+    const st = `stroke="#1d1d1f" stroke-linejoin="round"`, back = shade(mc);
+    const fits = l => l.length * (fs * 0.72 + 1) > 150 ? ` textLength="150" lengthAdjust="spacingAndGlyphs"` : '';
+    const flat = (cy) => lines.map((l, i) => `<text x="100" y="${(lines.length > 1 ? cy - 5 + i * (fs + 1.5) : cy) + fs * 0.35}" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="${fs.toFixed(1)}" letter-spacing="1"${fits(l)} fill="${tc}">${esc(l)}</text>`).join('');
+    if (kind === 'straight') return `<g><path d="M8 250H192L183 263L192 276H8L17 263Z" fill="${mc}" ${st} stroke-width="1.8"/><path d="M8 250H192M8 276H192" stroke="${back}" stroke-width="1" opacity=".6" transform="translate(0 2.5)"/>${flat(263)}</g>`;
+    if (kind === 'scroll') {
+      const end = `<path d="M26 248.5H14C5 248.5 3 256 3 263C3 270 5 277.5 14 277.5H26Z" fill="${back}" ${st} stroke-width="1.6"/><path d="M14 277.5C7.5 277.5 6.5 270 8.5 266C10.5 262 17 262.5 17 267C17 270.5 13.5 271.5 12 268.5" fill="none" ${st} stroke-width="1.4" stroke-linecap="round"/>`;
+      return `<g>${end}<g transform="translate(200 0) scale(-1 1)">${end}</g><path d="M22 250Q100 245 178 250V276Q100 271 22 276Z" fill="${mc}" ${st} stroke-width="1.8"/>${flat(263)}</g>`;
+    }
+    if (kind === 'arched') {
+      // the band curves down in the middle; the words follow it
+      const mid = (dy) => `M16 ${255 + dy}Q100 ${279 + dy} 184 ${255 + dy}`;
+      const paths = lines.map((_, i) => `<path id="${id}-m${i}" d="${mid((lines.length > 1 ? -5 + i * (fs + 1.5) : 0) + fs * 0.35)}" fill="none"/>`).join('');
+      const tails = `<path d="M20 247L2 251L11 259L3 270L20 266Z" fill="${back}" ${st} stroke-width="1.6"/><path d="M180 247L198 251L189 259L197 270L180 266Z" fill="${back}" ${st} stroke-width="1.6"/>`;
+      return `<g><defs>${paths}</defs>${tails}<path d="M16 242Q100 266 184 242L184 268Q100 292 16 268Z" fill="${mc}" ${st} stroke-width="1.8"/>
+        ${lines.map((l, i) => `<text font-family="Bookhaven, Georgia, serif" font-size="${fs.toFixed(1)}" letter-spacing="1" fill="${tc}" text-anchor="middle"><textPath href="#${id}-m${i}" startOffset="50%">${esc(l)}</textPath></text>`).join('')}</g>`;
+    }
+    // swallowtail (the first ribbon, and every motto made before there was a choice)
+    return `<g><path d="M22 254H4L13 266L4 278H22Z" fill="${back}" ${st} stroke-width="1.6"/><path d="M178 254H196L187 266L196 278H178Z" fill="${back}" ${st} stroke-width="1.6"/>
+        <path d="M18 250Q100 240 182 250V276Q100 266 18 276Z" fill="${mc}" ${st} stroke-width="1.8"/>
+        ${lines.map((l, i) => `<text x="100" y="${(lines.length > 1 ? 259 + i * (fs + 1.5) : 264) + fs * 0.35}" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="${fs.toFixed(1)}" letter-spacing="1"${fits(l)} fill="${tc}">${esc(l)}</text>`).join('')}</g>`;
   }
   function armsSVG(d, refs, size) {
     const sh = (SHAPES[d.shape] || SHAPES.heater)[1];
     const id = 'c' + Math.random().toString(36).slice(2, 8);
     const bord = d.ord === 'bordure' ? `<path d="${sh}" fill="none" stroke="${col(d.t3)}" stroke-width="28" clip-path="url(#${id})"/>` : '';
     const motto = d.mottoOn && (d.motto || '').trim();
-    const mc = col(d.mottoCol || 'argent'), up = (motto || '').toUpperCase();
+    const mc = ribbonCol(d), up = (motto || '').toUpperCase();
     // capitals in Bookhaven are about 0.72em wide (plus 1 of letter spacing); long mottos go on two lines
     let lines = [up];
     if (up.length > 22) { const mid = up.length / 2; let cut = -1; for (let i = 0; i < up.length; i++) if (up[i] === ' ' && (cut < 0 || Math.abs(i - mid) < Math.abs(cut - mid))) cut = i; lines = cut > 0 ? [up.slice(0, cut), up.slice(cut + 1)] : [up]; }
     const longest = Math.max(...lines.map(l => l.length), 1), fs = Math.max(6, Math.min(15, (148 / longest - 1) / 0.72, lines.length > 1 ? 11 : 15));
-    const fits = l => l.length * (fs * 0.72 + 1) > 150 ? ` textLength="150" lengthAdjust="spacingAndGlyphs"` : '';
-    const ribbon = motto ? `<g><path d="M22 254H4L13 266L4 278H22Z" fill="${mc}" stroke="#1d1d1f" stroke-width="1.6" stroke-linejoin="round"/><path d="M178 254H196L187 266L196 278H178Z" fill="${mc}" stroke="#1d1d1f" stroke-width="1.6" stroke-linejoin="round"/>
-        <path d="M18 250Q100 240 182 250V276Q100 266 18 276Z" fill="${mc}" stroke="#1d1d1f" stroke-width="1.8" stroke-linejoin="round"/>
-        ${lines.map((l, i) => `<text x="100" y="${(lines.length > 1 ? 259 + i * (fs + 1.5) : 264) + fs * 0.35}" text-anchor="middle" font-family="Bookhaven, Georgia, serif" font-size="${fs.toFixed(1)}" letter-spacing="1"${fits(l)} fill="${d.mottoCol === 'sable' || d.mottoCol === 'gules' || d.mottoCol === 'azure' || d.mottoCol === 'vert' || d.mottoCol === 'purpure' || d.mottoCol === 'sanguine' ? '#f2f1ec' : '#1d1d1f'}">${esc(l)}</text>`).join('')}</g>` : '';
+    const ribbon = motto ? ribbonSVG(d.ribbon, lines, fs, mc, inkOn(d, mc), id) : '';
     const H = motto ? 290 : 244;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 ${H}" width="${size ? size * 200 / H : '100%'}" height="${size || '100%'}"><defs><clipPath id="${id}"><path d="${sh}"/></clipPath></defs>
       <g clip-path="url(#${id})">${field(d)}${ordinary(d)}</g>${bord}${chargeG(d, refs)}${extrasG(d)}
@@ -270,131 +302,163 @@
   }
 
   // ================================================================== THE EDITOR
-  let it = null, ctx = null, box = null, d = null, refs = { item: null }, runes = [], sigils = [];
+  // The side panel and the shield share one selection: tap a symbol on the shield (or an extra symbol's row) and it
+  // gets a box with a size handle and a turn handle, like the map maker's; the sliders follow the handles.
+  const K = window.UnwipKit;
+  let it = null, ctx = null, box = null, d = null, refs = { item: null }, runes = [], sigils = [], sel = null, hd = null;
   async function loadRef() { refs.item = d.ref && d.ref.id ? (runes.concat(sigils).find(x => x.id === d.ref.id) || await B.get(d.ref.id)) : null; }
   async function open(item, el, c) {
-    it = item; ctx = c; box = el; d = it.data = Object.assign(blank(), it.data || {});
+    it = item; ctx = c; box = el; d = it.data = Object.assign(blank(), it.data || {}); sel = null;
     [runes, sigils] = await Promise.all([B.all('runes'), B.all('sigil')]);
     await loadRef();
     c.extra.innerHTML = '<button class="btn small" id="ar-rand" title="Roll random arms that follow the heralds’ rules (dice, not AI)">🎲 Random</button>';
-    $('#ar-rand').onclick = () => { const keepMotto = { motto: d.motto, mottoOn: d.mottoOn, mottoCol: d.mottoCol }; Object.assign(d, randomArms(), keepMotto); d.ref = null; refs.item = null; drawAll(); ctx.changed(); };
+    $('#ar-rand').onclick = () => { const keepMotto = { motto: d.motto, mottoOn: d.mottoOn, mottoCol: d.mottoCol, ribbon: d.ribbon, ribbonHex: d.ribbonHex, mottoInk: d.mottoInk }; Object.assign(d, randomArms(), keepMotto); d.ref = null; refs.item = null; sel = null; drawAll(); ctx.changed(); };
     drawAll();
   }
-  const sw = (key, label) => `<div class="ar-sw" data-key="${key}" aria-label="${label}">${Object.entries(T).map(([k, v]) => `<button type="button" class="ar-t ${d[key] === k ? 'on' : ''}" data-t="${k}" style="--c:${v[2]}" title="${v[0]} (${v[1]})"></button>`).join('')}<span class="ar-tn">${T[d[key]] ? `${T[d[key]][0]} · ${T[d[key]][1]}` : ''}</span></div>`;
+  // heraldic tinctures: the same round swatches as every other colour row, but only the real tinctures (their names
+  // go into the herald's description)
+  const TINCT = Object.entries(T).map(([k, v]) => ({ v: k, col: v[2], title: `${v[0]} (${v[1]})` }));
+  const tinctLabel = v => T[v] ? `${T[v][0]} · ${T[v][1]}` : '';
+  const mountTinct = (el, key, onPick) => K.swatches(el, { items: TINCT, value: key(), label: tinctLabel, onPick });
+  // the main symbol's choices: the library's sections, then your own runes and sigils
+  function chargeCats() {
+    const cats = K.libCats();
+    const runeItems = runes.flatMap(r => ((r.data && r.data.glyphs) || []).filter(g => (g.strokes || []).length).map(g => { const A = Object.assign(B.runes.blank(), r.data); const gw = B.runes.glyphW(A), gh = B.runes.glyphH(A);
+      return { key: `rune:${r.id}|${g.id}`, title: `${r.title}: ${g.name || (g.key || '').toUpperCase()}`, words: `${r.title} ${g.name || ''} ${g.key || ''} rune`, icon: `<svg viewBox="-8 -8 ${gw + 16} ${gh + 16}" class="kit-line">${B.runes.glyphG({ ...A, width: Math.max(A.width, 4) }, g, 'currentColor')}</svg>` }; }));
+    if (runeItems.length) cats.push({ id: 'my-runes', name: 'Your runes', items: runeItems.slice(0, 120) });
+    if (sigils.length) cats.push({ id: 'my-sigils', name: 'Your sigils', items: sigils.map(x => ({ key: `sigil:${x.id}`, title: `Sigil: ${x.title}`, words: `${x.title} sigil`, icon: `<svg viewBox="-104 -104 208 208" class="kit-line">${B.sigils.sigilG(Object.assign(B.sigils.blank(), x.data || {}), null, 'currentColor')}</svg>` })) });
+    return cats;
+  }
+  const chargeKey = () => d.charge === 'rune' && d.ref ? `rune:${d.ref.id}|${d.ref.glyph}` : d.charge === 'sigil' && d.ref ? `sigil:${d.ref.id}` : d.charge;
+  const ribbonIcon = k => `<svg viewBox="0 238 200 56" aria-hidden="true">${ribbonSVG(k, [''], 12, '#f4ecd8', '#000', 'ri' + k)}</svg>`;
   function drawAll() {
     const side0 = box.querySelector('.ar-side'), keepSide = side0 ? side0.scrollTop : 0, keepMain = box.scrollTop;
-    const charges = [['none', 'None'], ...Object.entries(CH).map(([k, v]) => [k, v[0]])];
-    const runeOpts = runes.flatMap(r => ((r.data && r.data.glyphs) || []).filter(g => (g.strokes || []).length).map(g => ({ r, g })));
+    if (hd) { hd.destroy(); hd = null; }
+    const pct = v => Math.round(v * 100), deg = v => `${Math.round(+v || 0)}°`;
     box.innerHTML = `<div class="ar-wrap">
       <section class="ar-show"><div class="ar-shield" id="ar-shield"></div><div class="ar-blazon" id="ar-blazon"></div><div class="ar-warn" id="ar-warn"></div></section>
       <aside class="ar-side">
         <h3>Shield</h3><div class="ar-shapes">${Object.entries(SHAPES).map(([k, v]) => `<button type="button" class="ar-shape ${d.shape === k ? 'on' : ''}" data-shape="${k}" title="${v[0]}"><svg viewBox="0 0 200 240"><path d="${v[1]}"/></svg></button>`).join('')}</div>
         <h3>Field</h3><div class="field"><select id="ar-div">${Object.entries(DIV).map(([k, v]) => `<option value="${k}" ${d.div === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></div>
-        ${sw('t1', 'First colour')}${d.div !== 'plain' ? sw('t2', 'Second colour') : ''}
+        <div class="ar-sw" data-key="t1"></div>${d.div !== 'plain' ? '<div class="ar-sw" data-key="t2"></div>' : ''}
         <h3>Band <small>(ordinary)</small></h3><div class="field"><select id="ar-ord">${Object.entries(ORD).map(([k, v]) => `<option value="${k}" ${d.ord === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></div>
-        ${d.ord !== 'none' ? sw('t3', 'Band colour') : ''}
+        ${d.ord !== 'none' ? '<div class="ar-sw" data-key="t3"></div>' : ''}
         <h3>Symbols <small>(charges)</small></h3>
-        <div class="ar-charges">${!CH[d.charge] && SYM && SYM.get(d.charge) ? `<button type="button" class="ar-ch lib on" data-ch="${d.charge}" title="${esc(SYM.get(d.charge).label)}">${SYM.icon(d.charge)}</button>` : ''}${charges.map(([k, l]) => `<button type="button" class="ar-ch ${d.charge === k ? 'on' : ''}" data-ch="${k}" title="${l}">${k === 'none' ? '<span>—</span>' : `<svg viewBox="-50 -50 100 100">${CH[k][3].map(p => `<path d="${p}" ${CH[k][4] ? 'fill-rule="evenodd"' : ''}/>`).join('')}</svg>`}</button>`).join('')}${SYM ? '<button type="button" class="ar-ch ar-all" id="ar-all" title="All symbols: animals, dragons, numerals and more">All…</button>' : ''}
-          ${runeOpts.length ? '<span class="ar-chl">Your runes</span>' : ''}${runeOpts.slice(0, 60).map(({ r, g }) => { const A = Object.assign(B.runes.blank(), r.data); const gw = B.runes.glyphW(A), gh = B.runes.glyphH(A); return `<button type="button" class="ar-ch rune ${d.charge === 'rune' && d.ref && d.ref.glyph === g.id ? 'on' : ''}" data-rune="${r.id}|${g.id}" title="${esc(r.title)}: ${esc(g.name || (g.key || '').toUpperCase())}"><svg viewBox="${-8} ${-8} ${gw + 16} ${gh + 16}">${B.runes.glyphG({ ...A, width: Math.max(A.width, 4) }, g, 'currentColor')}</svg></button>`; }).join('')}
-          ${sigils.length ? '<span class="ar-chl">Your sigils</span>' : ''}${sigils.map(s => `<button type="button" class="ar-ch sigil ${d.charge === 'sigil' && d.ref && d.ref.id === s.id ? 'on' : ''}" data-sigil="${s.id}" title="Sigil: ${esc(s.title)}"><svg viewBox="-104 -104 208 208">${B.sigils.sigilG(Object.assign(B.sigils.blank(), s.data || {}), null, 'currentColor')}</svg></button>`).join('')}</div>
+        <div id="ar-symbols"></div>
         ${runes.length || sigils.length ? '' : '<p class="bm-help">Runes and sigils you make in Build show up here too.</p>'}
-        ${d.charge !== 'none' ? `<div class="field"><label>How many</label><div class="chip-row" id="ar-count">${[1, 2, 3, 4].map(n => `<button type="button" class="chip ${d.count === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}</div></div>${sw('t4', 'Symbol colour')}
+        ${d.charge !== 'none' ? `<div class="field"><label>How many</label><div class="chip-row" id="ar-count">${[1, 2, 3, 4].map(n => `<button type="button" class="chip ${d.count === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}</div></div><div class="ar-sw" data-key="t4"></div>
           <div class="field"><label>Arrangement</label><div class="chip-row" id="ar-layout">${layoutsFor(d.count || 1).map(k => `<button type="button" class="chip ${(d.layout || 'auto') === k || (!layoutsFor(d.count || 1).includes(d.layout || 'auto') && k === 'auto') ? 'on' : ''}" data-layout="${k}">${k === 'custom' ? '✋ ' : ''}${LAYOUTS[k][0]}</button>`).join('')}</div>
-            ${d.layout === 'custom' ? '<p class="bm-help">Drag the symbols on the shield to move them. Pick another arrangement to go back.</p>' : ''}</div>
-          <div class="field"><label>Size <small id="ar-size-v">${Math.round((+d.size || 1) * 100)}%</small></label><input type="range" id="ar-size" min="40" max="180" step="5" value="${Math.round((+d.size || 1) * 100)}"></div>` : ''}
-        ${SYM ? `<h3>More symbols</h3>
-          <div class="ar-extras">${(d.extras || []).map((e, i) => { const D = SYM.get(e.k); return D ? `<div class="ar-ex" data-i="${i}"><span class="ar-ex-ic">${SYM.icon(e.k)}</span><span class="ar-ex-n">${esc(D.label)}</span>
-            <select data-ex-t aria-label="Colour">${Object.entries(T).map(([k, v]) => `<option value="${k}" ${e.t === k ? 'selected' : ''}>${v[0]} (${v[1]})</option>`).join('')}</select>
-            <input type="range" data-ex-s min="15" max="120" step="5" value="${Math.round(e.s * 100)}" aria-label="Size"><button type="button" class="icon-btn small" data-ex-del title="Remove">×</button></div>` : ''; }).join('')}</div>
-          <button type="button" class="btn small" id="ar-ex-add">+ Add a symbol</button>
-          ${(d.extras || []).length ? '<p class="bm-help">Drag them on the shield to place them.</p>' : '<p class="bm-help">Add as many as you like, each in its own colour and size: a crow on a tower, a numeral, a second beast.</p>'}` : ''}
+            <p class="bm-help">${d.layout === 'custom' ? 'Drag the symbols on the shield to move them. Pick another arrangement to go back.' : 'Tap a symbol on the shield for its size and turn handles. Dragging one moves it to Where I put them.'}</p></div>
+          <div class="field"><label>Size <small id="ar-size-v">${pct(+d.size || 1)}%</small></label><input type="range" id="ar-size" min="40" max="180" step="1" value="${pct(+d.size || 1)}"></div>
+          <div class="field"><label>Turn <small id="ar-rot-v">${deg(d.rot)}</small></label><input type="range" id="ar-rot" min="-180" max="180" step="5" value="${Math.round(+d.rot || 0)}"></div>` : ''}
+        ${SYM ? `<h3>More symbols</h3><div class="kit-items" id="ar-extras"></div>
+          <button type="button" class="btn small" id="ar-ex-add">+ Add a symbol</button>` : ''}
         <h3>Motto</h3><div class="field"><input id="ar-motto" value="${esc(d.motto || '')}" placeholder="e.g. We do not kneel"></div>
-        ${(d.motto || '').trim() ? `<label class="bd-check"><input type="checkbox" id="ar-mon" ${d.mottoOn ? 'checked' : ''}> Show the motto on a ribbon</label>${sw('mottoCol', 'Ribbon colour')}` : ''}
+        ${(d.motto || '').trim() ? `<label class="bd-check"><input type="checkbox" id="ar-mon" ${d.mottoOn ? 'checked' : ''}> Show the motto on a ribbon</label>
+          ${d.mottoOn ? `<div class="field"><label>Ribbon</label><div class="ar-ribbons">${Object.entries(RIBBONS).map(([k, n]) => `<button type="button" class="ar-rib ${(d.ribbon || 'swallow') === k ? 'on' : ''}" data-rib="${k}" title="${n}" aria-label="${n}">${ribbonIcon(k)}<span>${n}</span></button>`).join('')}</div></div>
+          <div id="ar-rcol"></div><div id="ar-rink"></div>` : ''}` : ''}
       </aside></div>`;
+    const shield = $('#ar-shield', box);
+    const pic = () => shield.querySelector('svg:not(.kit-ov)');
+    hd = K.handles(shield, { picture: pic, items, sel: () => sel, select: id => { sel = id; extrasList(); }, change, body: true, bounds: [0, 0, 200, 244] });
     paint();
     box.querySelector('.ar-side').scrollTop = keepSide; box.scrollTop = keepMain;
     const re = () => { drawAll(); ctx.changed(); };
     $$('.ar-shape', box).forEach(b => b.onclick = () => { d.shape = b.dataset.shape; re(); });
     $('#ar-div', box).onchange = e => { d.div = e.target.value; re(); };
     $('#ar-ord', box).onchange = e => { d.ord = e.target.value; re(); };
-    $$('.ar-sw', box).forEach(s => $$('.ar-t', s).forEach(b => b.onclick = () => { d[s.dataset.key] = b.dataset.t; re(); }));
-    $$('.ar-ch', box).forEach(b => b.onclick = async () => {
-      if (b.id === 'ar-all') { const k = await SYM.pick({ title: 'The main symbol', current: d.charge }); if (!k) return; d.charge = k; d.ref = null; return re(); }
-      if (b.dataset.rune) { const [rid, gid] = b.dataset.rune.split('|'); d.charge = 'rune'; d.ref = { id: rid, glyph: gid }; }
-      else if (b.dataset.sigil) { d.charge = 'sigil'; d.ref = { id: b.dataset.sigil }; }
-      else { d.charge = b.dataset.ch; d.ref = null; }
-      await loadRef(); re();
-    });
-    $$('#ar-count .chip', box).forEach(b => b.onclick = () => { d.count = +b.dataset.n; if (d.layout === 'custom') d.pos = null, d.layout = 'auto'; re(); });
+    $$('.ar-sw', box).forEach(s => { const k = s.dataset.key; mountTinct(s, () => d[k], v => { d[k] = v; paint(); ctx.changed(); }); });
+    K.symbols($('#ar-symbols', box), { id: 'arms', cats: chargeCats(), current: chargeKey(), none: 'None', onPick: async k => {
+      const had = d.charge !== 'none';
+      if (k.startsWith('rune:')) { const [rid, gid] = k.slice(5).split('|'); d.charge = 'rune'; d.ref = { id: rid, glyph: gid }; }
+      else if (k.startsWith('sigil:')) { d.charge = 'sigil'; d.ref = { id: k.slice(6) }; }
+      else { d.charge = k; d.ref = null; }
+      await loadRef();
+      if (had !== (d.charge !== 'none')) re(); else { paint(); ctx.changed(); }
+    } });
+    $$('#ar-count .chip', box).forEach(b => b.onclick = () => { d.count = +b.dataset.n; if (d.layout === 'custom') d.pos = null, d.layout = 'auto'; sel = null; re(); });
     $$('#ar-layout .chip', box).forEach(b => b.onclick = () => {
       const L = b.dataset.layout;
-      if (L === 'custom' && d.layout !== 'custom') { const cur = [...$('#ar-shield', box).querySelectorAll('[data-chi]')].map(g => [+g.dataset.x, +g.dataset.y]); d.pos = cur; }
+      if (L === 'custom' && d.layout !== 'custom') d.pos = placed();
       d.layout = L; re();
     });
     const add = $('#ar-ex-add', box);
     if (add) add.onclick = async () => {
-      const k = await SYM.pick({ title: 'Add a symbol' }); if (!k) return;
+      const k = await K.pickSymbol({ id: 'arms-more', title: 'Add a symbol' }); if (!k) return;
       const n = (d.extras || []).length, metal = T[d.t1] && T[d.t1][3] === 'metal';
-      d.extras = [...(d.extras || []), { k, t: metal ? 'sable' : 'or', x: 100 + ((n % 3) - 1) * 30, y: 118 + (Math.floor(n / 3) % 3) * 26 - 26, s: .45 }];
-      re();
+      d.extras = [...(d.extras || []), { k, t: metal ? 'sable' : 'or', x: 100 + ((n % 3) - 1) * 30, y: 118 + (Math.floor(n / 3) % 3) * 26 - 26, s: .45, r: 0 }];
+      sel = 'e' + (d.extras.length - 1);
+      paint(); extrasList(); ctx.changed();
     };
-    $$('.ar-ex', box).forEach(row => {
-      const e = () => d.extras[+row.dataset.i];
-      row.querySelector('[data-ex-t]').onchange = ev => { e().t = ev.target.value; paint(); ctx.changed(); };
-      row.querySelector('[data-ex-s]').oninput = ev => { e().s = +ev.target.value / 100; paint(); ctx.changed(); };
-      row.querySelector('[data-ex-del]').onclick = () => { d.extras.splice(+row.dataset.i, 1); re(); };
-    });
     const size = $('#ar-size', box); if (size) size.oninput = () => { d.size = +size.value / 100; $('#ar-size-v', box).textContent = size.value + '%'; paint(); ctx.changed(); };
+    const rot = $('#ar-rot', box); if (rot) rot.oninput = () => { d.rot = +rot.value; $('#ar-rot-v', box).textContent = deg(d.rot); paint(); ctx.changed(); };
     $('#ar-motto', box).oninput = e => { const had = !!(d.motto || '').trim(); d.motto = e.target.value; paint(); ctx.changed(); if (had !== !!d.motto.trim()) { const pos = e.target.selectionStart; drawAll(); const m = $('#ar-motto', box); m.focus(); m.setSelectionRange(pos, pos); } };
-    const mon = $('#ar-mon', box); if (mon) mon.onchange = e => { d.mottoOn = e.target.checked; paint(); ctx.changed(); };
+    const mon = $('#ar-mon', box); if (mon) mon.onchange = e => { d.mottoOn = e.target.checked; drawAll(); ctx.changed(); };
+    $$('.ar-rib', box).forEach(b => b.onclick = () => { d.ribbon = b.dataset.rib; $$('.ar-rib', box).forEach(x => x.classList.toggle('on', x === b)); paint(); ctx.changed(); });
+    if ($('#ar-rcol', box)) K.colours($('#ar-rcol', box), { label: 'Ribbon colour', value: ribbonCol(d), picture: pic, onPick: h => { d.ribbonHex = h; paint(); ctx.changed(); } });
+    if ($('#ar-rink', box)) K.colours($('#ar-rink', box), { label: 'Letters', value: d.mottoInk || '', reset: 'Automatic', picture: pic, onPick: h => { d.mottoInk = h; paint(); ctx.changed(); } });
+    extrasList();
+  }
+  // where the main symbols are drawn right now (after they're kept inside the shield)
+  const placed = () => [...$('#ar-shield', box).querySelectorAll('[data-chi]')].map(g => [+g.dataset.x, +g.dataset.y]);
+  // what can be selected on the shield: each main symbol (size and turn are shared by all of them) and each extra
+  function items() {
+    const out = [], sz = +d.size || 1, sh = box && $('#ar-shield', box);
+    if (sh && d.charge !== 'none') sh.querySelectorAll('[data-chi]').forEach(g => out.push({ id: 'c' + g.dataset.chi, x: +g.dataset.x, y: +g.dataset.y, s: sz, r: R0 * (+g.dataset.s) / sz, rot: +d.rot || 0, min: 0.4, max: 1.8 }));
+    (d.extras || []).forEach((e, i) => { if (SYM && SYM.get(e.k)) out.push({ id: 'e' + i, x: +e.x, y: +e.y, s: +e.s, r: 44, rot: +e.r || 0, min: 0.15, max: 1.2 }); });
+    return out;
+  }
+  // a handle was dragged: the shield and the sliders follow
+  function change(id, v, done) {
+    if (id[0] === 'c') {
+      const i = +id.slice(1), was = placed()[i] || [v.x, v.y];
+      if (Math.abs(v.x - was[0]) > 0.05 || Math.abs(v.y - was[1]) > 0.05) {
+        if (d.layout !== 'custom') { d.pos = placed(); d.layout = 'custom'; $$('#ar-layout .chip', box).forEach(b => b.classList.toggle('on', b.dataset.layout === 'custom')); }
+        d.pos = Array.isArray(d.pos) ? d.pos : placed(); d.pos[i] = [v.x, v.y];
+      }
+      d.size = v.s; d.rot = v.rot;
+      const s = $('#ar-size', box), r = $('#ar-rot', box);
+      if (s) { s.value = Math.round(d.size * 100); $('#ar-size-v', box).textContent = s.value + '%'; }
+      if (r) { r.value = Math.round(d.rot); $('#ar-rot-v', box).textContent = `${Math.round(d.rot)}°`; }
+    } else {
+      const e = d.extras[+id.slice(1)]; if (!e) return;
+      e.x = v.x; e.y = v.y; e.s = v.s; e.r = v.rot;
+      const row = box.querySelector(`#ar-extras .kit-item[data-i="${id.slice(1)}"]`);
+      if (row) { const s = row.querySelector('[data-ex-s]'), r = row.querySelector('[data-ex-r]'); if (s) { s.value = Math.round(e.s * 100); row.querySelector('[data-ex-sv]').textContent = s.value + '%'; } if (r) { r.value = Math.round(e.r); row.querySelector('[data-ex-rv]').textContent = `${Math.round(e.r)}°`; } }
+    }
+    paint();
+    if (done) ctx.changed();
+  }
+  // the extra symbols: a row each; the selected one opens with its colour, size and turn
+  function extrasList() {
+    const el = box && $('#ar-extras', box); if (!el) { if (hd) hd.refresh(); return; }
+    const list = d.extras || [];
+    el.innerHTML = list.map((e, i) => { const D = SYM.get(e.k); if (!D) return ''; const on = sel === 'e' + i;
+      return `<div class="kit-item ${on ? 'on' : ''}" data-i="${i}"><div class="kit-item-head" data-pick><span class="kit-item-ic">${SYM.icon(e.k)}</span><span class="kit-item-n">${esc(D.label)}</span><span class="kit-dot" style="--c:${col(e.t)}" title="${esc(tn(e.t))}"></span><button type="button" class="icon-btn small" data-ex-del title="Remove" aria-label="Remove">×</button></div>
+        ${on ? `<div class="kit-item-body"><div class="ar-sw" data-ex-t></div>
+          <label class="kit-sl">Size <small data-ex-sv>${Math.round(e.s * 100)}%</small><input type="range" data-ex-s min="15" max="120" step="1" value="${Math.round(e.s * 100)}"></label>
+          <label class="kit-sl">Turn <small data-ex-rv>${Math.round(+e.r || 0)}°</small><input type="range" data-ex-r min="-180" max="180" step="5" value="${Math.round(+e.r || 0)}"></label></div>` : ''}</div>`; }).join('')
+      + `<p class="bm-help">${list.length ? 'Tap one here or on the shield to change it. Drag it on the shield to move it; the corner handle sizes it and the round one turns it.' : 'Add as many as you like, each in its own colour and size: a crow on a tower, a numeral, a second beast.'}</p>`;
+    $$('.kit-item', el).forEach(row => {
+      const i = +row.dataset.i, e = () => d.extras[i];
+      row.querySelector('[data-pick]').onclick = ev => { if (ev.target.closest('[data-ex-del]')) return; sel = sel === 'e' + i ? null : 'e' + i; extrasList(); };
+      row.querySelector('[data-ex-del]').onclick = () => { d.extras.splice(i, 1); sel = null; paint(); extrasList(); ctx.changed(); };
+      const t = row.querySelector('[data-ex-t]'); if (t) mountTinct(t, () => e().t, v => { e().t = v; paint(); ctx.changed(); row.querySelector('.kit-dot').style.setProperty('--c', col(v)); });
+      const s = row.querySelector('[data-ex-s]'); if (s) s.oninput = () => { e().s = +s.value / 100; row.querySelector('[data-ex-sv]').textContent = s.value + '%'; paint(); ctx.changed(); };
+      const r = row.querySelector('[data-ex-r]'); if (r) r.oninput = () => { e().r = +r.value; row.querySelector('[data-ex-rv]').textContent = r.value + '°'; paint(); ctx.changed(); };
+    });
+    if (hd) hd.refresh();
   }
   function paint() {
     const sh = $('#ar-shield', box);
+    const ov = sh.querySelector('.kit-ov');
     sh.innerHTML = armsSVG(d, refs);
-    sh.classList.toggle('dragging-on', d.layout === 'custom');
-    if (d.layout === 'custom') dragCharges(sh);
-    dragExtras(sh);
+    if (ov) sh.appendChild(ov);
+    if (sel && !items().some(i => i.id === sel)) sel = null;
+    if (hd) hd.refresh();
     $('#ar-blazon', box).innerHTML = `<small>The herald’s description</small><p>${esc(blazon(d, refs))}</p>`;
     const notes = tinctureNotes(d);
     $('#ar-warn', box).innerHTML = notes.length ? `<b>Heralds’ rule of colour</b><p>Metal (gold, silver) goes on colour, and colour on metal, so arms can be read from far away. Here ${esc(notes.join('; '))}. It’s your world, so break the rule if you mean to: real arms sometimes do.</p>` : '';
-  }
-  // "Where I put them": drag a symbol on the shield (mouse or finger); it stays inside the shield
-  function dragCharges(sh) {
-    const svg = sh.querySelector('svg'); if (!svg) return;
-    svg.querySelectorAll('[data-chi]').forEach(g => g.addEventListener('pointerdown', e => {
-      e.preventDefault();
-      const m = svg.getScreenCTM(); if (!m) return;
-      const inv = m.inverse(), pt = svg.createSVGPoint();
-      const at = ev => { pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(inv); return [Math.max(0, Math.min(200, p.x)), Math.max(0, Math.min(244, p.y))]; };
-      const [sx, sy] = at(e), ox = +g.dataset.x - sx, oy = +g.dataset.y - sy, s = +g.dataset.s;
-      svg.setPointerCapture(e.pointerId);
-      const move = ev => { const [x, y] = at(ev); g.dataset.x = (x + ox).toFixed(1); g.dataset.y = (y + oy).toFixed(1); g.setAttribute('transform', `translate(${g.dataset.x} ${g.dataset.y}) scale(${s})`); };
-      const up = () => {
-        svg.removeEventListener('pointermove', move); svg.removeEventListener('pointerup', up); svg.removeEventListener('pointercancel', up);
-        d.pos = [...svg.querySelectorAll('[data-chi]')].map(x => [+x.dataset.x, +x.dataset.y]);
-        paint(); ctx.changed();
-      };
-      svg.addEventListener('pointermove', move); svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
-    }));
-  }
-  // the extra symbols can always be dragged
-  function dragExtras(sh) {
-    const svg = sh.querySelector('svg'); if (!svg) return;
-    svg.querySelectorAll('[data-exi]').forEach(g => { g.style.cursor = 'grab'; g.addEventListener('pointerdown', e => {
-      e.preventDefault(); e.stopPropagation();
-      const m = svg.getScreenCTM(); if (!m) return;
-      const inv = m.inverse(), pt = svg.createSVGPoint();
-      const at = ev => { pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(inv); return [Math.max(0, Math.min(200, p.x)), Math.max(0, Math.min(244, p.y))]; };
-      const [sx, sy] = at(e), ox = +g.dataset.x - sx, oy = +g.dataset.y - sy, s = +g.dataset.s, i = +g.dataset.exi;
-      svg.setPointerCapture(e.pointerId);
-      const move = ev => { const [x, y] = at(ev); g.dataset.x = (x + ox).toFixed(1); g.dataset.y = (y + oy).toFixed(1); g.setAttribute('transform', `translate(${g.dataset.x} ${g.dataset.y}) scale(${s})`); };
-      const up = () => {
-        svg.removeEventListener('pointermove', move); svg.removeEventListener('pointerup', up); svg.removeEventListener('pointercancel', up);
-        if (d.extras[i]) { d.extras[i].x = +g.dataset.x; d.extras[i].y = +g.dataset.y; }
-        paint(); ctx.changed();
-      };
-      svg.addEventListener('pointermove', move); svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
-    }); });
   }
   async function refsFor(item) { const r = item.data && item.data.ref; return { item: r && r.id ? await B.get(r.id) : null }; }
   B.editors.arms = {
@@ -406,7 +470,7 @@
       const c = await B.svgCanvas(armsSVG(dd, r, 700), Math.round(700 * 200 / H), 700);
       return `<p><img src="${c.toDataURL('image/png')}" alt="Arms of ${esc(item.title)}" width="280"></p><p><i>${esc(blazon(dd, r))}</i></p>${(dd.motto || '').trim() ? `<p>Motto: “${esc(dd.motto)}”</p>` : ''}`;
     },
-    close: () => { it = null; box = null; d = null; }
+    close: () => { if (hd) { hd.destroy(); hd = null; } it = null; box = null; d = null; sel = null; }
   };
   B.arms = { armsSVG, blazon, blank, randomArms };
 })();

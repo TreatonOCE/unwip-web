@@ -606,6 +606,21 @@ window.UnwipBookImport = (function () {
   }
   async function fromFolder(ctx = {}) {
     const res = await api.importFolder(); if (!res) return;
+    if (res.unwipBook) { U.toast('That’s an Unwip book folder. On an iPhone or iPad, books come in through Dropbox (Settings › Where your books live), not Import.', 'warn', 9000); return; }
+    if (res.books && res.books.length) {
+      // an Unwip book (or a folder of them): bring the books in as books, not their files as chapters
+      const n = res.books.length;
+      const ok = await U.modal({ title: n === 1 ? 'This is an Unwip book' : `${n} Unwip books in this folder`, body: `<p>${n === 1 ? `<b>${esc(res.books[0].title)}</b> is already an Unwip book, so it comes in as it is: chapters, characters, sheets, snapshots and pictures.` : `They come in as they are: ${res.books.map(b => `<b>${esc(b.title)}</b>`).join(', ')}.`} Each one is a copy; the folder you picked isn’t changed.${res.build ? ' The Build pieces next to it (maps, systems, runes…) come in too, apart from any you already have.' : ''}</p>`,
+        buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: n === 1 ? 'Add the book' : `Add ${n} books`, value: true, kind: 'primary' }] });
+      if (!ok) return;
+      try {
+        const r = await api.importUnwipBooks(res.books.map(b => b.path), res.build);
+        U.toast(`${r.slugs.length === 1 ? 'Book added' : r.slugs.length + ' books added'}${r.pieces ? `, with ${r.pieces} Build piece${r.pieces === 1 ? '' : 's'}` : ''}.`);
+        if (window.UnwipBuild && window.UnwipBuild.refresh) try { await window.UnwipBuild.refresh(); } catch {}
+        close(); await U.showLibrary();
+      } catch (e) { U.toast('Couldn’t bring that book in: ' + esc(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), 'warn', 8000); }
+      return;
+    }
     if (!res.files.length) { U.toast('That folder has no Word, text, RTF or Markdown files in it.', 'warn', 6000); return; }
     const sources = await readFiles(res.files); if (!sources.length) return;
     return preview(sources, { ...ctx, folder: res.folder, title: res.folder, from: 'Folder' });

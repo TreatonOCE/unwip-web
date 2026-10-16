@@ -132,6 +132,7 @@
           <div class="bm-pic-opts">
             <label>Style</label><div class="chip-row">${Object.entries(LOOKS).map(([k, v]) => `<button type="button" class="chip ${lookOf(d).theme === k ? 'on' : ''}" data-look-theme="${k}"><i class="bm-sw" style="background:${v.bg};border-color:${v.line}"></i>${v.name}</button>`).join('')}</div>
             <label>Border</label><div class="chip-row">${[['double', 'Double line'], ['ornate', 'Ornate'], ['none', 'None']].map(([k, n]) => `<button type="button" class="chip ${lookOf(d).frame === k ? 'on' : ''}" data-look-frame="${k}">${n}</button>`).join('')}</div>
+            <label>Accent</label><div id="bm-acc"></div>
             <label>Show</label><div class="bm-pic-show">${[['summary', 'The summary (question 1)'], ['costs', 'Costs'], ['kinds', 'Kinds of magic'], ['count', 'Number of spells']].map(([k, n]) => `<label class="check"><input type="checkbox" data-look-show="${k}" ${lookOf(d)[k] ? 'checked' : ''}> ${n}</label>`).join('')}</div>
           </div></div>
       </section>
@@ -139,6 +140,8 @@
       <section class="bm-card"><h2>Notes</h2><textarea data-notes rows="5" placeholder="Anything else: history, famous casters, what’s secret…">${esc(d.notes || '')}</textarea></section>`;
     box.scrollTop = keepY;
     wire(page);
+    // the shared colour row: the accent of the picture (empty is the style's own), with a pipette on the picture
+    window.UnwipKit.colours($('#bm-acc', page), { value: lookOf(d).accent, reset: 'Style colour', picture: () => $('#bm-pic img', box), onPick: h => { d.look = Object.assign(lookOf(d), { accent: h }); save(); drawPic(); } });
     drawPic();
   }
   function drawPic() { const b = box && $('#bm-pic', box); if (b) b.innerHTML = `<img alt="" src="${B.svgURL(cardSVG(it, 800, 500))}">`; }
@@ -274,7 +277,9 @@
     blood: { name: 'Blood', bg: '#2a1012', ink: '#f6e6dc', soft: '#d8b4a8', line: '#a8342e', accent: '#ff8a5c', disc: '#3a171a' },
     system: { name: 'System', bg: '#07101e', ink: '#e6f6ff', soft: '#8fb6cf', line: '#5fd0ff', accent: '#ffd36b', disc: '#0c1a2c' }
   };
-  const lookOf = d => Object.assign({ theme: 'parchment', frame: 'double', summary: true, costs: true, kinds: true, count: true }, d.look || {});
+  // accent: a colour picked for the marks (seal, first letter, costs); empty uses the style's own
+  const lookOf = d => Object.assign({ theme: 'parchment', frame: 'double', summary: true, costs: true, kinds: true, count: true, accent: '' }, d.look || {});
+  const withAccent = (P, L) => /^#[0-9a-f]{6}$/i.test(L.accent || '') ? Object.assign({}, P, { accent: L.accent }) : P;
   // ---- the System look: drawn like a game's status window (LitRPG), monospace, glowing lines, bars for costs
   const MONO = "'IBM Plex Mono', Menlo, Consolas, monospace";
   const GLOW = '<defs><filter id="bm-glow" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
@@ -299,7 +304,7 @@
   }
   const bar = (x, y, n, P) => [1, 2, 3, 4, 5].map(i => `<rect x="${x + (i - 1) * 16}" y="${y - 11}" width="12" height="12" fill="${i <= n ? P.line : 'none'}" stroke="${P.line}" stroke-width="1" opacity="${i <= n ? 1 : .45}"/>`).join('');
   function systemCardSVG(item, d, L, w, h) {
-    const P = LOOKS.system, x = s => esc(s || '');
+    const P = withAccent(LOOKS.system, L), x = s => esc(s || '');
     const sum = L.summary ? wrapW(d.answers.summary, 62, 2) : [];
     const costs = L.costs ? d.costs.slice(0, 4) : [], kinds = L.kinds ? d.elements.filter(e => (e.name || '').trim()).slice(0, 6) : [];
     let y = 128;
@@ -338,10 +343,83 @@
     const v = await U.modal({ title: s.name || 'Spell', body, wide: true, buttons: [{ label: 'Copy text', kind: 'ghost', onClick: copy }, { label: 'Copy picture', value: 'copy', kind: 'ghost' }, { label: 'Save PNG…', value: 'png', kind: 'ghost' }, { label: 'Close', value: null, kind: 'primary' }] });
     if (v) { const svg = spellSVG(d, s, 1280), m = /height="(\d+)"/.exec(svg.slice(svg.indexOf('width="1280"'))); const c = await B.svgCanvas(svg, 1280, m ? +m[1] : 600); if (v === 'copy') B.copyCanvas(c); else B.savePNG(c, s.name || 'Spell'); }
   }
+  // ---- the Parchment look: a written document rather than a card. A scroll with rolled ends and deckled sides,
+  // an illuminated first letter, ink-ruled lines, the costs as a ledger, kinds of magic as marks in the margin, and a
+  // wax seal. Everything is drawn here (no picture files); the edges come from the name, so they stay the same.
+  const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+  const seeded = str => { let h = 2166136261; for (const c of String(str || 'unwip')) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return () => { h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489917) >>> 0; return ((h ^= h >>> 16) >>> 0) / 4294967296; }; };
+  // a small mark for a kind of magic, made from its name: a ring, a few strokes from the middle, a dot
+  function kindMark(name, col) {
+    const r = seeded('kind' + name), n = 2 + Math.floor(r() * 3), a0 = r() * Math.PI * 2;
+    let p = ''; for (let i = 0; i < n; i++) { const a = a0 + i * Math.PI * 2 / n + (r() - .5) * .5, l = 7 + r() * 6; p += `M0 0L${(Math.cos(a) * l).toFixed(1)} ${(Math.sin(a) * l).toFixed(1)}`; }
+    const cut = r() < .5 ? `<path d="M-13 0H13" stroke="${col}" stroke-width="1"/>` : `<circle r="4" fill="none" stroke="${col}" stroke-width="1.2"/>`;
+    return `<circle r="13" fill="none" stroke="${col}" stroke-width="1.6"/><path d="${p}" stroke="${col}" stroke-width="1.8" stroke-linecap="round"/>${cut}<circle cx="${(Math.cos(a0) * 9).toFixed(1)}" cy="${(Math.sin(a0) * 9).toFixed(1)}" r="1.8" fill="${col}"/>`;
+  }
+  function parchmentSVG(item, d, L, P, w, h) {
+    const x = s => esc(s || ''), rnd = seeded(item.title || 'Magic system'), F = 'Bookhaven, Georgia, serif';
+    // the sheet: rolled at the top and bottom, deckled (torn-looking) down the sides
+    const top = 40, bot = 460, left = [], right = [];
+    for (let y = top; y <= bot; y += 12) { left.push([74 + rnd() * 9 - (y % 36 === 4 ? 4 : 0), y]); right.push([726 - rnd() * 9 + (y % 48 === 4 ? 4 : 0), y]); }
+    const sheet = 'M' + right.concat([...left].reverse()).map(([px, py]) => `${px.toFixed(1)} ${py}`).join('L') + 'Z';
+    const roll = y => `<rect x="54" y="${y - 15}" width="692" height="30" rx="15" fill="url(#pm-roll)" stroke="${P.line}" stroke-width="1.6"/><path d="M68 ${y - 6}H732" stroke="#fff" stroke-width="2" opacity=".25"/>
+      ${[42, 758].map(cx => `<ellipse cx="${cx}" cy="${y}" rx="13" ry="19" fill="${P.line}" stroke="${P.ink}" stroke-width="1.4"/><ellipse cx="${cx}" cy="${y}" rx="5" ry="8" fill="${P.ink}" opacity=".5"/>`).join('')}`;
+    const defs = `<defs><linearGradient id="pm-roll" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9d6ad"/><stop offset=".45" stop-color="${P.bg}"/><stop offset="1" stop-color="#b99a62"/></linearGradient>
+      <radialGradient id="pm-age" cx="50%" cy="48%" r="62%"><stop offset=".62" stop-color="${P.line}" stop-opacity="0"/><stop offset="1" stop-color="${P.line}" stop-opacity=".32"/></radialGradient></defs>`;
+    // the border inside the sheet
+    const bx0 = 100, bx1 = 700, by0 = 66, by1 = 434;
+    const curl = (cx, cy, sx, sy) => `<path transform="translate(${cx} ${cy}) scale(${sx} ${sy})" d="M0 22V6Q0 0 6 0H22M4 30C4 14 14 4 30 4M10 18a6 6 0 1 1 6 -6" fill="none" stroke="${P.line}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const border = L.frame === 'none' ? '' : L.frame === 'ornate'
+      ? `<rect x="${bx0}" y="${by0}" width="${bx1 - bx0}" height="${by1 - by0}" fill="none" stroke="${P.line}" stroke-width="1.4"/>${curl(bx0 + 6, by0 + 6, 1, 1)}${curl(bx1 - 6, by0 + 6, -1, 1)}${curl(bx0 + 6, by1 - 6, 1, -1)}${curl(bx1 - 6, by1 - 6, -1, -1)}
+        <path d="M370 ${by0}q15 -12 30 0q15 -12 30 0" fill="none" stroke="${P.line}" stroke-width="1.4"/><circle cx="400" cy="${by0}" r="3" fill="${P.accent}"/>`
+      : `<rect x="${bx0}" y="${by0}" width="${bx1 - bx0}" height="${by1 - by0}" fill="none" stroke="${P.line}" stroke-width="1.6"/><rect x="${bx0 + 5}" y="${by0 + 5}" width="${bx1 - bx0 - 10}" height="${by1 - by0 - 10}" fill="none" stroke="${P.line}" stroke-width=".7"/>`;
+    // the title: an illuminated first letter in a box, then the rest of the name in ink
+    const title = String(item.title || 'Magic system').trim() || 'Magic system', first = title[0].toUpperCase(), rest = title.slice(1);
+    const tfs = Math.max(22, Math.min(42, 470 / Math.max(6, rest.length * 0.52)));
+    const cap = `<g transform="translate(120 84)"><rect width="64" height="64" fill="${P.accent}" stroke="${P.line}" stroke-width="2"/><rect x="4" y="4" width="56" height="56" fill="none" stroke="#e8c770" stroke-width="1.2"/>
+      ${[[8, 8], [56, 8], [8, 56], [56, 56]].map(([cx, cy]) => `<path d="M${cx} ${cy - 3}L${cx + 3} ${cy}L${cx} ${cy + 3}L${cx - 3} ${cy}Z" fill="#e8c770"/>`).join('')}
+      <text x="32" y="48" text-anchor="middle" font-family="${F}" font-size="46" fill="${P.bg}">${x(first)}</text></g>`;
+    const name = `<text x="194" y="132" font-family="${F}" font-size="${tfs.toFixed(1)}" fill="${P.ink}"${rest.length * tfs * 0.52 > 480 ? ' textLength="480" lengthAdjust="spacingAndGlyphs"' : ''}>${x(rest)}</text>`;
+    // the summary, written on ruled lines
+    const sum = L.summary ? wrapW(d.answers.summary, 54, 3) : [];
+    let y = 176;
+    const rule = yy => `<path d="M120 ${yy + 6}H680" stroke="${P.line}" stroke-width=".7" opacity=".45"/>`;
+    let body = sum.map((l, i) => `${rule(y + i * 28)}<text x="124" y="${y + i * 28}" font-family="${F}" font-style="italic" font-size="20" fill="${P.soft}">${x(l)}</text>`).join('');
+    y += sum.length ? sum.length * 28 + 22 : 8;
+    // the costs: a ledger, name, dotted leader, then the weight in numerals and words
+    const kinds = L.kinds ? d.elements.filter(e => (e.name || '').trim()).slice(0, 6) : [];
+    const costs = L.costs ? d.costs.slice(0, 5) : [];
+    const ledgerR = kinds.length ? 500 : 680;
+    if (costs.length) {
+      body += `<text x="124" y="${y}" font-family="${F}" font-size="14" letter-spacing="3" fill="${P.line}">THE PRICE OF IT</text><path d="M124 ${y + 7}H${ledgerR}" stroke="${P.line}" stroke-width="1.2"/>`;
+      y += 32;
+      costs.forEach(c => {
+        const nm = (c.name || 'unnamed').slice(0, 22), right = `${ROMAN[c.weight || 1] || ''} · ${WEIGHT[c.weight] || ''}`;
+        const l0 = 138 + nm.length * 11.6, l1 = ledgerR - right.length * 8.6 - 10;
+        body += `${rule(y)}<text x="124" y="${y}" font-family="${F}" font-size="19" fill="${P.ink}">${x(nm)}</text>
+          ${l1 > l0 + 8 ? `<path d="M${l0.toFixed(1)} ${y - 2}H${l1.toFixed(1)}" stroke="${P.soft}" stroke-width="1.6" stroke-dasharray="1 5" stroke-linecap="round" opacity=".7"/>` : ''}
+          <text x="${ledgerR}" y="${y}" text-anchor="end" font-family="${F}" font-style="italic" font-size="17" fill="${P.accent}">${x(right)}</text>`;
+        y += 30;
+      });
+    }
+    // kinds of magic: marks down the right margin, each with its name
+    const ky = sum.length ? 176 + sum.length * 28 + 22 : 184;
+    const marks = kinds.map((k, i) => `<g transform="translate(548 ${ky + 4 + i * 40})">${kindMark(k.name, P.accent)}</g><text x="570" y="${ky + 10 + i * 40}" font-family="${F}" font-style="italic" font-size="16" fill="${P.ink}">${x(k.name.slice(0, 14))}</text>`).join('');
+    // a wax seal on the bottom edge, with the first letter pressed into it
+    const sr = seeded('seal' + title); let blob = '';
+    for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2, r0 = 33 + sr() * 5; blob += `${i ? 'L' : 'M'}${(Math.cos(a) * r0).toFixed(1)} ${(Math.sin(a) * r0).toFixed(1)}`; }
+    const seal = `<g transform="translate(664 432)"><path d="M-12 22L-22 62L-10 54L-2 64L4 24Z" fill="${P.accent}" opacity=".85"/><path d="M8 22L22 60L28 50L38 56L24 18Z" fill="${P.accent}" opacity=".7"/>
+      <path d="${blob}Z" fill="${P.accent}" stroke="${P.ink}" stroke-width="1" stroke-opacity=".35"/><circle r="23" fill="none" stroke="#000" stroke-opacity=".25" stroke-width="2"/><circle r="20" fill="none" stroke="#fff" stroke-opacity=".25" stroke-width="1"/>
+      <text y="10" text-anchor="middle" font-family="${F}" font-size="28" fill="#000" fill-opacity=".35">${x(first)}</text></g>`;
+    const count = L.count ? `<text x="124" y="420" font-family="${F}" font-style="italic" font-size="16" fill="${P.line}">Set down here: ${d.spells.length} spell${d.spells.length === 1 ? '' : 's'}, ${d.elements.length} kind${d.elements.length === 1 ? '' : 's'} of magic.</text>` : '';
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="${w}" height="${h}">${defs}
+      <path d="${sheet}" fill="${P.bg}" stroke="${P.line}" stroke-width="1.2" stroke-opacity=".6"/><path d="${sheet}" fill="url(#pm-age)"/>
+      ${roll(top)}${roll(bot)}${border}${cap}${name}${body}${marks}${count}${seal}</svg>`;
+  }
   // a picture: a card with the name, the one-line summary, the costs and the kinds of magic
   function cardSVG(item, w = 800, h = 500) {
-    const d = Object.assign(blank(), item.data || {}), L = lookOf(d), P = LOOKS[L.theme] || LOOKS.parchment;
+    const d = Object.assign(blank(), item.data || {}), L = lookOf(d), P = withAccent(LOOKS[L.theme] || LOOKS.parchment, L);
     if (L.theme === 'system') return systemCardSVG(item, d, L, w, h);
+    if (L.theme === 'parchment' || !LOOKS[L.theme]) return parchmentSVG(item, d, L, P, w, h);
     const wrap = (s, n) => { const words = String(s || '').split(/\s+/), lines = []; let l = ''; for (const x of words) { if ((l + ' ' + x).trim().length > n) { lines.push(l.trim()); l = x; } else l += ' ' + x; } if (l.trim()) lines.push(l.trim()); return lines.slice(0, 3); };
     const x = s => esc(s || '');
     const sum = L.summary ? wrap(d.answers.summary, 52) : [];

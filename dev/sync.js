@@ -340,8 +340,8 @@ window.UnwipSync = (function () {
             const have = new Set(B.facts.map(f => f && f.id));
             for (const f of other.bible.facts) if (f && typeof f === 'object' && f.id && !have.has(f.id)) { B.facts.push(JSON.parse(JSON.stringify(f))); changed++; }
           }
-          // threads and glossary words work the same way: anything with an id this device hasn't got comes in
-          for (const k of ['threads', 'glossary']) if (other.bible && Array.isArray(other.bible[k]) && other.bible[k].length) {
+          // threads, glossary words and relationships work the same way: anything with an id this device hasn't got comes in
+          for (const k of ['threads', 'glossary', 'links']) if (other.bible && Array.isArray(other.bible[k]) && other.bible[k].length) {
             const B = S.project.bible = (S.project.bible && typeof S.project.bible === 'object') ? S.project.bible : {};
             B[k] = Array.isArray(B[k]) ? B[k] : [];
             const have = new Set(B[k].map(x => x && x.id));

@@ -2987,6 +2987,8 @@
         <div class="field"><label>New here, or showing someone?</label><button class="btn" id="g-intro" type="button">Welcome setup…</button></div>
         <div class="field"><label>A quick look around a book</label><button class="btn" id="g-tour" type="button">Take the tour</button></div>
         <div class="field"><label>What everything does, and keyboard shortcuts</label><button class="btn" id="g-help" type="button">Open Help (F1)</button></div>
+        <div class="section-label">What’s new</div>
+        <div class="field full" id="s-news"></div>
 <div class="pc-only">        <div class="section-label">Updates</div>
         <label class="check"><input type="checkbox" id="g-autoup" ${cfg.autoUpdate !== false ? 'checked' : ''}> Install updates automatically</label>
         <div class="field"><label id="g-version">Unwip</label><button class="btn" id="g-checkup" type="button">Check for updates now</button></div>
@@ -3013,7 +3015,8 @@
     $('#g-intro', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.start(); };
     $('#g-tour', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipIntro && window.UnwipIntro.tour(); };
     $('#g-help', body).onclick = () => { body.closest('.modal-back').remove(); window.UnwipHelp && window.UnwipHelp.open(); };
-    api.updateState().then(st => { const l = $('#g-version', body); if (l) l.textContent = `You have Unwip ${st.current}`; }).catch(() => {});
+    const news = $('#s-news', body); if (news && window.UnwipUpdates) news.innerHTML = window.UnwipUpdates.newsHTML();
+    api.updateState().then(st => { const l = $('#g-version', body); if (l) l.textContent = `You have Unwip ${st.current}`; if (news && window.UnwipUpdates && st.current) news.innerHTML = window.UnwipUpdates.newsHTML(st.current); }).catch(() => {});
     $('#g-checkup', body).onclick = () => { window.UnwipUpdates && window.UnwipUpdates.checkNow(); };
     const ok = await modal({ title: 'Settings', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
     if (!ok) return;
@@ -4729,11 +4732,12 @@
     });
   }
 
-  async function editEvent(ev) {
+  // seed: a new event started from words picked in a chapter (Add to… on the selection): its title, note and chapter
+  async function editEvent(ev, seed) {
     const T = tl();
     const isNew = !ev;
     const lastDay = T.events.reduce((a, e) => Math.max(a, e.endDay ?? e.day ?? 0), 0);
-    ev = ev || { id: uid(), title: '', day: lastDay + 1, chars: [], color: EV_COLOURS[T.events.length % EV_COLOURS.length] };
+    ev = ev || { id: uid(), title: (seed && seed.title) || '', day: lastDay + 1, chars: (seed && seed.chars) || [], note: (seed && seed.note) || '', chapterIds: seed && seed.chapterId ? [seed.chapterId] : undefined, color: EV_COLOURS[T.events.length % EV_COLOURS.length] };
     const chs = chapterList();
     const body = document.createElement('div');
     body.innerHTML = `
@@ -4788,7 +4792,8 @@
     ev.note = v('ev-note');
     ev.color = colour;
     if (isNew) T.events.push(ev);
-    scheduleMeta(); renderTimeline();
+    scheduleMeta(); if (!seed || S.view === 'timeline') renderTimeline();
+    if (isNew && seed) toastAction(`Event added to the timeline: <b>${esc(ev.title)}</b>.`, 'Open the timeline', () => setView('timeline'), 7000);
     if (res === 'open' && evChapters(ev).length) { setView('write'); openDoc(evChapters(ev)[0]); }
   }
   async function addEventsFromChapters() {
@@ -5061,6 +5066,7 @@
   // test hooks (used by the automated checks, harmless otherwise)
   window.__folio = { S, openProject, openDoc, copyDocForDocs, compileManuscript, flushSave, addNode, setWriter, insertCleanHTML };
   window.__unwip = {
+    newEventFrom: seed => editEvent(null, seed), pageTemplate: root => sheetFor(root) ? sheetTemplate(root) : '<p><br></p>',
     get saveFailing() { return !!troubleRetry; }, pasteContent,
     S, api, I, $, $$, esc, fmt, makeRoom, countWords, today, editor, editorWrap, on, emit,
     modal, copyText, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
@@ -5071,4 +5077,29 @@
     tidyBlankLines, sectionDialog, sheetFor, scheduleNames, fontOptionsHTML, applyStyle, markScenes, docBlocks, rejectChanges, acceptChanges, isTitlePage, compileManuscript, templateGallery, continueWriting, noteLastPlace, caretOffset,
     openPreview, snapshotsDialog, openSettings, goalsDialog, writtenOn, dayKey, streaks, dial, manuscriptWords, openFind, openSearch, splitAtCursor, setMode, level: m => level(m), restoreRange, refreshToolbar, styleForm, applyStyleNow, refreshSnapCount
   };
+})();
+
+// The main screen's header: one row when everything fits, otherwise the level switch and the tabs go to a second row.
+// It used to switch at a fixed 1320 px, but what's in the header changes (Lore adds Open World, Unwip Dev adds DEV,
+// Dropbox adds Sync now, Set up Unwip comes and goes), so on some screens Record and Settings were pushed off the right
+// edge after picking Lore. Now it measures: try one row, and if the last button ends past the edge, use two.
+(function () {
+  const head = document.querySelector('#library .lib-head') || document.querySelector('.lib-head'); if (!head) return;
+  let busy = false;
+  function fit() {
+    if (busy || !head.offsetParent || matchMedia('(max-width: 720px)').matches) { head.classList.remove('lh-two'); return; }
+    busy = true;
+    head.classList.remove('lh-two');
+    const right = head.querySelector('.lib-head-right'), edge = head.getBoundingClientRect().right - (parseFloat(getComputedStyle(head).paddingRight) || 0);
+    const last = right && [...right.children].filter(k => k.offsetParent).pop();
+    const over = (last && last.getBoundingClientRect().right > edge + 1) || head.scrollWidth > head.clientWidth + 1;
+    head.classList.toggle('lh-two', over);
+    busy = false;
+  }
+  let t = null; const soon = () => { clearTimeout(t); t = setTimeout(fit, 30); };
+  new ResizeObserver(soon).observe(head);
+  new MutationObserver(soon).observe(head, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+  addEventListener('resize', soon);
+  if (window.__unwip && window.__unwip.on) window.__unwip.on('level', soon);
+  setTimeout(fit, 0);
 })();

@@ -78,7 +78,8 @@
   const LIB = window.UnwipSymbols;
   // a symbol from the shared library (animals and the like), drawn solid in the line colour
   const libSym = (k, col) => LIB && LIB.get(k) ? LIB.g(k, col) : '';
-  const blank = () => ({ frame: 'hex', symbol: 'eye', scheme: 'neon', name: '', desig: '', code: '', weight: 5, panel: true, ticks: true, double: true, custom: null, pattern: 'none', symScale: 1, rank: 0, glow: false, nodes: false, readout: false, readL: '', readR: '', barcode: false, glitch: false, orbit: false, scope: false });
+  // symRot (the symbol's turn, degrees) was added later; old insignia have none
+  const blank = () => ({ frame: 'hex', symbol: 'eye', scheme: 'neon', name: '', desig: '', code: '', weight: 5, panel: true, ticks: true, double: true, custom: null, pattern: 'none', symScale: 1, symRot: 0, rank: 0, glow: false, nodes: false, readout: false, readL: '', readR: '', barcode: false, glitch: false, orbit: false, scope: false });
   // a steady number from the name, so barcodes and readouts don't change every time it's drawn
   const hash = str => { let h = 2166136261; for (const c of String(str || 'unwip')) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
   const COND = "Oswald, 'Arial Narrow', sans-serif";
@@ -146,9 +147,12 @@
       default: return '';
     }
   }
+  // how big the symbol is drawn for each frame, and where its centre sits (the handles on the picture use these too)
+  const symK = d => d.frame === 'none' ? 3 : d.frame === 'chevron' ? 2 : 2.15;
+  const symY = d => 200 + (d.frame === 'triangle' ? 40 : 0) - (d.rank ? 16 : 0);
   function insigniaSVG(d, size) {
     const C = colours(d), sym = SYM[d.symbol] || SYM.eye, hasText = !!(d.name || d.desig || d.code), H = hasText ? 520 : 400;
-    const k = d.frame === 'none' ? 3 : d.frame === 'chevron' ? 2 : 2.15, cy = d.frame === 'chevron' ? 200 : 200;
+    const k = symK(d), cy = 200;
     const symW = d.weight * 0.95 / k;
     const nm = esc((d.name || '').toUpperCase()), dg = esc((d.desig || '').toUpperCase()), cd = esc((d.code || '').toUpperCase());
     // long names are squeezed to fit rather than running off the edge
@@ -157,11 +161,11 @@
     const text = hasText ? `<text x="200" y="${d.desig ? 450 : 462}" text-anchor="middle" font-family="${COND}" font-weight="700" font-size="${fs}" letter-spacing="${ls}"${fit(nm.length, fs, ls, 350)} fill="${C.main}">${nm}</text>
       ${dg ? `<path d="M40 482H${200 - Math.min(160, (d.desig || '').length * 6.8 + 12)}M${200 + Math.min(160, (d.desig || '').length * 6.8 + 12)} 482H360" stroke="${C.acc}" stroke-width="2"/><text x="200" y="488" text-anchor="middle" font-family="${COND}" font-size="17" letter-spacing="4"${fit((d.desig || '').length, 17, 4, 300)} fill="${C.acc}">${dg}</text>` : ''}
       ${cd ? `<text x="372" y="512" text-anchor="end" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="${C.main}" opacity=".6">${cd}</text>` : ''}` : '';
-    const sk = k * (+d.symScale || 1), syCy = cy + (d.frame === 'triangle' ? 40 : 0) - (d.rank ? 16 : 0);
+    const sk = k * (+d.symScale || 1), syCy = symY(d), rot = +d.symRot ? ` rotate(${+d.symRot})` : '';
     const isLib = !SYM[d.symbol] && LIB && LIB.get(d.symbol);
     const symPath = (col, op, dx) => isLib
-      ? `<g transform="translate(${200 + (dx || 0)} ${syCy}) scale(${sk * 0.95})"${op ? ` opacity="${op}"` : ''}>${libSym(d.symbol, col)}</g>`
-      : `<g transform="translate(${200 + (dx || 0)} ${syCy}) scale(${sk})"><path d="${sym[1]}" fill="none" stroke="${col}" stroke-width="${symW / (+d.symScale || 1)}" stroke-linejoin="round" stroke-linecap="round"${op ? ` opacity="${op}"` : ''}/></g>`;
+      ? `<g transform="translate(${200 + (dx || 0)} ${syCy})${rot} scale(${sk * 0.95})"${op ? ` opacity="${op}"` : ''}>${libSym(d.symbol, col)}</g>`
+      : `<g transform="translate(${200 + (dx || 0)} ${syCy})${rot} scale(${sk})"><path d="${sym[1]}" fill="none" stroke="${col}" stroke-width="${symW / (+d.symScale || 1)}" stroke-linejoin="round" stroke-linecap="round"${op ? ` opacity="${op}"` : ''}/></g>`;
     const hv = hash(d.name + d.code + d.desig);
     const extras = [];
     if (d.orbit) extras.push(`<circle cx="200" cy="${syCy}" r="${Math.min(118, 50 * sk + 18)}" fill="none" stroke="${C.acc}" stroke-width="1.6" stroke-dasharray="3 7"/><circle cx="${200 + Math.min(118, 50 * sk + 18) * Math.cos(-0.7)}" cy="${syCy + Math.min(118, 50 * sk + 18) * Math.sin(-0.7)}" r="5" fill="${C.acc}"/>`);
@@ -189,9 +193,14 @@
   const rnd = a => a[Math.floor(Math.random() * a.length)];
 
   // ================================================================== THE EDITOR
-  let it = null, ctx = null, box = null;
+  const K = window.UnwipKit;
+  let it = null, ctx = null, box = null, hd = null, sel = null;
+  // the symbol chooser: the line symbols in their groups, then the shared library (minus names the line set already
+  // uses, like crown and key, which would draw the line version anyway)
+  const symCats = () => [...GROUPS.map(([name, keys]) => ({ id: 'in-' + name, name, items: keys.filter(k => SYM[k]).map(k => ({ key: k, title: SYM[k][0], icon: symIcon(k, 'currentColor'), words: `${SYM[k][0]} ${k} ${name}` })) })),
+    ...K.libCats().map(c => ({ ...c, items: c.items.filter(x => !SYM[x.key]) })).filter(c => c.items.length)];
   function open(item, el, c) {
-    it = item; ctx = c; box = el;
+    it = item; ctx = c; box = el; sel = null;
     it.data = Object.assign(blank(), it.data || {});
     if (!it.data.name && it.title && it.title !== 'Untitled') it.data.name = it.title;
     c.extra.innerHTML = '<button class="btn small" id="in-rand" title="Roll a random frame, symbol and colours (dice, not AI)">🎲 Random</button>';
@@ -214,28 +223,50 @@
           <div class="bs-grid in-reads"><label>Left readout<input data-d="readL" value="${esc(d.readL || '')}" placeholder="e.g. HX-11 // NETWORK OPS" maxlength="34"></label><label>Right readout<input data-d="readR" value="${esc(d.readR || '')}" placeholder="e.g. 0x7AC4A25C" maxlength="34"></label></div>
           <p class="bm-help">The side readouts show when “Side readouts” is ticked. Leave them empty for a code made from the name.</p>
           <label class="in-w">Rank chevrons <select data-d="rank">${[0, 1, 2, 3].map(n => `<option value="${n}" ${+d.rank === n ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></label></section>
-        <section class="bm-card"><h2>Symbol</h2><label class="in-w">Size <input type="range" data-d="symScale" min="0.5" max="1.5" step="0.05" value="${d.symScale || 1}"></label>${GROUPS.map(([name, keys]) => `<h4 class="in-group">${name}</h4><div class="in-syms">${keys.filter(k => SYM[k]).map(k => `<button type="button" class="in-sym ${d.symbol === k ? 'on' : ''}" data-sym="${k}" title="${esc(SYM[k][0])}">${symIcon(k, '#2a2a2a')}</button>`).join('')}</div>`).join('')}
-          ${LIB ? `<h4 class="in-group">Animals, monsters and more</h4><div class="in-syms">${LIB.get(d.symbol) && !SYM[d.symbol] ? `<button type="button" class="in-sym on" data-sym="${d.symbol}" title="${esc(LIB.get(d.symbol).label)}">${LIB.icon(d.symbol, '#2a2a2a')}</button>` : ''}<button type="button" class="in-sym in-lib" id="in-lib" title="Lions, crows, dragons, skulls, numerals…">More…</button></div>` : ''}</section>
+        <section class="bm-card"><h2>Symbol</h2><div id="in-symbols"></div>
+          <label class="in-w">Size <small data-v="symScale">${Math.round((+d.symScale || 1) * 100)}%</small><input type="range" data-d="symScale" min="0.5" max="1.5" step="0.01" value="${d.symScale || 1}"></label>
+          <label class="in-w">Turn <small data-v="symRot">${Math.round(+d.symRot || 0)}°</small><input type="range" data-d="symRot" min="-180" max="180" step="5" value="${Math.round(+d.symRot || 0)}"></label>
+          <p class="bm-help">Tap the symbol on the picture for its handles: the corner one sizes it, the round one turns it.</p></section>
         <section class="bm-card"><h2>Colours</h2><div class="chip-row">${Object.entries(SCHEMES).map(([k, v]) => `<button type="button" class="chip in-sch ${d.scheme === k && !d.custom ? 'on' : ''}" data-sch="${k}"><i style="background:${v.bg}"></i><i style="background:${v.main}"></i><i style="background:${v.acc}"></i>${v.name}</button>`).join('')}</div>
-          <div class="in-cols"><label>Background <input type="color" data-c="bg" value="${C.bg}"></label><label>Lines <input type="color" data-c="main" value="${C.main}"></label><label>Accent <input type="color" data-c="acc" value="${C.acc}"></label></div></section>
+          <div class="in-cols">${[['bg', 'Background'], ['main', 'Lines'], ['acc', 'Accent']].map(([k]) => `<div data-col="${k}"></div>`).join('')}</div></section>
       </div></div>`;
+    // the colour presets stay; the three custom colours use the shared colour row, with a pipette on the picture
+    for (const [k, label] of [['bg', 'Background'], ['main', 'Lines'], ['acc', 'Accent']]) K.colours($(`[data-col="${k}"]`, box), { label, value: C[k], picture: () => $('#in-shot img', box), onPick: h => {
+      d.custom = Object.assign({}, d.custom || {}, { [k]: h }); $$('.in-sch', box).forEach(b => b.classList.remove('on')); save(); shot(); } });
+    K.symbols($('#in-symbols', box), { id: 'insignia', cats: symCats(), current: d.symbol, onPick: k => { d.symbol = k; save(); shot(); } });
+    const host = $('#in-shot', box);
+    if (hd) hd.destroy();
+    hd = K.handles(host, {
+      picture: () => $('img', host), viewBox: () => [0, 0, 400, size(it.data)], body: false,
+      items: () => { const dd = it.data; return [{ id: 'sym', x: 200, y: symY(dd), s: +dd.symScale || 1, r: 46 * symK(dd), rot: +dd.symRot || 0, min: 0.5, max: 1.5 }]; },
+      sel: () => sel, select: id => { sel = id; hd.refresh(); },
+      change: (id, v, done) => { const dd = it.data; dd.symScale = +v.s.toFixed(2); dd.symRot = v.rot; syncSliders(); shot(); if (done) save(); }
+    });
     shot();
   }
-  function shot() { const s = $('#in-shot', box); if (s) s.innerHTML = `<img alt="" src="${B.svgURL(insigniaSVG(it.data, 480))}">`; }
+  function syncSliders() {
+    const d = it.data;
+    for (const k of ['symScale', 'symRot']) { const r = box.querySelector(`input[data-d="${k}"]`), v = box.querySelector(`small[data-v="${k}"]`); if (r && document.activeElement !== r) r.value = d[k]; if (v) v.textContent = k === 'symRot' ? `${Math.round(+d[k] || 0)}°` : `${Math.round((+d[k] || 1) * 100)}%`; }
+  }
+  // the picture: the same <img> stays and only its picture changes, so it keeps its size and the handles stay put
+  function shot() {
+    const s = $('#in-shot', box); if (!s) return;
+    let img = $('img', s);
+    if (!img) { img = document.createElement('img'); img.alt = ''; img.onload = () => { if (hd) hd.refresh(); }; s.prepend(img); }
+    img.src = B.svgURL(insigniaSVG(it.data, 480));
+    if (hd) hd.refresh();
+  }
   function wire() {
     box.oninput = e => {
       const t = e.target, d = it.data;
-      if (t.dataset.d) { d[t.dataset.d] = t.type === 'range' || t.dataset.d === 'rank' ? +t.value : t.value; if (t.dataset.d === 'name' && (!it.title || it.title === 'Untitled')) it.title = t.value; }
-      else if (t.dataset.c) { d.custom = Object.assign({}, d.custom || {}, { [t.dataset.c]: t.value }); $$('.in-sch', box).forEach(b => b.classList.remove('on')); }
+      if (t.dataset.d) { d[t.dataset.d] = t.type === 'range' || t.dataset.d === 'rank' ? +t.value : t.value; if (t.dataset.d === 'name' && (!it.title || it.title === 'Untitled')) it.title = t.value; if (t.dataset.d === 'symScale' || t.dataset.d === 'symRot') syncSliders(); }
       else if (t.dataset.t) d[t.dataset.t] = t.checked;
       else return;
       save(); shot();
     };
     box.onclick = e => {
       const t = e.target.closest('button'); if (!t) return; const d = it.data;
-      if (t.id === 'in-lib') { LIB.pick({ title: 'Pick a symbol', current: d.symbol }).then(k => { if (k) { d.symbol = k; save(); draw(); } }); return; }
       if (t.dataset.frame) d.frame = t.dataset.frame;
-      else if (t.dataset.sym) d.symbol = t.dataset.sym;
       else if (t.dataset.sch) { d.scheme = t.dataset.sch; d.custom = null; }
       else if (t.dataset.pat) d.pattern = t.dataset.pat;
       else return;
@@ -249,7 +280,7 @@
     picture: item => { const d = Object.assign(blank(), item.data || {}); return B.svgCanvas(insigniaSVG(d, 1200), 1200, Math.round(1200 * size(d) / 400)); },
     toBook: async item => { const d = Object.assign(blank(), item.data || {}), c = await B.svgCanvas(insigniaSVG(d, 800), 800, Math.round(800 * size(d) / 400));
       return `<p><img src="${c.toDataURL('image/png')}" alt="${esc(item.title || d.name || 'Insignia')}" width="320"></p>`; },
-    close: () => { if (box) { box.onclick = null; box.oninput = null; } it = null; box = null; },
+    close: () => { if (hd) { hd.destroy(); hd = null; } if (box) { box.onclick = null; box.oninput = null; } it = null; box = null; sel = null; },
     _svg: insigniaSVG, SYMBOLS: SYM_KEYS
   };
 })();

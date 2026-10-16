@@ -163,10 +163,12 @@
         <div class="field"><label>Slant: <b id="br-slant-v">upright</b></label><input type="range" id="br-slant" min="-20" max="20" step="1" list="br-slant-mid" title="Snaps to upright near the middle. Double-click to reset."><datalist id="br-slant-mid"><option value="0"></option></datalist></div>
         <div class="field"><label>Spacing</label><input type="range" id="br-sp" min="0.4" max="2.5" step="0.1"></div>
         <div class="field"><label>Direction</label><select id="br-dir"><option value="ltr">Left to right</option><option value="rtl">Right to left</option><option value="ttb">Top to bottom (columns)</option></select></div>
-        <div class="field"><label>Colour</label><input type="color" id="br-col"></div>
+        <div class="field"><label>Colour</label><div id="br-col"></div></div>
         <div class="field"><label>Dot grid</label><select id="br-grid"></select></div>
       </aside></div>`;
-    const W = $('#br-w', box), cap = $('#br-cap', box), sl = $('#br-slant', box), col = $('#br-col', box), grid = $('#br-grid', box);
+    const W = $('#br-w', box), cap = $('#br-cap', box), sl = $('#br-slant', box), grid = $('#br-grid', box);
+    // the shared colour row (buildkit.js); the pipette takes a colour from the rune being drawn or the writing
+    const col = window.UnwipKit.colours($('#br-col', box), { value: A.color, picture: () => [$('#br-svg', box), $('#br-preview svg', box)].filter(Boolean), onPick: h => { A.color = h; all(); } });
     // the dot grid: the more dots, the more shapes a rune can take (any size from 2 to 9 dots each way)
     const GRIDS = [[2, 4], [3, 3], [3, 4], [3, 5], [4, 4], [4, 5], [4, 6], [5, 5], [5, 6], [5, 7], [6, 6], [7, 7]];
     const gridOpts = () => {
@@ -177,19 +179,19 @@
     gridOpts();
     const panel = $('#br-panel', box);
     const dark = () => { const w = box.querySelector('.br-wrap'); w.classList.toggle('br-dark', isDark(A)); w.classList.toggle('br-system', A.panel === 'system'); };
-    W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; col.value = A.color; panel.value = A.panel || ''; dark();
+    W.value = A.width; cap.value = A.cap; sl.value = A.slant || 0; panel.value = A.panel || ''; dark();
     const spx = $('#br-sp', box), dirx = $('#br-dir', box);
     spx.value = A.spacing || 1; dirx.value = A.dir || 'ltr';
     spx.oninput = () => { A.spacing = +spx.value; preview(); ctx.changed(); };
     dirx.onchange = () => { A.dir = dirx.value; preview(); ctx.changed(); };
     W.oninput = () => { A.width = +W.value; all(); };
     // picking circuit traces the first time: a dark panel and a cyan line, like a game's interface (change either after)
-    cap.onchange = () => { A.cap = cap.value; if (A.cap === 'circuit' && !A.panel && /^#2b2118$/i.test(A.color)) { A.panel = 'dark'; A.color = '#5fd0ff'; col.value = A.color; panel.value = 'dark'; dark(); } all(); };
-    panel.onchange = () => { A.panel = panel.value; if (isDark(A) && /^#2b2118$/i.test(A.color)) { A.color = '#5fd0ff'; col.value = A.color; } else if (!A.panel && /^#5fd0ff$/i.test(A.color)) { A.color = '#2b2118'; col.value = A.color; } dark(); all(); }; const slantV = () => { const v = A.slant || 0, el = $('#br-slant-v', box); if (el) el.textContent = v ? `${Math.abs(v)}° ${v > 0 ? 'right' : 'left'}` : 'upright'; };
+    cap.onchange = () => { A.cap = cap.value; if (A.cap === 'circuit' && !A.panel && /^#2b2118$/i.test(A.color)) { A.panel = 'dark'; A.color = '#5fd0ff'; col.set(A.color); panel.value = 'dark'; dark(); } all(); };
+    panel.onchange = () => { A.panel = panel.value; if (isDark(A) && /^#2b2118$/i.test(A.color)) { A.color = '#5fd0ff'; col.set(A.color); } else if (!A.panel && /^#5fd0ff$/i.test(A.color)) { A.color = '#2b2118'; col.set(A.color); } dark(); all(); }; const slantV = () => { const v = A.slant || 0, el = $('#br-slant-v', box); if (el) el.textContent = v ? `${Math.abs(v)}° ${v > 0 ? 'right' : 'left'}` : 'upright'; };
     // close to the middle snaps to upright, so a neutral slant is easy to hit; double-click puts it back
     sl.oninput = () => { let v = +sl.value; if (Math.abs(v) <= 2) { v = 0; sl.value = 0; } A.slant = v; slantV(); all(); };
     sl.ondblclick = () => { sl.value = 0; A.slant = 0; slantV(); all(); };
-    slantV(); col.oninput = () => { A.color = col.value; all(); };
+    slantV();
     grid.onchange = async () => {
       let v = grid.value;
       if (v === 'custom') {
@@ -350,7 +352,7 @@
     const SY = window.UnwipSymbols;
     if (SY && Array.isArray(D.syms)) for (const y of D.syms) {
       if (!SY.get(y.k)) continue;
-      const one = `<g transform="translate(${y.x} ${y.y}) scale(${y.s})">${SY.g(y.k, c)}</g>`;
+      const one = `<g transform="translate(${y.x} ${y.y})${+y.r ? ` rotate(${+y.r})` : ''} scale(${y.s})">${SY.g(y.k, c)}</g>`;
       if (!y.rep) { symsG += one; continue; }
       for (let k = 0; k < D.n; k++) { symsG += `<g transform="rotate(${360 * k / D.n})">${one}</g>`; if (D.mirror) symsG += `<g transform="rotate(${360 * k / D.n}) scale(-1 1)">${one}</g>`; }
     }
@@ -440,9 +442,9 @@
     }
     return out;
   }
-  let sg = null, sgAlpha = null, sgTool = 'pen', sgDraw = null, sgMove = null, sgUndo = [], alphas = [];
+  let sg = null, sgAlpha = null, sgTool = 'pen', sgDraw = null, sgMove = null, sgUndo = [], alphas = [], sgSel = null, hd = null;
   async function openSigil(item, el, c) {
-    it = item; ctx = c; box = el; sg = it.data = Object.assign(sigilBlank(), it.data || {}); sg.ring = Object.assign({ alpha: '', text: '' }, sg.ring || {}); sgUndo = [];
+    it = item; ctx = c; box = el; sg = it.data = Object.assign(sigilBlank(), it.data || {}); sg.ring = Object.assign({ alpha: '', text: '' }, sg.ring || {}); sgUndo = []; sgSel = null;
     alphas = await B.all('runes');
     sgAlpha = alphas.find(a => a.id === sg.ring.alpha) || null;
     box.innerHTML = `<div class="sg-wrap">
@@ -462,7 +464,7 @@
         <h3>Look</h3>
         <div class="field"><label>Outer rings</label><select id="sg-rings">${[0, 1, 2, 3].map(n => `<option value="${n}" ${sg.rings === n ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></div>
         <div class="field"><label>Line</label><input type="range" id="sg-w" min="1" max="8" step="0.5" value="${sg.width}"></div>
-        <div class="field"><label>Colour</label><input type="color" id="sg-col" value="${sg.color}"></div>
+        <div class="field"><label>Colour</label><div id="sg-col"></div></div>
         <div class="field"><label>Background</label><select id="sg-bg">${[['paper', 'Parchment'], ['white', 'White'], ['night', 'Night'], ['blood', 'Blood (black and red)'], ['witch', 'Witch (plum and candlelight)'], ['system', 'System (game interface)'], ['none', 'None (see-through)']].map(([v, l]) => `<option value="${v}" ${sg.bg === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><label>Star</label><select id="sg-star">${[['', 'None'], ['5', 'Pentagram (5 points)'], ['6', 'Hexagram (6 points)'], ['7', 'Heptagram (7 points)'], ['8', 'Octagram (8 points)']].map(([v, l]) => `<option value="${v}" ${String(sg.star || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         ${window.UnwipSymbols ? `<h3>Symbols</h3><div class="ar-extras" id="sg-syms"></div>` : ''}
@@ -472,8 +474,8 @@
           : '<p class="bm-help">Make a rune alphabet in Build to write these words in runes instead.</p>'}
       </aside></div>`;
     const ink = () => (DARK_INK[sg.bg] && sg.color === '#2b2118') ? DARK_INK[sg.bg] : sg.color;
-    const re = () => { drawSigil(); ctx.changed(); const c = $('#sg-col', box); if (c && document.activeElement !== c) c.value = ink(); };
-    $('#sg-col', box).value = ink();
+    const colRow = window.UnwipKit.colours($('#sg-col', box), { value: ink(), picture: () => $('svg', $('#sg-stage', box)), onPick: h => { sg.color = h; drawSigil(); ctx.changed(); } });
+    const re = () => { drawSigil(); ctx.changed(); if (colRow.value !== ink()) colRow.set(ink()); };
     $('#sg-n', box).oninput = e => { sg.n = +e.target.value; $('#sg-n-v', box).textContent = sg.n; re(); };
     $('#sg-mirror', box).onchange = e => { sg.mirror = e.target.checked; re(); };
     $('#sg-guides', box).onchange = e => { sg.guides = e.target.checked; re(); };
@@ -481,46 +483,66 @@
     $('#sg-sm', box).oninput = e => { sg.smooth = +e.target.value; $('#sg-sm-v', box).textContent = sg.smooth || 'Off'; ctx.changed(); };
     $('#sg-rings', box).onchange = e => { sg.rings = +e.target.value; re(); };
     $('#sg-w', box).oninput = e => { sg.width = +e.target.value; re(); };
-    $('#sg-col', box).oninput = e => { sg.color = e.target.value; re(); };
     $('#sg-bg', box).onchange = e => { sg.bg = e.target.value; re(); };
     $('#sg-star', box).onchange = e => { sg.star = e.target.value; if (sg.star && [5, 6, 7, 8].includes(+sg.star) && sg.n % +sg.star && !sg.strokes.length) { sg.n = +sg.star; $('#sg-n', box).value = sg.n; $('#sg-n-v', box).textContent = sg.n; } re(); };
     $('#sg-text', box).oninput = e => { sg.ring.text = e.target.value; re(); };
     if ($('#sg-alpha', box)) $('#sg-alpha', box).onchange = e => { sg.ring.alpha = e.target.value; sgAlpha = alphas.find(a => a.id === sg.ring.alpha) || null; re(); };
-    $$('#sg-tool .chip', box).forEach(b => b.onclick = () => { sgTool = b.dataset.v; $$('#sg-tool .chip', box).forEach(x => x.classList.toggle('on', x === b)); });
+    $$('#sg-tool .chip', box).forEach(b => b.onclick = () => { sgTool = b.dataset.v; $$('#sg-tool .chip', box).forEach(x => x.classList.toggle('on', x === b)); if (hd) hd.refresh(); });
     const keep = () => { sgUndo.push(JSON.stringify({ strokes: sg.strokes, syms: sg.syms || [] })); if (sgUndo.length > 60) sgUndo.shift(); };
     $('#sg-undo', box).onclick = () => { if (!sgUndo.length) return; const u = JSON.parse(sgUndo.pop()); if (Array.isArray(u)) sg.strokes = u; else { sg.strokes = u.strokes; sg.syms = u.syms; } re(); if (typeof symsList === 'function') symsList(); };
     $('#sg-clear', box).onclick = () => { keep(); sg.strokes = []; re(); };
     $('#sg-rand', box).onclick = () => { keep(); sg.strokes = randomSigil(sg); re(); };
     // ---- symbols: a list in the side panel (size, repeat, remove); Move drags them on the circle
     const SY = window.UnwipSymbols;
+    const toMove = () => { sgTool = 'move'; $$('#sg-tool .chip', box).forEach(x => x.classList.toggle('on', x.dataset.v === 'move')); };
     const symsList = () => {
       const el = $('#sg-syms', box); if (!el) return;
-      el.innerHTML = (sg.syms || []).map((y, i) => SY.get(y.k) ? `<div class="ar-ex sg-sym" data-i="${i}"><span class="ar-ex-ic">${SY.icon(y.k)}</span><span class="ar-ex-n">${esc(SY.get(y.k).label)}</span>
-        <label class="bd-check sg-rep"><input type="checkbox" data-sy-rep ${y.rep ? 'checked' : ''}> Repeat around the circle</label>
-        <input type="range" data-sy-s min="10" max="120" step="5" value="${Math.round(y.s * 100)}" aria-label="Size"><button type="button" class="icon-btn small" data-sy-del title="Remove">×</button></div>` : '').join('')
-        + `<p class="bm-help">${(sg.syms || []).length ? 'Pick Move to drag a symbol on the circle.' : 'Add a crow, a skull, a numeral… with + Symbol at the top.'}</p>`;
+      if (sgSel != null && !(sg.syms || [])[sgSel]) sgSel = null;
+      el.innerHTML = (sg.syms || []).map((y, i) => { if (!SY.get(y.k)) return ''; const on = sgSel === i;
+        return `<div class="kit-item sg-sym ${on ? 'on' : ''}" data-i="${i}"><div class="kit-item-head" data-pick><span class="kit-item-ic">${SY.icon(y.k)}</span><span class="kit-item-n">${esc(SY.get(y.k).label)}</span><button type="button" class="icon-btn small" data-sy-del title="Remove" aria-label="Remove">×</button></div>
+        ${on ? `<div class="kit-item-body"><label class="bd-check sg-rep"><input type="checkbox" data-sy-rep ${y.rep ? 'checked' : ''}> Repeat around the circle</label>
+          <label class="kit-sl">Size <small data-sy-sv>${Math.round(y.s * 100)}%</small><input type="range" data-sy-s min="10" max="120" step="1" value="${Math.round(y.s * 100)}"></label>
+          <label class="kit-sl">Turn <small data-sy-rv>${Math.round(+y.r || 0)}°</small><input type="range" data-sy-r min="-180" max="180" step="5" value="${Math.round(+y.r || 0)}"></label></div>` : ''}</div>`; }).join('')
+        + `<p class="bm-help">${(sg.syms || []).length ? 'In Move, drag a symbol on the circle. Tap one for its handles: the corner one sizes it, the round one turns it.' : 'Add a crow, a skull, a numeral… with + Symbol at the top.'}</p>`;
       $$('.sg-sym', el).forEach(row => {
-        const y = () => sg.syms[+row.dataset.i];
-        row.querySelector('[data-sy-rep]').onchange = e => { keep(); y().rep = e.target.checked; re(); };
-        row.querySelector('[data-sy-s]').oninput = e => { y().s = +e.target.value / 100; re(); };
-        row.querySelector('[data-sy-del]').onclick = () => { keep(); sg.syms.splice(+row.dataset.i, 1); re(); symsList(); };
+        const i = +row.dataset.i, y = () => sg.syms[i];
+        row.querySelector('[data-pick]').onclick = e => { if (e.target.closest('[data-sy-del]')) return; sgSel = sgSel === i ? null : i; if (sgSel != null) toMove(); symsList(); hd.refresh(); };
+        row.querySelector('[data-sy-del]').onclick = () => { keep(); sg.syms.splice(i, 1); sgSel = null; re(); symsList(); };
+        const rp = row.querySelector('[data-sy-rep]'); if (rp) rp.onchange = e => { keep(); y().rep = e.target.checked; re(); };
+        const sz = row.querySelector('[data-sy-s]'); if (sz) sz.oninput = e => { y().s = +e.target.value / 100; row.querySelector('[data-sy-sv]').textContent = e.target.value + '%'; re(); };
+        const rt = row.querySelector('[data-sy-r]'); if (rt) rt.oninput = e => { y().r = +e.target.value; row.querySelector('[data-sy-rv]').textContent = e.target.value + '°'; re(); };
       });
     };
     const addSym = $('#sg-addsym', box);
     if (addSym) addSym.onclick = async () => {
-      const k = await SY.pick({ title: 'Add a symbol to the sigil' }); if (!k) return;
-      keep(); sg.syms = [...(sg.syms || []), { k, x: 0, y: (sg.syms || []).length ? -40 : 0, s: (sg.syms || []).length ? .3 : .55, rep: false }];
-      sgTool = 'move'; $$('#sg-tool .chip', box).forEach(x => x.classList.toggle('on', x.dataset.v === 'move'));
+      const k = await window.UnwipKit.pickSymbol({ id: 'sigil', title: 'Add a symbol to the sigil' }); if (!k) return;
+      keep(); sg.syms = [...(sg.syms || []), { k, x: 0, y: (sg.syms || []).length ? -40 : 0, s: (sg.syms || []).length ? .3 : .55, rep: false, r: 0 }];
+      sgSel = sg.syms.length - 1; toMove();
       re(); symsList();
     };
+    const stage = $('#sg-stage', box);
+    // handles on the selected symbol (in Move): the corner one sizes it, the round one turns it; Move drags it as before
+    let hdUndo = false;
+    hd = window.UnwipKit.handles(stage, {
+      picture: () => $('svg:not(.kit-ov)', stage), active: () => sgTool === 'move', body: false,
+      items: () => (sg.syms || []).map((y, i) => SY && SY.get(y.k) ? { id: i, x: +y.x, y: +y.y, s: +y.s, r: 44, rot: +y.r || 0, min: 0.1, max: 1.2 } : null).filter(Boolean),
+      sel: () => sgSel, select: i => { sgSel = i; symsList(); },
+      change: (i, v, done) => {
+        const y = sg.syms[i]; if (!y) return;
+        if (!hdUndo) { keep(); hdUndo = true; }
+        y.s = v.s; y.r = v.rot; drawSigil();
+        const row = box.querySelector(`.sg-sym[data-i="${i}"]`);
+        if (row) { const sz = row.querySelector('[data-sy-s]'), rt = row.querySelector('[data-sy-r]'); if (sz) { sz.value = Math.round(y.s * 100); row.querySelector('[data-sy-sv]').textContent = sz.value + '%'; } if (rt) { rt.value = Math.round(y.r); row.querySelector('[data-sy-rv]').textContent = rt.value + '°'; } }
+        if (done) { hdUndo = false; ctx.changed(); }
+      }
+    });
     symsList();
     drawSigil();
-    const stage = $('#sg-stage', box);
     const pt = e => { const svg = $('svg', stage), p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10]; };
     const snapOn = p => sg.snap !== false ? snapPt(sg, p) : p;
     let hover = null;
     const ghost = p => p ? `<g class="sg-ghost" pointer-events="none">${copiesOf(sg, p).map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${sgTool === 'dot' ? Math.max(2.2, sg.width * 0.9) : 2.2}" fill="${sgTool === 'dot' ? '#e0663c' : 'none'}" stroke="#e0663c" stroke-width="${i ? .7 : 1.2}" opacity="${i ? .45 : .95}"/>`).join('')}</g>` : '';
-    const paint = () => { const st = $('#sg-stage', box); if (st) st.innerHTML = sigilSVG(sg, sgAlpha && sgAlpha.data, '100%', { guides: sg.guides, overlay: ghost(hover) }); };
+    const paint = () => { const st = $('#sg-stage', box); if (st) { st.innerHTML = sigilSVG(sg, sgAlpha && sgAlpha.data, '100%', { guides: sg.guides, overlay: ghost(hover) }); if (hd) hd.refresh(); } };
     // one finger at a time: a second finger cancels the line in progress (it used to start a second, runaway line), and
     // nothing draws again until every finger has lifted
     const downs = new Set(); let multi = false, active = null, raf = 0;
@@ -544,7 +566,8 @@
           const tries = y.rep ? [...Array(sg.n)].flatMap((_, k) => (sg.mirror ? [1, -1] : [1]).map(m => ({ k, m }))) : [{ k: 0, m: 1 }];
           for (const t of tries) { const a = 2 * Math.PI * t.k / sg.n, px = y.x * t.m, cx = px * Math.cos(a) - y.y * Math.sin(a), cy = px * Math.sin(a) + y.y * Math.cos(a), dd = Math.hypot(raw[0] - cx, raw[1] - cy); if (dd < Math.max(10, 44 * y.s) && dd < bd) { bd = dd; best = { i, ...t, ox: cx - raw[0], oy: cy - raw[1] }; } }
         });
-        if (!best) return;
+        if (!best) { if (sgSel != null) { sgSel = null; symsList(); hd.refresh(); } return; }
+        if (sgSel !== best.i) { sgSel = best.i; symsList(); }
         keep(); sgMove = best; (() => { try { stage.setPointerCapture(e.pointerId); } catch {} })(); return;
       }
       if (sgTool === 'rub') {
@@ -554,7 +577,7 @@
         for (let k = 0; k < sg.n; k++) for (const m of sg.mirror ? [1, -1] : [1]) { const a = -2 * Math.PI * k / sg.n, x = raw[0] * Math.cos(a) - raw[1] * Math.sin(a), y = raw[0] * Math.sin(a) + raw[1] * Math.cos(a); variants.push([x * m, y]); }
         sg.strokes.forEach((s, i) => { for (const v of variants) for (const q of s.t === 'circle' ? [s.pts[0]] : s.pts) { const d = Math.hypot(q[0] - v[0], q[1] - v[1]) - (s.t === 'circle' ? Math.hypot(s.pts[1][0] - s.pts[0][0], s.pts[1][1] - s.pts[0][1]) : 0); if (Math.abs(d) < bd) { bd = Math.abs(d); best = i; } } });
         const hitSym = (sg.syms || []).findIndex(y => Math.hypot(raw[0] - y.x, raw[1] - y.y) < Math.max(10, 44 * y.s));
-        if (hitSym >= 0 && (best < 0 || bd > 3)) { keep(); sg.syms.splice(hitSym, 1); re(); if (typeof symsList === 'function') symsList(); return; }
+        if (hitSym >= 0 && (best < 0 || bd > 3)) { keep(); sg.syms.splice(hitSym, 1); sgSel = null; re(); if (typeof symsList === 'function') symsList(); return; }
         if (best >= 0) { keep(); sg.strokes.splice(best, 1); re(); }
         return;
       }
@@ -599,14 +622,14 @@
     };
     stage.onpointerup = finish; stage.onpointercancel = finish;
   }
-  function drawSigil() { const st = $('#sg-stage', box); if (st) st.innerHTML = sigilSVG(sg, sgAlpha && sgAlpha.data, '100%', { guides: sg.guides }); }
+  function drawSigil() { const st = $('#sg-stage', box); if (st) { st.innerHTML = sigilSVG(sg, sgAlpha && sgAlpha.data, '100%', { guides: sg.guides }); if (hd) hd.refresh(); } }
   async function alphaFor(item) { const id = item.data && item.data.ring && item.data.ring.alpha; if (!id) return null; const a = await B.get(id); return a && a.data ? Object.assign(runesBlank(), a.data) : null; }
   B.editors.sigil = {
     blank: sigilBlank, open: openSigil,
     thumb: item => B.svgURL(sigilSVG(Object.assign(sigilBlank(), item.data || {}), sgAlpha && it === item ? sgAlpha.data : null, 200)),
     picture: async item => B.svgCanvas(sigilSVG(Object.assign(sigilBlank(), item.data || {}), await alphaFor(item), 1600), 1600, 1600),
     toBook: async item => { const c = await B.svgCanvas(sigilSVG(Object.assign(sigilBlank(), item.data || {}), await alphaFor(item), 900), 900, 900); return `<p><img src="${c.toDataURL('image/png')}" alt="${esc(item.title)}" width="360"></p>${item.data && item.data.ring && item.data.ring.text ? `<p><i>${esc(item.data.ring.text)}</i></p>` : ''}`; },
-    close: () => { it = null; box = null; sg = null; sgDraw = null; sgMove = null; }
+    close: () => { if (hd) { hd.destroy(); hd = null; } it = null; box = null; sg = null; sgDraw = null; sgMove = null; sgSel = null; }
   };
 
   // for coats of arms: draw any rune or sigil as a charge

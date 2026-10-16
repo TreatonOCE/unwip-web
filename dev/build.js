@@ -105,7 +105,7 @@ window.UnwipBuild = (function () {
     const by = k => items.filter(x => x.kind === k).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const world = scope === 'world';
     box.innerHTML = `
-      ${world && window.UnwipBible && !phone() ? '<div id="sbb-shelf-slot"></div>' : ''}
+      ${window.UnwipBible && (world ? !phone() : phone()) ? '<div id="sbb-shelf-slot"></div>' : ''}
       <div class="pl-head"><div><h1>${world ? 'Open World' : 'Build'}</h1><p>${world ? 'The deep end of your world: magic systems, rune alphabets, sigils and insignia. Like everything in Build, they belong to the world, not one book, so any book can use them.' : 'The pieces of your world: maps, coats of arms and stat systems. They belong to the world, not one book, so any book can use them.' + (U.level && U.level() >= 2 ? ' Magic, runes, sigils and insignia are in Open World.' : '')}</p></div></div>
       <div class="pl-tools bd-tools">${NEW_ORDER().filter(inScope).map(k => `<button class="pl-tool" data-new="${k}"><span class="${k === 'runes' ? 'bd-rune-ic' : ''}">${KINDS[k].icon}</span><b>New ${KINDS[k].name.toLowerCase()}</b><em>${esc(KINDS[k].blurb)}</em></button>`).join('')}${world && !phone() && window.UnwipCharSheet ? `<button class="pl-tool" data-csheet><span>🛡️</span><b>New character sheet</b><em>Name a character once, put them in the books they’re in, and give them gear slot by slot, chapter by chapter.</em></button>` : ''}</div>
       ${items.some(x => inScope(x.kind)) ? ORDER.filter(k => inScope(k) && by(k).length).map(k => `<div class="lib-row bd-row"><h1>${KINDS[k].plural}</h1></div>
@@ -160,6 +160,8 @@ window.UnwipBuild = (function () {
   // where Build was opened from: null (the Build page), 'book' (from inside a book: Done goes back to the chapter) or
   // 'window' (its own window on the PC/Mac, next to the book: Done closes the window)
   let ret = null;
+  // opened from the Story Bible's Lore tab: Done goes back there (it used to leave you in Build)
+  const backToBible = () => { render(); if (window.UnwipBible && window.UnwipBible.reopen) window.UnwipBible.reopen(); };
   const screen = $('#build-screen'), top = $('#bd-top'), main = $('#bd-main');
   // Phones: the picture (or the drawing area) stays pinned at the top while the options scroll under it (style.css,
   // "Build on a phone"). Coats of arms and stat systems get smaller once you scroll down (tap a stat system's picture to see it full size again) and stops
@@ -188,7 +190,7 @@ window.UnwipBuild = (function () {
   const symbolsIn = it => { const d = (it && it.data) || {};
     if (it.kind === 'arms') return [d.charge, ...(d.extras || []).map(e => e.k)];
     if (it.kind === 'sigil') return (d.syms || []).map(y => y.k);
-    if (it.kind === 'insignia') return [d.symbol];
+    if (it.kind === 'insignia') return ((editors.insignia || {}).SYMBOLS || []).includes(d.symbol) ? [] : [d.symbol];   // its own line symbols need no credit
     return []; };
   let creditT = null;
   const creditSoon = () => { clearTimeout(creditT); creditT = setTimeout(showCredit, 250); };
@@ -204,7 +206,7 @@ window.UnwipBuild = (function () {
     await loadFonts();
     pinReset();
     const it = await get(id); if (!it) { U.toast('Couldn’t open that.', 'warn'); if (!ret && !from) render(); return; }
-    if (viewOnly(it.kind)) { await viewPicture(it); if (!ret && !from) render(); return; }
+    if (viewOnly(it.kind)) { await viewPicture(it); if (from === 'bible') backToBible(); else if (!ret && !from) render(); return; }
     await close(true);
     if (from !== undefined) ret = from || null;
     if (ret === 'book' && U.flushSave) await U.flushSave();
@@ -220,7 +222,7 @@ window.UnwipBuild = (function () {
       <button class="btn small ghost" id="bd-png" title="Save a picture of it as a PNG file">Save PNG…</button>
       <button class="icon-btn small" id="bd-pmenu" title="Picture: copy or save" aria-label="Copy or save a picture">⋯</button>
       ${ret === 'window' ? '' : '<button class="btn small" id="bd-add" title="Put it into one of your books">Add to book…</button>'}
-      <button class="btn primary small" id="bd-done" title="${ret === 'book' ? 'Save and go back to your chapter' : ret === 'window' ? 'Save and close this window' : 'Save and go back to Build'}">${ret === 'book' ? 'Back to the book' : 'Done'}</button>`;
+      <button class="btn primary small" id="bd-done" title="${ret === 'book' ? 'Save and go back to your chapter' : ret === 'window' ? 'Save and close this window' : ret === 'bible' ? 'Save and go back to the Story Bible' : 'Save and go back to Build'}">${ret === 'book' ? 'Back to the book' : ret === 'bible' ? 'Back to the Story Bible' : 'Done'}</button>`;
     $('#bd-copy').onclick = async () => { const c = ed.picture && await ed.picture(cur); if (c) copyCanvas(c); };
     $('#bd-png').onclick = async () => { const c = ed.picture && await ed.picture(cur); if (c) savePNG(c, cur.title); };
     // on a phone Copy picture, Save PNG and Add to book fold into ⋯, so the name has room next to Record
@@ -250,7 +252,7 @@ window.UnwipBuild = (function () {
         const done = v.querySelector('#mp-done'); if (done) { done.classList.remove('mp-end'); done.before(b); } else if (gen) gen.before(b);   // same order as the other Build editors: …, Add to book, Done
         const t = v.querySelector('.mp-title'); if (t) { t.title = 'Double-click to rename'; t.ondblclick = async () => { const n = await U.promptText('Rename map', 'Name', it.title); if (n) { it.title = n; t.textContent = n; await put(it); } }; }
       },
-      unmount: () => { cur = null; top.classList.remove('hidden'); const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r !== 'book') render(); },
+      unmount: () => { cur = null; top.classList.remove('hidden'); const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r === 'bible') backToBible(); else if (r !== 'book') render(); },
       inBook: false
     };
     active = null;
@@ -258,12 +260,12 @@ window.UnwipBuild = (function () {
   }
   async function close(quiet) {
     { const bar = $('#bd-credit'); if (bar) { bar.classList.add('hidden'); bar.innerHTML = ''; } }
-    if (!cur) { if (!quiet) { const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r !== 'book') render(); } return; }
+    if (!cur) { if (!quiet) { const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r === 'bible') backToBible(); else if (r !== 'book') render(); } return; }
     if (cur.kind === 'map') { await window.UnwipMaps.close(true); return; }
     await saveNow();
     if (active && active.close) try { active.close(); } catch {}
     active = null; cur = null; main.innerHTML = '';
-    if (!quiet) { const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r !== 'book') render(); }
+    if (!quiet) { const r = ret; show(false); ret = null; if (r === 'window') window.close(); else if (r === 'bible') backToBible(); else if (r !== 'book') render(); }
   }
   // for the window on the PC/Mac: save before it closes
   async function flush() { if (cur && cur.kind !== 'map') await saveNow(); return true; }

@@ -8,6 +8,10 @@
 //   topic (Hair, Ruler…) replaces an earlier one from its chapter on; "As of" shows the bible up to a chapter.
 //   bible.glossary: [{ id, term, meaning, at }]      words of the world; their spelling is checked in every chapter
 //   bible.threads:  [{ id, title, note, open, closed, status: 'open'|'paid'|'dropped', at }]   open/closed = chapter ids
+//   bible.links:    [{ id, a, b, type, label, ch, end, note, at }]   relationships: a and b are { node, key, kind, title }
+//                    (found like facts: series key, else the page id in any book, else the same name). type is one of
+//                    REL below (or 'other' with its own label), read from a's side. ch / end = chapter ids it starts and
+//                    stops at (empty: from the start / still so), so As of shows who was what to whom at that point.
 // Also on each book's project.json:
 //   seriesNo   the book's number in its series (Book 1, Book 2…), set by reordering the books here
 //   series     the series name (already used by series.js), set here with "Put it in a series"
@@ -21,6 +25,15 @@ window.UnwipBible = (function () {
   const { $, $$, esc, api } = U;
   const KINDS = [['characters', 'People', 'person'], ['places', 'Places', 'pin'], ['items', 'Things', 'gem']];
   const KIND_ONE = { characters: 'person', places: 'place', items: 'thing' };
+  // relationship types, by the kinds on each side: [type, from a's side, from b's side (none: the same both ways), group]
+  const REL = {
+    'characters>characters': [['parent', 'Parent of', 'Child of', 'family'], ['sibling', 'Brother or sister of', null, 'family'], ['family', 'Family of', null, 'family'], ['married', 'Married to', null, 'love'], ['engaged', 'Engaged to', null, 'love'], ['loves', 'In love with', 'Loved by', 'love'], ['friend', 'Friend of', null, 'ally'], ['ally', 'Ally of', null, 'ally'], ['mentor', 'Mentor of', 'Taught by', 'ally'], ['serves', 'Serves', 'Served by', 'ally'], ['worksfor', 'Works for', 'Employs', 'ally'], ['rival', 'Rival of', null, 'conflict'], ['enemy', 'Enemy of', null, 'conflict'], ['hunts', 'Hunts', 'Hunted by', 'conflict'], ['betrayed', 'Betrayed', 'Betrayed by', 'conflict']],
+    'characters>places': [['lives', 'Lives in', 'Home of', 'place'], ['rules', 'Rules', 'Ruled by', 'place'], ['born', 'Born in', 'Birthplace of', 'place'], ['held', 'Held in', 'Holds', 'place'], ['guards', 'Guards', 'Guarded by', 'place']],
+    'characters>items': [['owns', 'Owns', 'Owned by', 'thing'], ['carries', 'Carries', 'Carried by', 'thing'], ['made', 'Made', 'Made by', 'thing'], ['seeks', 'Seeks', 'Sought by', 'thing'], ['lost', 'Lost', 'Lost by', 'thing']],
+    'any': [['part', 'Part of', 'Has in it', 'other'], ['near', 'Near', null, 'other'], ['tied', 'Tied to', null, 'other']]
+  };
+  const REL_GROUPS = { family: 'Family', love: 'Love', ally: 'Allies and work', conflict: 'Conflict', place: 'Places', thing: 'Things', other: 'Other' };
+  const relDef = type => { for (const list of Object.values(REL)) { const d = list.find(x => x[0] === type); if (d) return d; } return null; };
   const LORE = { magic: 'Magic systems', runes: 'Rune alphabets', sigil: 'Sigils', insignia: 'Insignia', map: 'Maps', arms: 'Coats of arms', stats: 'Stat systems' };
   const COMMON = new Set(['the', 'a', 'an', 'old', 'young', 'lady', 'lord', 'sir', 'mr', 'mrs', 'miss', 'dr', 'king', 'queen', 'captain', 'count', 'new']);
   const norm = s => String(s || '').trim();
@@ -44,7 +57,7 @@ window.UnwipBible = (function () {
     const card = (label, sub, data) => `<button type="button" class="sbb-card" ${data}><span class="sbb-spine"></span><b>${esc(label)}</b><em>${esc(sub)}</em></button>`;
     const cards = sh.series.map(s => card(s.name, `Series · ${s.books.length} book${s.books.length === 1 ? '' : 's'}`, `data-bible-series="${esc(s.name)}"`))
       .concat(sh.alone.map(b => card(b.title, 'One book', `data-bible-book="${esc(b.slug)}"`)));
-    return `<div class="sbb-shelf"><div class="pl-head"><div><h1>Story Bible</h1><p>Everything about your world in one place, for a whole series or one book: who and what is in it, where each one turns up, and when things happen.</p></div></div>
+    return `<div class="sbb-shelf"><div class="pl-head"><div><h1>Story Bible</h1><p>Everything about your world in one place, for a whole series or one book: who and what is in it, where each one turns up, and when things happen.${phone() ? ' On a phone you can read it; add to it on an iPad or computer.' : ''}</p></div></div>
       <div class="sbb-row">${cards.join('') || '<p class="lib-empty">Make a book first, then its Story Bible fills itself in.</p>'}</div></div>`;
   }
   function wireShelf(box) {
@@ -140,17 +153,31 @@ window.UnwipBible = (function () {
       }
     }
     threads.sort((x, y) => gp(x) - gp(y) || x.at - y.at);
+    // relationships, from every book, with the chapters they start and stop at
+    const whereCh = id => { if (!id) return null; for (const bx of B) { const i = bx.chs.findIndex(c => c.id === id); if (i >= 0) return { b: bx, ci: i }; } return null; };
+    const findEnt = r => r && typeof r === 'object' ? ((r.key && E.get('s:' + r.key)) || [...E.values()].find(x => x.in.some(i => i.node.id === r.node)) || E.get(r.kind + ':' + keyName(r.title || ''))) : null;
+    const links = [];
+    for (const b of B) {
+      const bb = b.p.bible && typeof b.p.bible === 'object' ? b.p.bible : {};
+      for (const l of Array.isArray(bb.links) ? bb.links : []) {
+        if (!l || typeof l !== 'object' || typeof l.type !== 'string') continue;
+        const ea = findEnt(l.a), eb = findEnt(l.b); if (!ea || !eb || ea === eb) continue;
+        links.push({ id: String(l.id || ''), a: ea, b: eb, type: l.type, label: typeof l.label === 'string' ? l.label.slice(0, 40) : '', from: whereCh(l.ch), to: whereCh(l.end), note: typeof l.note === 'string' ? l.note.slice(0, 300) : '', book: b, at: +l.at || 0 });
+      }
+    }
     // often seen with: the entries that share the most chapters with this one
     const list = [...E.values()];
     for (const e of list) {
       const mine = new Set(e.seen.map(s => s.b.slug + ':' + s.ci));
       e.with = list.filter(o => o !== e && o.kind === 'characters').map(o => ({ o, n: o.seen.filter(s => mine.has(s.b.slug + ':' + s.ci)).length })).filter(x => x.n).sort((a, b) => b.n - a.n).slice(0, 6);
     }
-    return { label, series, books: B, entries: list, threads, glossary: [...gloss.values()].sort((a, b) => a.term.localeCompare(b.term)) };
+    return { label, series, books: B, entries: list, threads, links, glossary: [...gloss.values()].sort((a, b) => a.term.localeCompare(b.term)) };
   }
 
   // ---------------------------------------------------------------- the page
-  let st = null, page = null;
+  let st = null, page = null, last = null;
+  // back from a Lore piece opened here: the same bible, on the Lore tab, at the same As of
+  async function reopen() { if (!last) return; const l = last; last = null; await open({ ...l.target, tab: l.tab }); if (st) { st.asOf = l.asOf; draw(); } }
   function progress(n, of) { const p = page && page.querySelector('.sbb-load'); if (p) p.textContent = `Reading the books… ${Math.round(n / Math.max(1, of) * 100)}%`; }
   async function open(target) {
     if (!page) { page = document.createElement('section'); page.id = 'bible'; page.className = 'sbb hidden'; document.body.appendChild(page); }
@@ -171,7 +198,7 @@ window.UnwipBible = (function () {
   const where = s => `${s.b.no > 1 || (st && st.data.books.length > 1) ? `Book ${s.b.no} · ` : ''}Ch ${s.ci + 1}`;
   function draw() {
     const D = st.data, multi = D.books.length > 1;
-    const tabs = [...KINDS.map(([k, t]) => [k, t, D.entries.filter(e => e.kind === k && visible(e)).length]), ['threads', 'Threads', null], ['glossary', 'Glossary', null], ['lore', 'Lore', null], ['timeline', 'Timeline', null]];
+    const tabs = [...KINDS.map(([k, t]) => [k, t, D.entries.filter(e => e.kind === k && visible(e)).length]), ['web', 'Web', null], ['threads', 'Threads', null], ['glossary', 'Glossary', null], ['lore', 'Lore', null], ['timeline', 'Timeline', null]];
     page.innerHTML = `
       <div class="sbb-top"><button type="button" class="icon-btn" data-close aria-label="Back to the main screen" title="Back">‹</button>
         <div class="sbb-title"><span class="sbb-kicker">Story Bible</span><h1>${esc(D.label)}</h1></div>
@@ -182,7 +209,7 @@ window.UnwipBible = (function () {
           ${D.books.map(b => `<optgroup label="${multi ? `Book ${b.no}: ` : ''}${esc(b.title)}">${b.chs.map((c, ci) => `<option value="${b.no * 100000 + ci}" ${st.asOf === b.no * 100000 + ci ? 'selected' : ''}>${multi ? `Book ${b.no} · ` : ''}Ch ${ci + 1}: ${esc(c.title)}</option>`).join('')}</optgroup>`).join('')}
         </select></label>${st.asOf != null ? '<button type="button" class="sbb-chip" data-step-asof="-1" aria-label="A chapter earlier">‹</button><button type="button" class="sbb-chip" data-step-asof="1" aria-label="A chapter later">›</button><span class="sbb-spoil">Nothing after this chapter is shown: no spoilers.</span>' : ''}</div>
       <nav class="sbb-tabs">${tabs.map(([k, t, n]) => `<button type="button" class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${t}${n != null ? ` <small>${n}</small>` : ''}</button>`).join('')}</nav>
-      <div class="sbb-body">${st.sel ? entryHTML(D.entries.find(e => e.id === st.sel)) : st.tab === 'lore' ? '<p class="sbb-load">Gathering…</p>' : st.tab === 'timeline' ? timelineHTML() : st.tab === 'threads' ? threadsHTML() : st.tab === 'glossary' ? '<p class="sbb-load">Reading the words…</p>' : listHTML(st.tab)}</div>`;
+      <div class="sbb-body">${st.sel ? entryHTML(D.entries.find(e => e.id === st.sel)) : st.tab === 'lore' ? '<p class="sbb-load">Gathering…</p>' : st.tab === 'timeline' ? timelineHTML() : st.tab === 'web' ? webHTML() : st.tab === 'threads' ? threadsHTML() : st.tab === 'glossary' ? '<p class="sbb-load">Reading the words…</p>' : listHTML(st.tab)}</div>`;
     wire();
     if (!st.sel && st.tab === 'glossary') glossaryHTML().then(h => { const b = page.querySelector('.sbb-body'); if (b && st && st.tab === 'glossary' && !st.sel) { b.innerHTML = h; wireGloss(b); } });
     if (!st.sel && st.tab === 'lore') loreHTML().then(h => { const b = page.querySelector('.sbb-body'); if (b && st && st.tab === 'lore' && !st.sel) { b.innerHTML = h; wireLore(b); } });
@@ -234,6 +261,7 @@ window.UnwipBible = (function () {
         ${e.sheet.sections.filter(s => s.p.some(Boolean)).map(s => `<section class="sbb-sec">${s.h ? `<h3>${esc(s.h)}</h3>` : ''}${s.p.filter(Boolean).map(p => `<p>${esc(p)}</p>`).join('')}</section>`).join('')}
         ${!e.sheet.fields.some(f => f[1]) && !e.sheet.sections.some(s => s.p.some(Boolean)) ? '<p class="hint">Nothing written on this page yet. Open it in the book to fill it in.</p>' : ''}
         ${factsHTML(e)}
+        ${linksHTML(e)}
         ${e.kind === 'characters' && gearHTML(e) ? `<h3 class="sbb-h">Gear</h3>${gearHTML(e)}` : ''}
       </div><aside>
         <h3 class="sbb-h">Appears in <small>${seen.length} chapter${seen.length === 1 ? '' : 's'}${st.asOf != null ? ' so far' : ''}</small></h3>
@@ -246,7 +274,7 @@ window.UnwipBible = (function () {
   }
   // facts: by topic, the latest one (up to As of) first, with what it was before; facts with no topic in order
   function factsHTML(e) {
-    const F = factsNow(e); if (!F.length) return `<h3 class="sbb-h">Facts</h3><p class="hint">None pinned yet. In a chapter, select the words that say something about ${esc(e.title)} and choose <b>Add to bible</b>.</p>`;
+    const F = factsNow(e); if (!F.length) return `<h3 class="sbb-h">Facts</h3><p class="hint">None pinned yet. In a chapter, select the words that say something about ${esc(e.title)} and choose <b>Add to…</b> › The Story Bible.</p>`;
     const topics = new Map(), loose = [];
     for (const f of F) { if (f.topic) { const k = keyName(f.topic); if (!topics.has(k)) topics.set(k, []); topics.get(k).push(f); } else loose.push(f); }
     const chip = f => `<button type="button" class="sbb-chip" data-go="${esc(f.b.slug)}|${esc((f.b.chs[f.ci] || {}).id || '')}" title="${esc((f.b.chs[f.ci] || {}).title || '')}">${where(f)}</button>`;
@@ -256,7 +284,123 @@ window.UnwipBible = (function () {
         ${l.length > 1 ? `<details class="sbb-was"><summary>Before: ${l.length - 1} earlier</summary>${l.slice(0, -1).reverse().map(f => `<div class="sbb-old"><p>${esc(f.text)}</p><div class="sbb-fm">${chip(f)}${del(f)}</div></div>`).join('')}</details>` : ''}</div></div>`; }).join('')}
       ${loose.map(f => `<div class="sbb-fact"><span class="sbb-ft none"></span><div><p>${esc(f.text)}</p><div class="sbb-fm">${chip(f)}${del(f)}</div></div></div>`).join('')}</div>`;
   }
+  // ---------------------------------------------------------------- relationships
+  // A relationship holds from its Since chapter (or the start) and stops at its Until chapter: As of shows who was what
+  // to whom at that point (engaged in book one, married in book two). Read from either side: "Parent of" / "Child of".
+  const linkOn = l => !l.from || upto(l.from);
+  const linkOver = l => !!(l.to && upto(l.to));
+  const linkGroup = l => (relDef(l.type) || [0, 0, 0, 'other'])[3];
+  function linkWords(l, me) {
+    const d = relDef(l.type), mine = l.a === me;
+    if (!d) return mine ? esc(l.label || 'Tied to') : `${esc(l.label || 'Tied to')} <small>(their side)</small>`;
+    return esc(mine ? d[1] : (d[2] || d[1]));
+  }
+  function linksHTML(e) {
+    const L = st.data.links.filter(l => (l.a === e || l.b === e) && linkOn(l));
+    const row = l => { const o = l.a === e ? l.b : l.a;
+      return `<div class="sbb-link g-${linkGroup(l)} ${linkOver(l) ? 'over' : ''}"><span class="sbb-lk-t">${l.type === 'other' && l.a === e ? esc(l.label || 'Tied to') : linkWords(l, e)}</span>
+        <button type="button" class="sbb-chip" data-ent="${esc(o.id)}">${esc(o.title)}</button>
+        <small class="sbb-lk-when">${l.from ? `from ${where(l.from)}` : ''}${l.to && upto(l.to) ? `${l.from ? ', ' : ''}until ${where(l.to)}` : ''}</small>
+        ${l.note ? `<span class="sbb-lk-note">${esc(l.note)}</span>` : ''}
+        <button type="button" class="sbb-fx" data-dellink="${esc(l.book.slug)}|${esc(l.id)}" aria-label="Remove this relationship" title="Remove">×</button></div>`; };
+    const now = L.filter(l => !linkOver(l)), before = L.filter(linkOver);
+    return `<h3 class="sbb-h">Relationships ${L.length ? `<small>${now.length}${st.asOf != null ? ' at this point' : ''}</small>` : ''}</h3>
+      ${now.length ? `<div class="sbb-links">${now.map(row).join('')}</div>` : `<p class="hint">${L.length ? 'None that still hold.' : `Who ${esc(e.title)} is tied to: family, love, allies, enemies, where they live, what they carry.`}</p>`}
+      ${before.length ? `<div class="sbb-links sbb-links-before"><span class="sbb-before-h">Before</span>${before.map(row).join('')}</div>` : ''}
+      <button type="button" class="btn small ghost sbb-addlink" data-newlink>+ Relationship</button>`;
+  }
+  async function newLink(e) {
+    if (phone() || !e) return;
+    const D = st.data, others = D.entries.filter(o => o !== e);
+    if (!others.length) { U.toast('Add another person, place or thing first.'); return; }
+    const multi = D.books.length > 1;
+    const chOpts = first => `<option value="">${first}</option>` + D.books.map(b => `<optgroup label="${multi ? `Book ${b.no}: ` : ''}${esc(b.title)}">${b.chs.map((c, ci) => `<option value="${esc(c.id)}">${multi ? `Book ${b.no} · ` : ''}Ch ${ci + 1}: ${esc(c.title)}</option>`).join('')}</optgroup>`).join('');
+    const body = document.createElement('div'); body.className = 'sbb-add';
+    body.innerHTML = `<div class="sbb-add-row"><div class="field"><label>${esc(e.title)} is</label><select id="sbb-ltype"></select></div>
+        <div class="field"><label>Who or what</label><select id="sbb-lwith">${KINDS.map(([k, t]) => { const l = others.filter(o => o.kind === k).sort((a, b) => a.title.localeCompare(b.title)); return l.length ? `<optgroup label="${t}">${l.map(o => `<option value="${esc(o.id)}">${esc(o.title)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select></div></div>
+      <div class="field" id="sbb-lother" hidden><label>In your own words</label><input type="text" id="sbb-llabel" maxlength="40" placeholder="e.g. Sworn to protect"></div>
+      <div class="sbb-add-row"><div class="field"><label>Since</label><select id="sbb-lfrom">${chOpts('The start')}</select></div><div class="field"><label>Until</label><select id="sbb-lto">${chOpts('Still so')}</select></div></div>
+      <div class="field"><label>Note <small>(optional)</small></label><input type="text" id="sbb-lnote" maxlength="300" placeholder="e.g. Secretly"></div>
+      <p class="hint">Since and Until make As of honest: engaged in book one, married in book two, and nothing shown before it happens.</p>`;
+    const typeSel = body.querySelector('#sbb-ltype'), withSel = body.querySelector('#sbb-lwith'), other = body.querySelector('#sbb-lother');
+    const choices = () => {
+      const o = D.entries.find(x => x.id === withSel.value); if (!o) return [];
+      const out = [], fwd = REL[e.kind + '>' + o.kind], back = REL[o.kind + '>' + e.kind];
+      if (fwd) for (const d of fwd) out.push([d[0] + '|f', d[1], d[3]]);
+      else if (back) for (const d of back) out.push([d[0] + '|r', d[2] || d[1], d[3]]);
+      for (const d of REL.any) out.push([d[0] + '|f', d[1], d[3]]);
+      out.push(['other|f', 'Something else…', 'other']);
+      return out;
+    };
+    const fill = () => {
+      const keep = typeSel.value, c = choices(), groups = [...new Set(c.map(x => x[2]))];
+      typeSel.innerHTML = groups.map(g => `<optgroup label="${REL_GROUPS[g]}">${c.filter(x => x[2] === g).map(x => `<option value="${x[0]}">${esc(x[1])}</option>`).join('')}</optgroup>`).join('');
+      if (c.some(x => x[0] === keep)) typeSel.value = keep;
+      other.hidden = typeSel.value !== 'other|f';
+    };
+    withSel.onchange = fill; typeSel.onchange = () => { other.hidden = typeSel.value !== 'other|f'; };
+    const same = others.find(o => o.kind === e.kind); if (same) withSel.value = same.id;
+    fill();
+    const ok = await U.modal({ title: `Relationship: ${esc(e.title)}`, body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Add', value: true, kind: 'primary' }] });
+    if (!ok) return;
+    const o = D.entries.find(x => x.id === withSel.value); if (!o) return;
+    const [type, dir] = typeSel.value.split('|'), label = type === 'other' ? norm(body.querySelector('#sbb-llabel').value).slice(0, 40) : '';
+    if (type === 'other' && !label) { U.toast('Say in a few words what ties them.'); return; }
+    let from = body.querySelector('#sbb-lfrom').value, to = body.querySelector('#sbb-lto').value;
+    const pos = id => { for (const b of D.books) { const i = b.chs.findIndex(c => c.id === id); if (i >= 0) return b.no * 100000 + i; } return -1; };
+    if (from && to && pos(to) <= pos(from)) { U.toast('Until has to come after Since. It’s saved without an Until.'); to = ''; }
+    const [a, b] = dir === 'r' ? [o, e] : [e, o];
+    const ref = x => ({ node: x.node.id, key: x.id.startsWith('s:') ? x.id.slice(2) : '', kind: x.kind, title: x.title });
+    const home = (from && D.books.find(bk => bk.chs.some(c => c.id === from))) || e.book;   // kept in the book it starts in
+    await editBible(home.slug, bb => { bb.links = Array.isArray(bb.links) ? bb.links : []; bb.links.push({ id: U.uid(), a: ref(a), b: ref(b), type, label, ch: from, end: to, note: norm(body.querySelector('#sbb-lnote').value).slice(0, 300), at: Date.now() }); });
+  }
+  // the Web: everyone with a relationship, drawn as a map of who is tied to whom (at the As of chapter). The layout is
+  // worked out the same way every time (a fixed start, then springs), so it doesn't jump about between visits.
+  function webHTML() {
+    const D = st.data, L = D.links.filter(linkOn);
+    if (!L.length) return `<p class="lib-empty">No relationships ${st.asOf != null ? 'yet at this point' : 'yet'}. Open a person, place or thing and choose <b>+ Relationship</b>: who they’re married to, who they serve, where they live, what they carry. They show here as a web.</p>`;
+    const N = [...new Set(L.flatMap(l => [l.a, l.b]))].sort((x, y) => KINDS.findIndex(k => k[0] === x.kind) - KINDS.findIndex(k => k[0] === y.kind) || x.title.localeCompare(y.title));
+    const W = 960, H = Math.max(420, Math.min(900, 200 + N.length * 28)), idx = new Map(N.map((n, i) => [n, i]));
+    const P = N.map((n, i) => { const a = i / N.length * Math.PI * 2; return { x: W / 2 + Math.cos(a) * W * 0.32, y: H / 2 + Math.sin(a) * H * 0.34, vx: 0, vy: 0 }; });
+    const E2 = L.map(l => [idx.get(l.a), idx.get(l.b)]);
+    for (let it = 0; it < 360; it++) {
+      const k = 1 - it / 360;
+      for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) {
+        let dx = P[i].x - P[j].x, dy = P[i].y - P[j].y, d2 = dx * dx + dy * dy + 0.01; const f = 9000 / d2, d = Math.sqrt(d2);
+        dx /= d; dy /= d; P[i].vx += dx * f; P[i].vy += dy * f; P[j].vx -= dx * f; P[j].vy -= dy * f;
+      }
+      for (const [i, j] of E2) { const dx = P[j].x - P[i].x, dy = P[j].y - P[i].y, d = Math.sqrt(dx * dx + dy * dy) + 0.01, f = (d - 210) * 0.02; P[i].vx += dx / d * f; P[i].vy += dy / d * f; P[j].vx -= dx / d * f; P[j].vy -= dy / d * f; }
+      // keep people off other people's lines (a line through someone reads as if they were part of it)
+      if (N.length * E2.length < 30000) for (const [i, j] of E2) { const a = P[i], b = P[j], dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1;
+        for (let m = 0; m < N.length; m++) { if (m === i || m === j) continue; const q = P[m], t = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / L2)), px = a.x + dx * t - q.x, py = a.y + dy * t - q.y, d = Math.sqrt(px * px + py * py) + 0.01;
+          if (d < 60) { const f = (60 - d) * 0.25; q.vx -= px / d * f; q.vy -= py / d * f; a.vx += px / d * f * 0.3; a.vy += py / d * f * 0.3; b.vx += px / d * f * 0.3; b.vy += py / d * f * 0.3; } } }
+      for (const p of P) { p.vx += (W / 2 - p.x) * 0.004; p.vy += (H / 2 - p.y) * 0.006; p.x += Math.max(-20, Math.min(20, p.vx * k)); p.y += Math.max(-20, Math.min(20, p.vy * k)); p.vx *= 0.5; p.vy *= 0.5; p.x = Math.max(60, Math.min(W - 60, p.x)); p.y = Math.max(40, Math.min(H - 50, p.y)); }
+    }
+    // spread the result over the picture (but don't blow two people up to opposite corners)
+    { const xs = P.map(p => p.x), ys = P.map(p => p.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const sx = Math.min(2.4, (W - 200) / Math.max(1, x1 - x0)), sy = Math.min(2.4, (H - 130) / Math.max(1, y1 - y0)), k = Math.min(sx, sy * 1.6);
+      for (const p of P) { p.x = W / 2 + (p.x - (x0 + x1) / 2) * k; p.y = H / 2 - 10 + (p.y - (y0 + y1) / 2) * Math.min(k, sy); } }
+    const R = 22, ini = t => esc(t.split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase());
+    // two relationships between the same pair are bent apart so both labels read
+    const pairN = new Map();
+    const edges = L.map(l => {
+      const i = idx.get(l.a), j = idx.get(l.b), key = [Math.min(i, j), Math.max(i, j)].join('-'), n = pairN.get(key) || 0; pairN.set(key, n + 1);
+      const a = P[i], b = P[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / d, uy = dy / d;
+      const bend = n ? (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 56 : 0, mx = (a.x + b.x) / 2 - uy * bend, my = (a.y + b.y) / 2 + ux * bend;
+      const x1 = a.x + ux * R, y1 = a.y + uy * R, x2 = b.x - ux * (R + 4), y2 = b.y - uy * (R + 4);
+      const d0 = relDef(l.type), dir = d0 ? !!d0[2] : l.type === 'other';
+      const word = l.type === 'other' ? (l.label || 'Tied to') : d0 ? d0[1] : 'Tied to';
+      return `<g class="sbb-we g-${linkGroup(l)} ${linkOver(l) ? 'over' : ''}"><path d="M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}" ${dir ? `marker-end="url(#sbb-ar-${linkGroup(l)})"` : ''}/><text x="${((x1 + x2) / 2 * 0.5 + mx * 0.5).toFixed(1)}" y="${((y1 + y2) / 2 * 0.5 + my * 0.5 - 4).toFixed(1)}">${esc(word)}</text></g>`;
+    });
+    const nodes = N.map((n, i) => { const p = P[i], shape = n.kind === 'places' ? `<rect x="${(p.x - R).toFixed(1)}" y="${(p.y - R).toFixed(1)}" width="${R * 2}" height="${R * 2}" rx="7"/>` : n.kind === 'items' ? `<path d="M${p.x.toFixed(1)},${(p.y - R - 3).toFixed(1)} L${(p.x + R + 3).toFixed(1)},${p.y.toFixed(1)} L${p.x.toFixed(1)},${(p.y + R + 3).toFixed(1)} L${(p.x - R - 3).toFixed(1)},${p.y.toFixed(1)} Z"/>` : `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${R}"/>`;
+      return `<g class="sbb-wn k-${n.kind}" data-ent="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.title)}">${shape}<text class="ini" x="${p.x.toFixed(1)}" y="${(p.y + 5).toFixed(1)}">${ini(n.title)}</text><text class="nm" x="${p.x.toFixed(1)}" y="${(p.y + R + 16).toFixed(1)}">${esc(n.title)}</text></g>`; });
+    const groups = [...new Set(L.map(linkGroup))];
+    return `<p class="hint">Everyone with a relationship${st.asOf != null ? ', as things stood at this chapter' : ''}. Click a name to open their page. Dashed lines are ones that had ended by then.</p>
+      <div class="sbb-web-legend">${groups.map(g => `<span class="g-${g}"><i></i>${REL_GROUPS[g]}</span>`).join('')}</div>
+      <div class="sbb-web-wrap"><svg class="sbb-web" viewBox="0 0 ${W} ${H}" role="img" aria-label="Relationships"><defs>${Object.keys(REL_GROUPS).map(g => `<marker id="sbb-ar-${g}" class="g-${g}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>`).join('')}</defs>${edges.join('')}${nodes.join('')}</svg></div>`;
+  }
   async function deleteFact(slug, id) {
+    if (phone()) return;   // read only on a phone
     if (!(await U.confirmBox('Remove this fact?', 'It comes out of the Story Bible. The chapter itself doesn’t change.', 'Remove'))) return;
     const p = await api.openProject(slug); if (!p || !p.bible || !Array.isArray(p.bible.facts)) return;
     p.bible.facts = p.bible.facts.filter(f => f && f.id !== id);
@@ -279,13 +423,14 @@ window.UnwipBible = (function () {
         <div class="sbb-th-acts">${s === 'open' ? `<button type="button" class="btn small" data-paid="${esc(t.b.slug)}|${esc(t.id)}">Paid off…</button><button type="button" class="btn small ghost" data-drop="${esc(t.b.slug)}|${esc(t.id)}">Drop</button>` : `<button type="button" class="btn small ghost" data-reopen="${esc(t.b.slug)}|${esc(t.id)}">Open again</button>`}
           <button type="button" class="sbb-fx" data-delthread="${esc(t.b.slug)}|${esc(t.id)}" aria-label="Remove this thread" title="Remove this thread">×</button></div></div>`; };
     const open = T.filter(t => statusNow(t) === 'open'), paid = T.filter(t => statusNow(t) === 'paid'), dropped = T.filter(t => statusNow(t) === 'dropped');
-    return `<div class="sbb-tools"><p class="hint sbb-grow">A thread is something set up that the reader will expect to be paid off: a locked door, a promise, a prophecy, a gun on the wall. In a chapter, select the words that set it up and choose <b>Add to bible</b> › Plot thread.</p><button type="button" class="btn primary small" data-newthread>+ New thread</button></div>
+    return `<div class="sbb-tools"><p class="hint sbb-grow">A thread is something set up that the reader will expect to be paid off: a locked door, a promise, a prophecy, a gun on the wall. In a chapter, select the words that set it up and choose <b>Add to…</b> › The Story Bible › Plot thread.</p><button type="button" class="btn primary small" data-newthread>+ New thread</button></div>
       ${T.length ? `<h3 class="sbb-h">Open <small>${open.length}</small></h3>${open.map(card).join('') || '<p class="hint">Nothing waiting for a pay-off.</p>'}
         ${paid.length ? `<h3 class="sbb-h">Paid off <small>${paid.length}</small></h3>${paid.map(card).join('')}` : ''}
         ${dropped.length ? `<h3 class="sbb-h">Dropped <small>${dropped.length}</small></h3>${dropped.map(card).join('')}` : ''}` : '<p class="lib-empty">No threads yet.</p>'}`;
   }
   // edit one book's bible data: the book's project.json is read, changed and saved (the book needn't be open)
   async function editBible(slug, fn) {
+    if (phone()) return;   // read only on a phone
     const open = U.S.slug === slug && U.S.project;
     const p = open ? U.S.project : await api.openProject(slug); if (!p) return;
     p.bible = p.bible && typeof p.bible === 'object' ? p.bible : {};
@@ -310,6 +455,7 @@ window.UnwipBible = (function () {
     await editBible(slug, bb => { bb.threads = Array.isArray(bb.threads) ? bb.threads : []; bb.threads.push({ id: U.uid(), title, note: norm(body.querySelector('#sbb-tnote').value).slice(0, 600), open: ch, closed: null, status: 'open', at: Date.now() }); });
   }
   async function payOff(slug, id) {
+    if (phone()) return;   // read only on a phone
     const body = document.createElement('div'); body.className = 'sbb-add';
     body.innerHTML = chapterPicker('Paid off in', null) + '<p class="hint">The chapter where the reader gets what was promised.</p>';
     const ok = await U.modal({ title: 'Paid off', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
@@ -352,11 +498,12 @@ window.UnwipBible = (function () {
     return `<div class="sbb-tools"><p class="hint sbb-grow">The words of your world: invented names, ranks, foods, curses. Their spelling is checked in every chapter${dict ? '' : ' (the word list couldn’t load, so suggestions are off)'}.</p><button type="button" class="btn primary small" data-newterm>+ New word</button></div>
       ${terms.length ? `<div class="sbb-gloss">${terms.map(t => { const u = used(t); return `<div class="sbb-term"><b>${esc(t.term)}</b><p>${t.meaning ? esc(t.meaning) : '<span class="hint">No meaning written yet.</span>'}</p><div class="sbb-fm">${u ? `<small>${u.n} time${u.n === 1 ? '' : 's'}, first</small>${chipGo(u.first)}` : '<small>Not in a chapter yet</small>'}<button type="button" class="sbb-fx" data-editterm="${esc(t.b.slug)}|${esc(t.id)}" aria-label="Change" title="Change">✎</button><button type="button" class="sbb-fx" data-delterm="${esc(t.b.slug)}|${esc(t.id)}" aria-label="Remove" title="Remove">×</button></div></div>`; }).join('')}</div>` : '<p class="hint">No words yet. Add one, or pick from the suggestions below.</p>'}
       ${near.length ? `<h3 class="sbb-h">Possible misspellings <small>${near.length}</small></h3><div class="sbb-near">${near.slice(0, 40).map(({ x, t }) => `<div class="sbb-near-row"><span><b>${esc(x.w)}</b> <small>looks like</small> <b>${esc(t)}</b></span>${chipGo(x.first)}</div>`).join('')}</div>` : ''}
-      ${capsSugg.length ? `<h3 class="sbb-h">Names and invented words <small>not in the dictionary, used 3 times or more</small></h3><div class="sbb-with">${capsSugg.map(x => `<button type="button" class="sbb-chip" data-suggest="${esc(x.w)}">${esc(x.w)} <small>${x.n}</small></button>`).join('')}</div>` : ''}
+      ${phone() ? '' : `${capsSugg.length ? `<h3 class="sbb-h">Names and invented words <small>not in the dictionary, used 3 times or more</small></h3><div class="sbb-with">${capsSugg.map(x => `<button type="button" class="sbb-chip" data-suggest="${esc(x.w)}">${esc(x.w)} <small>${x.n}</small></button>`).join('')}</div>` : ''}
       ${lowSugg.length ? `<h3 class="sbb-h">Other words not in Unwip’s word list</h3><div class="sbb-with">${lowSugg.map(x => `<button type="button" class="sbb-chip" data-suggest="${esc(x.w)}">${esc(x.w)} <small>${x.n}</small></button>`).join('')}</div>` : ''}
-      ${capsSugg.length || lowSugg.length ? '<p class="hint">Click one to add it to the glossary. Unwip’s word list is a short one, so some ordinary words turn up here too.</p>' : ''}`;
+      ${capsSugg.length || lowSugg.length ? '<p class="hint">Click one to add it to the glossary. Unwip’s word list is a short one, so some ordinary words turn up here too.</p>' : ''}`}`;
   }
   async function termDialog(slug, g) {
+    if (phone()) return;   // read only on a phone
     const D = st.data, body = document.createElement('div'); body.className = 'sbb-add';
     body.innerHTML = `<div class="field"><label>Word</label><input type="text" id="sbb-gterm" maxlength="60" value="${esc(g ? g.term : '')}"></div>
       <div class="field"><label>Meaning <small>(optional)</small></label><textarea id="sbb-gmean" rows="3" maxlength="600">${esc(g ? g.meaning : '')}</textarea></div>
@@ -368,6 +515,7 @@ window.UnwipBible = (function () {
     await editBible(target, bb => { bb.glossary = Array.isArray(bb.glossary) ? bb.glossary : []; const x = g && g.id && findIn(bb.glossary, g.id); if (x) { x.term = term; x.meaning = meaning; x.at = Date.now(); } else bb.glossary.push({ id: U.uid(), term, meaning, at: Date.now() }); });
   }
   function wireGloss(box) {
+    if (phone()) box.querySelectorAll(EDITS).forEach(x => x.remove());
     $$('[data-go]', box).forEach(b => b.onclick = () => { const [slug, id] = b.dataset.go.split('|'); goTo(slug, id); });
     const nt = box.querySelector('[data-newterm]'); if (nt) nt.onclick = () => termDialog(st.data.books[0].slug, null);
     $$('[data-suggest]', box).forEach(b => b.onclick = () => termDialog(st.data.books[0].slug, { term: b.dataset.suggest, meaning: '' }));
@@ -392,9 +540,14 @@ window.UnwipBible = (function () {
     return groups.length ? `<p class="hint">Open World and Build pieces belong to the world, so every book can use them.</p>${groups.map(([k, l]) => `<h3 class="sbb-h">${LORE[k]}</h3><div class="sbb-lore">${l.map(x => `<button type="button" class="sbb-lore-it" data-lore="${esc(x.id)}"><span>${x.thumb ? `<img src="${esc(x.thumb)}" alt="">` : ''}</span><b>${esc(x.title || 'Untitled')}</b></button>`).join('')}</div>`).join('')}`
       : '<p class="lib-empty">No magic systems, runes, sigils, insignia or maps yet. Make them in Open World and Build.</p>';
   }
-  function wireLore(box) { $$('[data-lore]', box).forEach(b => b.onclick = async () => { const id = b.dataset.lore; close(); const isLore = ['magic', 'runes', 'sigil', 'insignia'].includes(((window.UnwipBuild.items || []).find(x => x.id === id) || {}).kind); if (window.UnwipPlay) window.UnwipPlay.setTab(isLore ? 'world' : 'build'); await window.UnwipBuild.open(id); }); }
+  function wireLore(box) { $$('[data-lore]', box).forEach(b => b.onclick = async () => { const id = b.dataset.lore; last = { target: st.target, tab: 'lore', asOf: st.asOf }; close(); const isLore = ['magic', 'runes', 'sigil', 'insignia'].includes(((window.UnwipBuild.items || []).find(x => x.id === id) || {}).kind); if (window.UnwipPlay) window.UnwipPlay.setTab(isLore && !phone() ? 'world' : 'build'); await window.UnwipBuild.open(id, 'bible'); }); }
+  // On a phone (up to 720 px wide) the bible is for reading: everything that changes it comes out of the page, and the
+  // edit functions refuse too. iPads and bigger keep all of it.
+  const EDITS = '[data-new], [data-addto], [data-newthread], [data-newterm], [data-editterm], [data-delterm], [data-delfact], [data-delthread], [data-paid], [data-drop], [data-reopen], [data-bmv], [data-series], [data-suggest], [data-rm], [data-newlink], [data-dellink]';
   function wire() {
     const D = st.data;
+    page.classList.toggle('sbb-ro', phone());
+    if (phone()) { page.querySelectorAll(EDITS).forEach(x => x.remove()); const t = page.querySelector('.sbb-title'); if (t && !t.querySelector('.sbb-ro-tag')) t.insertAdjacentHTML('beforeend', '<span class="sbb-ro-tag">Read only on a phone</span>'); }
     page.querySelector('[data-close]').onclick = close;
     $$('[data-tab]', page).forEach(b => b.onclick = () => { st.tab = b.dataset.tab; st.sel = null; st.q = ''; draw(); });
     $$('[data-ent]', page).forEach(b => b.onclick = () => { st.sel = b.dataset.ent; const e = D.entries.find(x => x.id === st.sel); if (e) st.tab = e.kind; draw(); page.scrollTop = 0; });
@@ -414,6 +567,9 @@ window.UnwipBible = (function () {
     $$('[data-reopen]', page).forEach(b => b.onclick = () => { const [slug, id] = b.dataset.reopen.split('|'); editBible(slug, bb => { const t = findIn(bb.threads, id); if (t) { t.status = 'open'; t.closed = null; } }); });
     $$('[data-delthread]', page).forEach(b => b.onclick = async () => { const [slug, id] = b.dataset.delthread.split('|'); if (await U.confirmBox('Remove this thread?', 'It comes out of the Story Bible. Your chapters don’t change.', 'Remove')) editBible(slug, bb => { bb.threads = (bb.threads || []).filter(x => x && x.id !== id); }); });
     $$('[data-delfact]', page).forEach(b => b.onclick = () => { const [slug, id] = b.dataset.delfact.split('|'); deleteFact(slug, id); });
+    $$('[data-newlink]', page).forEach(b => b.onclick = () => newLink(D.entries.find(e => e.id === st.sel)));
+    $$('[data-dellink]', page).forEach(b => b.onclick = async () => { const [slug, id] = b.dataset.dellink.split('|'); if (await U.confirmBox('Remove this relationship?', 'It comes out of the Story Bible. Your chapters don’t change.', 'Remove')) editBible(slug, bb => { bb.links = (bb.links || []).filter(x => x && x.id !== id); }); });
+    $$('.sbb-wn', page).forEach(g => g.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); g.dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
     const asof = page.querySelector('.sbb-asof-sel'); if (asof) asof.onchange = () => { st.asOf = asof.value === '' ? null : +asof.value; draw(); };
     $$('[data-step-asof]', page).forEach(b => b.onclick = () => { const opts = [...asof.options].filter(o => o.value !== '').map(o => +o.value), i = opts.indexOf(st.asOf) + +b.dataset.stepAsof; if (i >= 0 && i < opts.length) { st.asOf = opts[i]; draw(); } });
   }
@@ -423,7 +579,7 @@ window.UnwipBible = (function () {
     const D = st.data, multi = D.books.length > 1;
     const body = document.createElement('div'); body.className = 'sbb-add';
     body.innerHTML = `<div class="field"><label>Up to</label><select id="sbb-xasof"><option value="">the whole ${multi ? 'series' : 'book'}</option>${D.books.map(b => `<optgroup label="${multi ? `Book ${b.no}: ` : ''}${esc(b.title)}">${b.chs.map((c, ci) => `<option value="${b.no * 100000 + ci}" ${st.asOf === b.no * 100000 + ci ? 'selected' : ''}>${multi ? `Book ${b.no} · ` : ''}Ch ${ci + 1}: ${esc(c.title)}</option>`).join('')}</optgroup>`).join('')}</select></div>
-      <div class="field"><label>Put in</label><div class="sbb-pick">${[['people', 'People', 1], ['places', 'Places', 1], ['things', 'Things', 1], ['facts', 'Facts on each page', 1], ['glossary', 'Glossary', 1], ['timeline', 'Timeline', 1], ['threads', 'Plot threads (your notes: leave out for readers)', 0]].map(([k, l, on]) => `<label class="check"><input type="checkbox" value="${k}" ${on ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
+      <div class="field"><label>Put in</label><div class="sbb-pick">${[['people', 'People', 1], ['places', 'Places', 1], ['things', 'Things', 1], ['facts', 'Facts on each page', 1], ['links', 'Relationships', 1], ['glossary', 'Glossary', 1], ['timeline', 'Timeline', 1], ['threads', 'Plot threads (your notes: leave out for readers)', 0]].map(([k, l, on]) => `<label class="check"><input type="checkbox" value="${k}" ${on ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
       <div class="field"><label>As</label><div class="sbb-kinds">${[['docx', 'Word (.docx)'], ['pdf', 'PDF']].map(([k, l], i) => `<label><input type="radio" name="sbb-xfmt" value="${k}" ${i ? '' : 'checked'}><span>${l}</span></label>`).join('')}</div></div>
       <p class="hint">Up to a chapter, nothing that happens after it is included: the people met so far, facts as they stood, threads set up so far. Good for a beta reader or an editor partway through.</p>`;
     const ok = await U.modal({ title: 'Export the Story Bible', body, wide: true, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Export', value: true, kind: 'primary' }] });
@@ -471,6 +627,10 @@ window.UnwipBible = (function () {
             for (const f of loose) P.push(`<p>${esc(f.text)} <span class="k">(${where(f)})</span></p>`);
           }
         }
+        if (inc.has('links')) {
+          const L = D.links.filter(l => (l.a === e || l.b === e) && linkOn(l) && !linkOver(l));
+          if (L.length) { P.push('<h3>Relationships</h3>'); for (const l of L) { const o = l.a === e ? l.b : l.a; P.push(`<p>${l.type === 'other' && l.a === e ? esc(l.label) : linkWords(l, e).replace(/<[^>]+>/g, '')} <b>${esc(o.title)}</b>${l.note ? ` <span class="k">(${esc(l.note)})</span>` : ''}</p>`); } }
+        }
         if (seen.length) P.push(`<p class="k">First seen ${where(seen[0])}, in ${seen.length} chapter${seen.length === 1 ? '' : 's'}${st.asOf != null ? ' so far' : ''}.</p>`);
       }
       P.push('</div>');
@@ -503,6 +663,7 @@ window.UnwipBible = (function () {
     if (id) await U.openDoc(id);
   }
   async function reorder(i, d) {
+    if (phone()) return;   // read only on a phone
     const L = st.data.books, j = i + d; if (j < 0 || j >= L.length) return;
     [L[i], L[j]] = [L[j], L[i]];
     for (const [k, b] of L.entries()) { b.no = k + 1; const p = await api.openProject(b.slug).catch(() => null); if (p && +p.seriesNo !== k + 1) { p.seriesNo = k + 1; await api.saveProjectMeta(b.slug, p); } b.p.seriesNo = k + 1; }
@@ -541,21 +702,64 @@ window.UnwipBible = (function () {
     return true;
   }
   // a new person, place or thing: named once, put in the books you pick, shared between them when there's more than one
+  // ---- a book picker that copes with any number of books: chips for the ones picked, a search box, and a short list
+  // under it (recent books when the box is empty, matches when typing; a series name offers all its books at once)
+  function bookPicker(sh, all, ctx) {
+    const seriesOf = b => b.series || '';
+    const picked = new Map();
+    const el = document.createElement('div'); el.className = 'sbb-bp'; el.dataset.ownEnter = '1';
+    el.innerHTML = `<div class="sbb-bp-chips"></div><input type="search" class="sbb-bp-q" placeholder="Find a book or series" aria-label="Find a book or series" autocomplete="off"><div class="sbb-bp-list" role="listbox"></div>`;
+    const chips = el.querySelector('.sbb-bp-chips'), q = el.querySelector('.sbb-bp-q'), listEl = el.querySelector('.sbb-bp-list');
+    let tell = () => {};
+    const label = b => `${seriesOf(b) ? `${esc(seriesOf(b))}${b.seriesNo ? ` ${b.seriesNo}` : ''} · ` : ''}${esc(b.title)}`;
+    function drawChips() {
+      chips.innerHTML = picked.size ? [...picked.values()].map(b => `<span class="sbb-bp-chip">${label(b)}<button type="button" data-rm="${esc(b.slug)}" aria-label="Take out ${esc(b.title)}">×</button></span>`).join('') : '<span class="sbb-bp-none">No book picked yet</span>';
+      tell(picked.size);
+    }
+    function drawList() {
+      const t = q.value.trim().toLowerCase();
+      const rows = [];
+      const ser = t ? sh.series.filter(s => s.name.toLowerCase().includes(t)) : (ctx && ctx.series ? sh.series.filter(s => keyName(s.name) === keyName(ctx.series)) : []);
+      for (const s of ser.slice(0, 3)) if (s.books.length > 1 && s.books.some(b => !picked.has(b.slug))) rows.push(`<button type="button" class="sbb-bp-row sbb-bp-all" data-series="${esc(s.name)}"><b>All ${s.books.length} books</b> in ${esc(s.name)}</button>`);
+      const pool = (t ? all.filter(b => b.title.toLowerCase().includes(t) || seriesOf(b).toLowerCase().includes(t)) : [...all].sort((a, b) => (b.modified || 0) - (a.modified || 0))).filter(b => !picked.has(b.slug));
+      for (const b of pool.slice(0, 6)) rows.push(`<button type="button" class="sbb-bp-row" data-add="${esc(b.slug)}">+ ${label(b)}</button>`);
+      if (pool.length > 6) rows.push(`<div class="sbb-bp-more">${pool.length - 6} more${t ? ' match' : ''}: type to narrow it down</div>`);
+      if (!rows.length) rows.push(`<div class="sbb-bp-more">${t ? 'No book matches that.' : 'Every book is picked.'}</div>`);
+      listEl.innerHTML = (t ? '' : '<div class="sbb-bp-h">Recent books</div>') + rows.join('');
+    }
+    const add = slug => { const b = all.find(x => x.slug === slug); if (b) picked.set(slug, b); };
+    el.addEventListener('click', e => {
+      const a = e.target.closest('[data-add]'), r = e.target.closest('[data-rm]'), s = e.target.closest('[data-series]');
+      if (a) add(a.dataset.add); else if (r) picked.delete(r.dataset.rm); else if (s) (sh.series.find(x => x.name === s.dataset.series) || { books: [] }).books.forEach(b => add(b.slug)); else return;
+      drawChips(); drawList(); q.focus();
+    });
+    q.addEventListener('input', drawList);
+    q.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); const f = listEl.querySelector('[data-add], [data-series]'); if (f) f.click(); } });
+    // starting point: a series' latest book, or the book whose bible is open, or nothing
+    if (ctx && ctx.series) { const s = sh.series.find(x => keyName(x.name) === keyName(ctx.series)); if (s && s.books.length) add(s.books[s.books.length - 1].slug); }
+    else if (ctx && ctx.slug) add(ctx.slug);
+    drawChips(); drawList();
+    return { el, get: () => [...picked.keys()], onChange: fn => { tell = fn; fn(picked.size); } };
+  }
   async function newEntry(o = {}) {
-    let kind = o.kind || 'characters', target = o.into || (st && st.target);
+    if (phone()) { U.toast('On a phone the Story Bible is read only. Add people, places and things on an iPad or computer.'); return; }
+    const kind = o.kind || 'characters';
     const sh = await shelf();
     const all = [...sh.series.flatMap(s => s.books), ...sh.alone];
     if (!all.length) { U.toast('Make a book first: people, places and things live in your books.'); return; }
-    if (!target) target = sh.series.length ? { series: sh.series[0].name } : { slug: sh.alone[0].slug };
-    const inSeries = target.series ? (sh.series.find(s => keyName(s.name) === keyName(target.series)) || { books: [] }).books : all.filter(b => b.slug === target.slug);
+    // which books: a search over every book (there may be hundreds), with the ones picked shown as chips. In a series'
+    // bible its latest book starts picked and "All N books" is one tap; from the main screen nothing is picked until you
+    // choose (it used to tick only the last book opened, and listing every book wouldn't work with 500 of them).
+    const picker = bookPicker(sh, all, st && st.target ? st.target : o.into || null);
     const body = document.createElement('div'); body.className = 'sbb-new';
     body.innerHTML = `<div class="field"><label>Name</label><input type="text" id="sbb-nname" maxlength="80" placeholder="${kind === 'characters' ? 'e.g. Wren Tallow' : kind === 'places' ? 'e.g. Tallow Street' : 'e.g. The brass wick-hook'}"></div>
-      ${o.chooseKind ? '' : ''}
-      <div class="field"><label>Put it in</label><div class="sbb-pick">${inSeries.map((b, i) => `<label class="check"><input type="checkbox" value="${esc(b.slug)}" ${i === inSeries.length - 1 ? 'checked' : ''}><span>${inSeries.length > 1 ? `Book ${i + 1}: ` : ''}${esc(b.title)}</span></label>`).join('')}</div></div>
-      <p class="hint">${inSeries.length > 1 ? 'Ticking more than one book shares the page: change it in any of them and the others follow.' : 'It goes in the book’s ' + ({ characters: 'Characters', places: 'Places', items: 'Items' }[kind]) + ' folder.'}${o.sheet ? ' Its character sheet opens next.' : ''}</p>`;
-    const ok = await U.modal({ title: `New ${KIND_ONE[kind]}`, body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Make it', value: true, kind: 'primary' }], onOpen: back => setTimeout(() => back.querySelector('#sbb-nname').focus(), 50) });
+      <div class="field"><label>Put it in</label><div class="sbb-bp-slot"></div></div>
+      <p class="hint">It goes in each book’s ${({ characters: 'Characters', places: 'Places', items: 'Items' }[kind])} folder. In more than one book the page is shared: change it in any of them and the others follow.${o.sheet ? ' Its character sheet opens next.' : ''}</p>`;
+    body.querySelector('.sbb-bp-slot').appendChild(picker.el);
+    const ok = await U.modal({ title: `New ${KIND_ONE[kind]}`, body, buttons: [{ label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Make it', value: true, kind: 'primary' }],
+      onOpen: back => { const go = back.querySelector('.m-foot .btn.primary'); picker.onChange(n => { if (go) go.disabled = !n; }); setTimeout(() => back.querySelector('#sbb-nname').focus(), 50); } });
     const name = ok ? norm(body.querySelector('#sbb-nname').value).slice(0, 80) : '';
-    const picks = [...body.querySelectorAll('.sbb-pick input:checked')].map(x => x.value);
+    const picks = picker.get();
     if (!name || !picks.length) return;
     const key = picks.length > 1 ? U.uid() + U.uid() : null;
     let firstSlug = null, firstId = null;
@@ -571,6 +775,7 @@ window.UnwipBible = (function () {
     if (st) { const keepTab = st.tab; st.data = await load(st.target); st.tab = keepTab; const e = st.data && st.data.entries.find(x => x.title === name && x.kind === kind); st.sel = e ? e.id : null; draw(); }
   }
   async function addToBooks(e) {
+    if (phone()) return;   // read only on a phone
     if (!e) return;
     const D = st.data, missing = D.books.filter(b => !e.in.some(x => x.b === b)); if (!missing.length) return;
     const body = document.createElement('div');
@@ -650,5 +855,5 @@ window.UnwipBible = (function () {
   if (U.api.onAddToBible) U.api.onAddToBible(t => { if (U.level() >= 2 && !phone()) addFact(t || getSelection().toString()); });
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && st && !document.querySelector('.modal-back')) { if (st.sel) { st.sel = null; draw(); } else close(); } });
-  return { open, close, shelfHTML, wireShelf, newEntry, addFact, load, parseSheet, exportHTML: inc => exportHTML(new Set(inc)), get state() { return st; } };
+  return { open, close, reopen, shelfHTML, wireShelf, newEntry, addFact, load, parseSheet, exportHTML: inc => exportHTML(new Set(inc)), get state() { return st; } };
 })();

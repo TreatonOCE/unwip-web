@@ -490,7 +490,7 @@
     prefsWrite: async json => { await FS.write(`${LIB}/_Settings/shared.json`, json); return true; },
     onPrefsChange: on('prefs'),
     buildDelete: async id => { await FS.remove(`${LIB}/_Build/items/${safeId(id)}.json`); return true; },
-    onNoteCmd: on('note'), onPastePlain: on('pastePlain'), onSplit: on('split'), onAddToSheet: on('addToSheet'), onAddToBible: on('addToBible'), setLevel: () => {},
+    onNoteCmd: on('note'), onPastePlain: on('pastePlain'), onSplit: on('split'), onAddToSheet: on('addToSheet'), onAddToBible: on('addToBible'), onAddTo: on('addTo'), setLevel: () => {},
     find: async (t, o) => find(t, o), stopFind: async () => { clearFind(); },
     onFindResult: cb => { findCb = cb; },
     // spelling: the browser's own spellcheck does the work
@@ -555,7 +555,9 @@
       // iPhone and iPad can't hand a whole folder to a web app (the picker greys out every file), so there you pick
       // the chapter files themselves: Select at the top of the picker, tap them all, then Open
       const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-      const fs = (await pickFiles({ multiple: true, directory: !ios && 'webkitdirectory' in document.createElement('input'), accept: ios ? '.docx,.odt,.rtf,.txt,.md,.markdown,.text,.htm,.html' : '' }))
+      const picked = await pickFiles({ multiple: true, directory: !ios && 'webkitdirectory' in document.createElement('input'), accept: ios ? '.docx,.odt,.rtf,.txt,.md,.markdown,.text,.htm,.html' : '' });
+      if (picked.some(f => f.name === 'project.json') && picked.some(f => segs(f).includes('docs'))) return { unwipBook: true, files: [] };   // an Unwip book's own folder
+      const fs = picked
         .filter(f => /\.(docx|odt|rtf|txt|md|markdown|text|htm|html)$/i.test(f.name) && !/\.excalidraw\.md$/i.test(f.name) && !segs(f).some(x => /^[~.]/.test(x)));
       if (!fs.length) return null;
       const folder = segs(fs[0]).length > 1 ? segs(fs[0])[0] : 'Chapters';
