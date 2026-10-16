@@ -203,7 +203,7 @@ window.UnwipBible = (function () {
     if (!st.data) { close(); U.toast('That series or book isn’t there any more.'); return; }
     draw();
   }
-  function close() { if (page) { page.classList.add('hidden'); page.innerHTML = ''; } document.body.classList.remove('in-bible'); st = null; }
+  function close() { if (page) { page.classList.add('hidden'); page.innerHTML = ''; } document.body.classList.remove('in-bible'); st = null; refreshShelf(); }
   const upto = s => !st || st.asOf == null || gp(s) <= st.asOf;
   const seenNow = e => e.seen.filter(upto);
   const factsNow = e => e.facts.filter(upto);
@@ -216,7 +216,7 @@ window.UnwipBible = (function () {
       <div class="sbb-top"><button type="button" class="icon-btn" data-close aria-label="Back to the main screen" title="Back">‹</button>
         <div class="sbb-title"><span class="sbb-kicker">Story Bible</span><h1>${esc(D.label)}</h1></div>
         <div class="sbb-books">${D.books.map((b, i) => `<span class="sbb-book" title="${esc(b.title)}">${multi ? `<b>${b.no}</b>` : ''}${esc(b.title)}<button type="button" class="sbb-bk-more" data-bmore="${i}" aria-label="More for ${esc(b.title)}" title="Open, take out of the series, or delete">⋯</button>${multi ? `<span class="sbb-mv">${i ? `<button type="button" data-bmv="-1" data-i="${i}" aria-label="Earlier in the series">‹</button>` : ''}${i < D.books.length - 1 ? `<button type="button" data-bmv="1" data-i="${i}" aria-label="Later in the series">›</button>` : ''}</span>` : ''}</span>`).join('')}
-          ${D.series ? '' : '<button type="button" class="link-btn" data-series>Put it in a series…</button>'}<button type="button" class="btn small" data-export title="Save the Story Bible as a Word file or PDF, up to a chapter if you like">Export…</button></div></div>
+          ${D.series ? '<button type="button" class="link-btn" data-endseries title="Every book stays, as a book of its own">End the series…</button>' : '<button type="button" class="link-btn" data-series>Put it in a series…</button>'}<button type="button" class="btn small" data-export title="Save the Story Bible as a Word file or PDF, up to a chapter if you like">Export…</button></div></div>
       <div class="sbb-asof"><label>As of <select class="sbb-asof-sel" aria-label="Show the bible as of">
           <option value="">the whole ${multi ? 'series' : 'book'}</option>
           ${D.books.map(b => `<optgroup label="${multi ? `Book ${b.no}: ` : ''}${esc(b.title)}">${b.chs.map((c, ci) => `<option value="${b.no * 100000 + ci}" ${st.asOf === b.no * 100000 + ci ? 'selected' : ''}>${multi ? `Book ${b.no} · ` : ''}Ch ${ci + 1}: ${esc(c.title)}</option>`).join('')}</optgroup>`).join('')}
@@ -589,7 +589,7 @@ window.UnwipBible = (function () {
   function wireLore(box) { $$('[data-lore]', box).forEach(b => b.onclick = async () => { const id = b.dataset.lore; last = { target: st.target, tab: st.tab, sel: st.sel, asOf: st.asOf }; close(); const isLore = ['magic', 'runes', 'sigil', 'insignia'].includes(((window.UnwipBuild.items || []).find(x => x.id === id) || {}).kind); if (window.UnwipPlay) window.UnwipPlay.setTab(isLore && !phone() ? 'world' : 'build'); await window.UnwipBuild.open(id, 'bible'); }); }
   // On a phone (up to 720 px wide) the bible is for reading: everything that changes it comes out of the page, and the
   // edit functions refuse too. iPads and bigger keep all of it.
-  const EDITS = '[data-new], [data-addto], [data-newthread], [data-newterm], [data-editterm], [data-delterm], [data-delfact], [data-delthread], [data-paid], [data-drop], [data-reopen], [data-bmv], [data-series], [data-suggest], [data-rm], [data-newlink], [data-dellink], [data-bmore]';
+  const EDITS = '[data-new], [data-addto], [data-newthread], [data-newterm], [data-editterm], [data-delterm], [data-delfact], [data-delthread], [data-paid], [data-drop], [data-reopen], [data-bmv], [data-series], [data-suggest], [data-rm], [data-newlink], [data-dellink], [data-bmore], [data-endseries]';
   function wire() {
     const D = st.data;
     page.classList.toggle('sbb-ro', phone());
@@ -605,6 +605,7 @@ window.UnwipBible = (function () {
     $$('[data-new]', page).forEach(b => b.onclick = () => newEntry({ kind: b.dataset.new, into: st.target }));
     const add = page.querySelector('[data-addto]'); if (add) add.onclick = () => addToBooks(D.entries.find(x => x.id === st.sel));
     const ser = page.querySelector('[data-series]'); if (ser) ser.onclick = putInSeries;
+    const endS = page.querySelector('[data-endseries]'); if (endS) endS.onclick = endSeries;
     const ex = page.querySelector('[data-export]'); if (ex) ex.onclick = exportDialog;
     $$('[data-bmv]', page).forEach(b => b.onclick = () => reorder(+b.dataset.i, +b.dataset.bmv));
     if (st.sel) wireLore(page);
@@ -735,6 +736,25 @@ window.UnwipBible = (function () {
     for (const [k, b] of rest.entries()) { const q = await api.openProject(b.slug).catch(() => null); if (q && +q.seriesNo !== k + 1) { q.seriesNo = k + 1; await api.saveProjectMeta(b.slug, q); } }
     U.toast(`“${esc(bk.title)}” is out of the series.`);
     if (rest.length) { const keep = { tab: st.tab }; st.data = await load(st.target); st.sel = null; Object.assign(st, keep); draw(); } else close();
+  }
+  // the whole series ends: every book stays, as a book of its own with its own Story Bible
+  async function endSeries() {
+    if (phone() || !st || !st.data.series) return;
+    const D = st.data;
+    if (!(await U.confirmBox(`End the series “${esc(D.label)}”?`, `${D.books.length === 1 ? 'The book stays' : `All ${D.books.length} books stay`}, with everything in ${D.books.length === 1 ? 'it' : 'them'}, as books of their own. Pages they share stop updating together: each book keeps its own copy. To delete a book as well, use the ⋯ next to it.`, 'End the series'))) return;
+    for (const bk of D.books) {
+      const open = U.S.slug === bk.slug && U.S.project, p = open ? U.S.project : await api.openProject(bk.slug).catch(() => null); if (!p) continue;
+      p.series = ''; delete p.seriesNo;
+      walk(p.binder, n => { if (n.series && typeof n.series === 'object') delete n.series; });
+      if (open) { U.scheduleMeta(); await U.saveMetaNow(); } else await api.saveProjectMeta(bk.slug, p);
+    }
+    U.toast(`The series “${esc(D.label)}” has ended. Its books are still here.`);
+    close();
+  }
+  // the Open World shelf behind the bible shows the series and books as they are now
+  async function refreshShelf() {
+    const slot = document.getElementById('sbb-shelf-slot'); if (!slot) return;
+    const h = await shelfHTML(); if (slot.isConnected) { slot.innerHTML = h; wireShelf(slot); }
   }
   async function deleteFromBible(bk) {
     if (phone() || !U.deleteBook) return;

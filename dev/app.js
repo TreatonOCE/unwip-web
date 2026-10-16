@@ -62,6 +62,14 @@
   const countWords = t => (String(t).match(/[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu) || []).length;
   const fmt = n => Number(n || 0).toLocaleString();
   const today = () => new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
+  // when a book was last changed, with the time (people switch between books a lot): Today 3:05 pm, Yesterday 9:12 am, 14 Oct 2026, 8:40 pm
+  function lastChanged(t) {
+    const d = new Date(t), time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).replace(/\s?([AP])M$/i, (m, a) => ' ' + a.toLowerCase() + 'm');
+    const day = x => x.toLocaleDateString('en-CA'), y = new Date(); y.setDate(y.getDate() - 1);
+    if (day(d) === day(new Date())) return 'Today ' + time;
+    if (day(d) === day(y)) return 'Yesterday ' + time;
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) + ', ' + time;
+  }
 
   // ------------------------------------------------------------------ theme
   function applyTheme() {
@@ -225,7 +233,7 @@
       }
       const card = document.createElement('div');
       card.className = 'project-card';
-      const when = p.modified ? new Date(p.modified).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+      const when = p.modified ? lastChanged(p.modified) : '';
       const goal = (p.goals || {}).total || 0;
       const pace = paceText(p.goals || {}, p.words || 0);
       card.innerHTML = `<div class="pc-top"><div><div class="pc-spine"></div><h3>${esc(p.title)}</h3></div>
@@ -546,27 +554,54 @@
     toast(f.node.fav ? `★ Added “${esc(f.node.title)}” to Favourites (top of the binder).` : `Removed “${esc(f.node.title)}” from Favourites.`);
   }
   // ---- custom icons / emojis for binder items
-  const ICON_CHOICES = ['folder', 'doc', 'book', 'person', 'pin', 'gem', 'note', 'flask', 'scene', 'flame', 'bolt', 'tag', 'mood', 'image', 'sticky', 'palette', 'timeline', 'cork', 'outline', 'history', 'search', 'columns'];
+  const ICON_CHOICES = ['folder', 'doc', 'book', 'person', 'pin', 'gem', 'note', 'flask', 'scene', 'flame', 'bolt', 'tag', 'mood', 'image', 'sticky', 'palette', 'timeline', 'cork', 'outline', 'history', 'search', 'columns', 'trash'];
   const EMOJI_CHOICES = ('📖 📕 📗 📘 📙 📓 📝 ✏️ 🖋️ 📜 🗒️ 📌 📍 🔖 ⭐ 🌟 ✨ 💡 🔥 ⚡ ❤️ 💔 💀 👑 🗡️ ⚔️ 🛡️ 🏹 🔮 🧪 🗝️ 💎 💰 🪙 📦 🎁 ' +
     '🧙 🧝 🧛 🧟 🐉 🦄 🐺 🦅 🐈 🐍 👤 👥 👩 👨 🧒 👵 🤴 👸 🕵️ 🦹 ' +
     '🏰 🏯 🏠 🏚️ ⛪ 🏙️ 🌆 🌃 🌲 🌳 🏔️ 🌋 🏝️ 🌊 🏜️ 🌍 🗺️ 🧭 🚢 🚂 🚀 ' +
-    '☀️ 🌙 🌧️ ❄️ 🌪️ 🌸 🍂 🕯️ 🕰️ ⏳ 📅 🎭 🎬 🎵 🎨 🧩 ❓ ❗ ✅ ❌ 🚧 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪').split(' ');
+    '🗑️ ☀️ 🌙 🌧️ ❄️ 🌪️ 🌸 🍂 🕯️ 🕰️ ⏳ 📅 🎭 🎬 🎵 🎨 🧩 ❓ ❗ ✅ ❌ 🚧 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪').split(' ');
   function iconHTML(n, fallback) {
     if (!n.icon) return fallback;
     if (I[n.icon] && /^[a-zA-Z]+$/.test(n.icon)) return I[n.icon];
     return `<span class="tr-emoji">${esc(n.icon)}</span>`;
   }
   // the icon chooser: returns { icon } ('' = default) or null if cancelled
+  // every emoji with its name and search words (app/vendor/emoji/names.txt, made by tools/emoji/make.py), loaded the
+  // first time someone searches, so "trash" finds the wastebasket without the Windows emoji keyboard
+  let emojiNames = null;
+  const loadEmojiNames = () => emojiNames || (emojiNames = fetch('vendor/emoji/names.txt').then(r => r.ok ? r.text() : '').then(t => t.split('\n').filter(Boolean).map(l => { const [e, n, k] = l.split('\t'); return { e, n, k: (n + ' ' + (k || '')).toLowerCase() }; })).catch(() => []));
+  function findEmoji(list, q) {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean), out = [];
+    for (const it of list) {
+      const ws = it.k.split(' ');
+      if (!words.every(w => ws.some(x => x.startsWith(w)))) continue;
+      const nm = it.n.toLowerCase(), score = nm === q ? 0 : nm.startsWith(words[0]) ? 1 : nm.split(' ').some(x => x.startsWith(words[0])) ? 2 : 3;
+      out.push([score, it]);
+    }
+    return out.sort((a, b) => a[0] - b[0]).slice(0, 120).map(x => x[1]);
+  }
+  // the icon chooser: returns { icon } ('' = default) or null if cancelled
   async function pickIcon(current, title) {
     let chosen = current || '';
     const body = document.createElement('div');
-    body.innerHTML = `<div class="ip-label">Icons</div><div class="ip-grid icons">${ICON_CHOICES.map(k => `<button class="ip-btn" data-v="${k}" title="${k}">${I[k]}</button>`).join('')}</div>
-      <div class="ip-label">Emojis</div><div class="ip-grid emoji">${EMOJI_CHOICES.map(e => `<button class="ip-btn" data-v="${esc(e)}">${esc(e)}</button>`).join('')}</div>
-      <div class="ip-own"><label>Or type/paste any emoji (Windows: press Win + . to open the emoji keyboard)</label><input type="text" maxlength="8" value="${chosen && !I[chosen] ? esc(chosen) : ''}" placeholder="🙂"></div>`;
+    const btn = (v, t) => `<button class="ip-btn" type="button" data-v="${esc(v)}"${t ? ` title="${esc(t)}"` : ''}>${esc(v)}</button>`;
+    body.innerHTML = `<div class="ip-own"><label>Search emojis by name (trash, dragon, castle…), or type or paste any emoji</label><input type="text" maxlength="40" value="${chosen && !I[chosen] ? esc(chosen) : ''}" placeholder="Search, or 🙂" aria-label="Search emojis"></div>
+      <div class="ip-found hidden"><div class="ip-label">Found</div><div class="ip-grid emoji ip-found-grid"></div></div>
+      <div class="ip-label">Icons</div><div class="ip-grid icons">${ICON_CHOICES.map(k => `<button class="ip-btn" type="button" data-v="${k}" title="${k}">${I[k]}</button>`).join('')}</div>
+      <div class="ip-label">Emojis</div><div class="ip-grid emoji">${EMOJI_CHOICES.map(e => btn(e)).join('')}</div>`;
+    const input = $('.ip-own input', body), found = $('.ip-found', body), fgrid = $('.ip-found-grid', body);
     const mark = () => $$('.ip-btn', body).forEach(b => b.classList.toggle('on', b.dataset.v === chosen));
-    mark();
-    $$('.ip-btn', body).forEach(b => b.onclick = () => { chosen = b.dataset.v; $('.ip-own input', body).value = I[chosen] ? '' : chosen; mark(); });
-    $('.ip-own input', body).oninput = e => { chosen = e.target.value.trim(); mark(); };
+    const wire = root => $$('.ip-btn', root).forEach(b => b.onclick = () => { chosen = b.dataset.v; if (!input.value || !/\p{L}/u.test(input.value) || /\p{Extended_Pictographic}/u.test(input.value)) input.value = I[chosen] ? '' : chosen; mark(); });
+    mark(); wire(body);
+    let seq = 0;
+    input.oninput = async () => {
+      const v = input.value.trim(), my = ++seq;
+      if (v && /\p{L}/u.test(v) && !/\p{Extended_Pictographic}/u.test(v)) {   // words: search
+        const list = findEmoji(await loadEmojiNames(), v); if (my !== seq) return;
+        found.classList.remove('hidden');
+        fgrid.innerHTML = list.length ? list.map(it => btn(it.e, it.n)).join('') : `<p class="hint">No emoji called “${esc(v)}”. Try another word.</p>`;
+        wire(fgrid); mark();
+      } else { found.classList.add('hidden'); fgrid.innerHTML = ''; chosen = v; mark(); }
+    };
     const r = await modal({ title: `Icon for “${title || 'Untitled'}”`, body, wide: true, buttons: [{ label: 'Use default', value: 'reset', kind: 'ghost' }, { label: 'Cancel', value: false, kind: 'ghost' }, { label: 'Save', value: true, kind: 'primary' }] });
     if (!r) return null;
     if (r === 'reset' || !chosen) return { icon: '' };
@@ -2429,8 +2464,29 @@
     if (g.dropBlank) blocks = blocks.filter(b => b.runs.some(r => !r.br && (r.text || '').trim()));
     if (g.smf) blocks = blocks.map(b => Clip.SCENE_BREAK.test(b.runs.map(r => r.text || '').join('')) && b.runs.some(r => (r.text || '').trim()) ? { ...b, runs: [{ ...b.runs.find(r => !r.br), text: '#' }] } : b);
     let html = Clip.exportFromBlocks(blocks, g.style, { pageBreaks: true }).html;
+    // Kindle / EPUB: [system messages] as boxes, as the EPUB will have them (Settings › LitRPG). The preview used to
+    // leave them as plain brackets whatever the setting said.
+    if (fmt === 'ebook') html = ebookSysBoxes(html);
     // in the preview, "new page" means "new column"
     return html.replace(/page-break-before: always; break-before: page/g, 'break-before: column');
+  }
+  function ebookSysBoxes(html) {
+    const L = S.settings.litrpg, Lit = window.UnwipLitRPG;
+    if (!L || !L.on || !L.ebook || !Lit) return html;
+    const box = document.createElement('div'); box.innerHTML = html;
+    const ps = [...box.querySelectorAll('p')].filter(p => (p.textContent || '').trim());
+    const mode = Lit.shortStyle();
+    // the same look as the EPUB's p.sys (epub.js)
+    const FULL = 'text-indent:0;text-align:left;margin:.7em 1.2em;padding:.35em .7em;border:1px solid #5d84c9;border-left:4px solid #5d84c9;background-color:#eef3fb;color:#1d2a44;font-family:monospace;font-size:.88em;break-inside:avoid;';
+    ps.forEach((p, i) => {
+      const t = p.textContent || ''; if (!Lit.isSys(t)) return;
+      const short = mode !== 'full' && Lit.isShort(t, ps[i - 1] ? ps[i - 1].textContent : '', ps[i + 1] ? ps[i + 1].textContent : '');
+      if (short && mode === 'plain') { p.style.cssText += ';text-indent:0;margin:.5em 1.2em;font-weight:bold;'; return; }
+      p.style.cssText += ';' + FULL + (short ? 'display:table;margin-right:auto;' : '');
+      p.querySelectorAll('[style]').forEach(x => { x.style.fontFamily = ''; x.style.fontSize = ''; });   // the box's own monospace, as in the EPUB
+      if (!short && ps[i - 1] && Lit.isSys(ps[i - 1].textContent)) p.style.cssText += 'margin-top:-.45em;border-top:0;';
+    });
+    return box.innerHTML;
   }
   // Flow the text into page-sized columns and count them
   function layoutInto(flow, fmt) {
@@ -2772,7 +2828,7 @@
         if (!S.project.epubId) { S.project.epubId = 'urn:uuid:' + crypto.randomUUID(); scheduleMeta(); }
         const bk = S.project.book || {};
         const typeset = TS ? { t: TS.resolved(bookDesign()), d: bookDesign(), book: bk } : null;
-        const { bytes, chapters } = window.FolioEPUB.build({ blocks: PV.blocks, style: S.project.style, title: PV.scope === 'doc' ? name : (bk.title || name), author: bk.author || settings.author || '', lang, id: S.project.epubId, typeset: PV.scope === 'doc' ? null : typeset, systemBoxes: !!(S.settings.litrpg && S.settings.litrpg.on && S.settings.litrpg.ebook) });
+        const { bytes, chapters } = window.FolioEPUB.build({ blocks: PV.blocks, style: S.project.style, title: PV.scope === 'doc' ? name : (bk.title || name), author: bk.author || settings.author || '', lang, id: S.project.epubId, typeset: PV.scope === 'doc' ? null : typeset, systemBoxes: !!(S.settings.litrpg && S.settings.litrpg.on && S.settings.litrpg.ebook), systemShort: window.UnwipLitRPG ? window.UnwipLitRPG.shortStyle() : 'full' });
         const p = await api.exportBinary(bytes, name, 'epub', 'EPUB e-book');
         if (p) window.UnwipStart && window.UnwipStart.done('export');
         if (p) toast(`EPUB saved with ${chapters} chapter${chapters === 1 ? '' : 's'}.${settings.author ? '' : ' Tip: add your author name in Settings.'}`, '', 6000);
@@ -3094,22 +3150,45 @@
     if (sel && sel.length < 60) findInput.value = sel;
     findInput.focus(); findInput.select();
   }
-  function closeFind() { findbar.classList.add('hidden'); $('#find-count').textContent = ''; api.stopFind(); restoreRange(); }
-  function runFind(forward = true, next = true) {
-    const t = findInput.value; if (!t) { $('#find-count').textContent = ''; api.stopFind(); return; }
-    api.find(t, { forward, findNext: next });
+  // Find looks only in the chapter's text and highlights matches itself (all soft, the current one strong). The PC used to
+  // use the browser's find, which also matched the buttons and binder, and took the focus out of the box after every
+  // key, so Backspace stopped after each letter. Now you can type or backspace freely; Enter goes to the next match.
+  let findState = { text: '', idx: -1 }, findTimer = 0;
+  function findRanges(text) {
+    if (!text) return [];
+    const needle = text.toLowerCase(), out = [];
+    const tw = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const hay = n.data.toLowerCase(); let i = hay.indexOf(needle);
+      while (i >= 0) { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + text.length); out.push(r); i = hay.indexOf(needle, i + needle.length); }
+    }
+    return out;
   }
-  findInput.addEventListener('input', () => runFind(true, false));
+  function clearFindMarks() { try { CSS.highlights.delete('unwip-find'); CSS.highlights.delete('unwip-find-cur'); } catch {} findState = { text: '', idx: -1 }; }
+  function closeFind() { clearTimeout(findTimer); findbar.classList.add('hidden'); $('#find-count').textContent = ''; clearFindMarks(); restoreRange(); }
+  function runFind(forward = true, next = true) {
+    clearTimeout(findTimer);
+    const t = findInput.value, count = $('#find-count');
+    if (!t) { count.textContent = ''; clearFindMarks(); return; }
+    const rs = findRanges(t);
+    if (!rs.length) { clearFindMarks(); count.textContent = 'No matches'; return; }
+    let idx = findState.text === t && next ? findState.idx + (forward ? 1 : -1) : findState.text === t ? findState.idx : 0;
+    idx = (idx + rs.length) % rs.length;
+    findState = { text: t, idx };
+    try { if (window.Highlight && CSS.highlights) { CSS.highlights.set('unwip-find', new Highlight(...rs)); CSS.highlights.set('unwip-find-cur', new Highlight(rs[idx])); } } catch {}
+    const el = rs[idx].startContainer.parentElement;
+    if (el) el.scrollIntoView({ block: 'center', behavior: next ? 'smooth' : 'auto' });
+    count.textContent = `${idx + 1} of ${rs.length}`;
+  }
+  // typing in the box: wait for a short pause, so backspacing over a word doesn't search after every key
+  findInput.addEventListener('input', () => { clearTimeout(findTimer); if (!findInput.value) { $('#find-count').textContent = ''; clearFindMarks(); return; } findTimer = setTimeout(() => runFind(true, false), 250); });
   findInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); runFind(!e.shiftKey, true); }
+    if (e.key === 'Enter') { e.preventDefault(); runFind(!e.shiftKey, findState.text === findInput.value); }
     if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
   });
   $('#find-next').onclick = () => runFind(true, true);
   $('#find-prev').onclick = () => runFind(false, true);
   $('#find-close').onclick = closeFind;
-  api.onFindResult(r => {
-    if (r.finalUpdate) $('#find-count').textContent = r.matches ? `${Math.max(0, r.activeMatchOrdinal - 0)} of ${r.matches}` : 'No matches';
-  });
 
 
   // ================================================================== REVISION MODE
@@ -5073,7 +5152,7 @@
     newEventFrom: seed => editEvent(null, seed), showMenu: (x, y, items) => showMenu(x, y, items), deleteBook: p => deleteBook(p), pageTemplate: root => sheetFor(root) ? sheetTemplate(root) : '<p><br></p>',
     get saveFailing() { return !!troubleRetry; }, pasteContent,
     S, api, I, $, $$, esc, fmt, makeRoom, countWords, today, editor, editorWrap, on, emit,
-    modal, copyText, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField,
+    modal, copyText, toast, toastAction, confirmBox, promptText, showMenu, quoteToast, placeField, pickIcon,
     findNode, walkTree, rootOf, isInside, currentBlock, scheduleSave, scheduleMeta, saveMetaNow, flushSave, refreshSnapCount,
     renderBinder, refreshPlanView, updateStatus, updateCountsSoon, openDoc, addNode, setWriter, setRevise,
     beginSprint, typewriterScroll, applyTheme, insertCleanHTML, resyncWords, openSplit, takeSnapshot, uid,

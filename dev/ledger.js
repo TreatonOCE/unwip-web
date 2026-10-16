@@ -12,6 +12,13 @@ window.UnwipLedger = (function () {
 
   const KINDS = { skill: 'Skills', spell: 'Spells', ability: 'Abilities', perk: 'Perks', trait: 'Traits', item: 'Items', title: 'Titles', class: 'Classes', achievement: 'Achievements', quest: 'Quests' };
   const RESOURCE = /^(hp|mp|sp|health|mana|stamina|energy|xp|exp|experience|gold|coins?|credits?|hunger|thirst|durability)$/i;
+  // stats that count even on their own line, outside a status block ([Strength: 14] in the middle of a scene). Any
+  // other "[Label: number]" outside a status block is usually a message (a [New Balance: 1,680], a [Cost: 10]), so it
+  // only counts as a stat in a block of three or more, or if a status block somewhere uses the same label.
+  const KNOWN = /^(level|lvl|lv|hp|mp|sp|health|mana|stamina|energy|xp|exp|experience|strength|str|agility|agi|dexterity|dex|constitution|con|vitality|vit|endurance|end|intelligence|int|wisdom|wis|charisma|cha|luck|luk|perception|per|willpower|wil|spirit|spi|speed|spd|defen[cs]e|def|attack|atk|armou?r|magic|mag|resistance|res|free points|stat points|unspent points|skill points|attribute points)$/i;
+  // [Status: Name]: the name must look like a name (Greg, Mina Harker, Ace of Spades), not a mood or a description
+  // ("[Status: feeling victorious over older sister]" is a joke status, not a character)
+  const NAMEISH = s => { const w = s.trim().split(/\s+/); return w.length <= 4 && /^\p{Lu}/u.test(w[0]) && w.every(x => /^\p{Lu}/u.test(x) || /^(of|the|de|da|di|von|van|du|le|la|al|bin|ibn|and)$/.test(x)); };
   const GET = /^(?:new\s+)?(skill|spell|ability|perk|trait|item|title|class|achievement|quest)\b([^:]*):\s*(.+)$/i;
 
   const chapters = () => { const out = [], r = U.findNode('root-manuscript'); if (r) U.walkTree(r.node.children || [], n => { if (n.type === 'doc') out.push(n); }); return out; };
@@ -26,18 +33,21 @@ window.UnwipLedger = (function () {
   const num = s => +String(s).replace(/,/g, '');
 
   async function scan() {
-    const chs = chapters(), events = [], stats = new Map(), got = new Map(), prose = [];
+    const chs = chapters(), events = [], stats = new Map(), got = new Map(), prose = [], later = [];
+    const addLater = (_stats, ...a) => later.push(a);
     let order = 0, main = '';   // the main character: the first one named in a status block
     for (let ci = 0; ci < chs.length; ci++) {
-      const ps = await paras(chs[ci]); let who = '', proseText = '';
+      const ps = await paras(chs[ci]); let who = '', proseText = '', pending = [];
+      // the end of a group of [messages]: loose numbers count if the group looks like a status block
+      const flush = () => { const many = pending.length >= 3; for (const a of pending) (many || KNOWN.test(keyOf(a[1])) ? add : addLater)(stats, ...a); pending = []; };
       for (const t of ps) {
         const msgs = [...t.matchAll(/\[([^\[\]]{1,300})\]/g)].map(m => m[1].trim());
-        if (!msgs.length) { who = ''; proseText += ' ' + t; continue; }
+        if (!msgs.length) { flush(); who = ''; proseText += ' ' + t; continue; }
         const outside = t.replace(/\[[^\[\]]*\]/g, ' '); if (outside.trim().length > 20) proseText += ' ' + outside;
         for (const m of msgs) {
           order++;
           let g;
-          if ((g = /^(?:status|character|name)\s*[:\-–—]\s*([^:\d][^:]{0,40})$/i.exec(m)) && !/\d/.test(g[1])) { who = nice(g[1]); if (!main) main = who; continue; }
+          if ((g = /^(?:status|character|name)\s*[:\-–—]\s*([^:\d][^:]{0,40})$/i.exec(m)) && !/\d/.test(g[1])) { if (NAMEISH(g[1])) { flush(); who = nice(g[1]); if (!main) main = who; } continue; }
           if (/^status$/i.test(m)) continue;
           if ((g = GET.exec(m))) {
             const kind = g[1].toLowerCase(), rest = g[2].toLowerCase(), name = nice(g[3].replace(/[.!]+$/, ''));
@@ -59,13 +69,20 @@ window.UnwipLedger = (function () {
           // Label: 14  /  HP: 40/50
           for (const s of m.matchAll(/([A-Za-z][A-Za-z '’\-]{0,24}?)\s*:\s*([+\-]?\d[\d,]*(?:\.\d+)?)(?:\s*\/\s*(\d[\d,]*))?(?![\d.])/g)) {
             const label = nice(s[1]); if (!label || /^(chapter|day|year|page|time|floor)$/i.test(label)) continue;
-            add(stats, who || main, label, num(s[2]), s[3] != null ? num(s[3]) : null, ci, order, m); any = true;
+            if (who) add(stats, who, label, num(s[2]), s[3] != null ? num(s[3]) : null, ci, order, m);
+            else pending.push([main, label, num(s[2]), s[3] != null ? num(s[3]) : null, ci, order, m]);
+            any = true;
           }
           void any;
         }
       }
+      flush();
       prose.push(proseText);
     }
+    // loose numbers whose label a real status block also uses ("Gold" in a block, then [Gold: 40] on its own) count too
+    const blockLabels = new Set([...stats.values()].map(st => st.key));
+    for (const a of later.sort((x, y) => x[5] - y[5])) if (blockLabels.has(keyOf(a[1]))) add(stats, ...a);
+    if (later.length) for (const st of stats.values()) st.values.sort((x, y) => x.order - y.order);
     // what to check
     const flags = [];
     // a level-up explains a stat going up; only a [-2 Strength] style message explains one going down

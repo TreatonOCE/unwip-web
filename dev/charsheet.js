@@ -158,7 +158,7 @@ window.UnwipCharSheet = (function () {
       body.innerHTML = `
         <div class="cs-head"><div class="cs-name">${esc(node.title || 'Untitled')}</div><div class="cs-sub">${lv ? `Level ${U.fmt(lv.v)}` : ''}${lv && chs.length ? ' · ' : ''}${chs.length ? esc(chName(ci)) : ''}</div></div>
         <div class="cs-time">
-          <div class="cs-when">${svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', 16)}<b>${si === last ? 'Up to date' : 'Looking back'}</b><span>·</span><span>${chs.length ? `Ch ${ci + 1}: ${esc(chName(ci))}` : 'No chapters yet'}</span></div>
+          <${si === last ? 'div' : 'button type="button" data-now title="Looking at the sheet as it was at this chapter. Click to go back to the latest chapter."'} class="cs-when">${svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', 16)}<b>${si === last ? 'Up to date' : 'Looking back'}</b><span>·</span><span>${chs.length ? `Ch ${ci + 1}: ${esc(chName(ci))}` : 'No chapters yet'}</span>${si === last ? '' : '<em class="cs-now">Back to latest</em>'}</${si === last ? 'div' : 'button'}>
           <button type="button" class="cs-nav" data-step="-1" ${si <= 0 ? 'disabled' : ''} aria-label="Earlier">‹</button>
           <div class="cs-track"><i style="width:${last > 0 ? si / last * 100 : 100}%"></i>${SP.map((c, i) => `<button type="button" class="cs-stop ${i === si ? 'on' : ''}" style="left:${last > 0 ? i / last * 100 : 50}%" data-stop="${c}" title="${esc('Ch ' + (c + 1) + ': ' + chName(c))}" aria-label="${esc('Chapter ' + (c + 1))}"><span></span></button>`).join('')}</div>
           <button type="button" class="cs-nav" data-step="1" ${si >= last ? 'disabled' : ''} aria-label="Later">›</button>
@@ -213,6 +213,7 @@ window.UnwipCharSheet = (function () {
     function wire() {
       $$('[data-slot]', body).forEach(b => b.onclick = () => { st.sel = b.dataset.slot; st.editing = null; render(); });
       $$('[data-stop]', body).forEach(b => b.onclick = () => { st.ci = +b.dataset.stop; st.editing = null; render(); });
+      const nowB = $('[data-now]', body); if (nowB) nowB.onclick = () => { const SP = stops(); st.ci = SP[SP.length - 1]; st.editing = null; render(); };
       $$('[data-step]', body).forEach(b => b.onclick = () => { const SP = stops(), i = SP.indexOf(st.ci) + +b.dataset.step; if (i >= 0 && i < SP.length) { st.ci = SP[i]; st.editing = null; render(); } });
       $$('[data-tab]', body).forEach(b => b.onclick = () => { st.tab = b.dataset.tab; st.editing = null; render(); });
       $$('[data-fig]', body).forEach(b => b.onclick = () => { sh.fig = b.dataset.fig; save(); render(); });

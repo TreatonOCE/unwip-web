@@ -194,8 +194,14 @@ window.UnwipMobile = (function () {
   if (vv) { vv.addEventListener('resize', fitVisible); vv.addEventListener('scroll', fitVisible); fitVisible(); }
   document.addEventListener('focusin', e => {
     const t = e.target; if (!vv || t === editor || !t.matches || !t.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select')) return;
-    let n = 0;
+    // only for an on-screen keyboard, and never once you scroll yourself: Settings focuses its first box, and on a PC
+    // scrolling down straight after opening it was pulled back up to that box
+    if (!(window.matchMedia && matchMedia('(pointer: coarse)').matches)) return;
+    let n = 0, moved = false;
+    const stop = () => { moved = true; };
+    addEventListener('wheel', stop, { once: true, passive: true }); addEventListener('touchmove', stop, { once: true, passive: true });
     (function check() {
+      if (moved) return;
       fitVisible();
       const r = t.getBoundingClientRect(), bottom = vv.offsetTop + vv.height - 12;
       if (r.bottom > bottom || r.top < vv.offsetTop) t.scrollIntoView({ block: 'center', behavior: 'smooth' });

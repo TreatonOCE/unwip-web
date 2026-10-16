@@ -63,12 +63,17 @@ window.UnwipRR = (function () {
     const notes = [], pics = [], out = [], plain = [];
     let sys = null, systems = 0;
     const L0 = LOOKS[o.look] || LOOKS.rr;
+    let sysT = [];
+    const Lit = window.UnwipLitRPG, mode = Lit ? Lit.shortStyle() : 'full';
     const flush = () => {
       if (!sys) return;
       const L = o.look === 'auto' ? autoLook(sys[0]) : L0;
+      // a short message on its own (Settings › LitRPG): a box that fits the words, or just bold
+      const short = mode !== 'full' && sys.length === 1 && Lit.isShort(sysT[0], '', '');
+      if (short && mode === 'plain') { out.push(`<p${o.center ? ' style="text-align: center;"' : ''}><strong>${sys[0]}</strong></p>`); sys = null; sysT = []; return; }
       const inner = sys.map(h => `<p${o.center ? ' style="text-align: center;"' : ''}>${h}</p>`).join('');
-      out.push(`<table style="width: 100%; border-collapse: collapse;"><tbody><tr><td style="${L.td}${o.center ? ' text-align: center;' : ''}">${inner}</td></tr></tbody></table>`);
-      sys = null;
+      out.push(`<table style="${short ? '' : 'width: 100%; '}border-collapse: collapse;"><tbody><tr><td style="${L.td}${o.center ? ' text-align: center;' : ''}">${inner}</td></tr></tbody></table>`);
+      sys = null; sysT = [];
     };
     if (o.title && title) { out.push(`<h2>${esc(title)}</h2>`); plain.push(title, ''); }
     for (const b of blocks) {
@@ -82,7 +87,7 @@ window.UnwipRR = (function () {
         if (!o.brackets) {                                               // [Level Up!] -> Level Up!, and [a] [b] side by side -> a · b
           runs = runs.map(r => r.text ? { ...r, text: r.text.replace(/\]\s*\[/g, ' · ').replace(/\[\s*/g, '').replace(/\s*\]/g, '') } : r);
         }
-        (sys = sys || []).push(runsHTML(runs, notes, pics)); plain.push(t.trim()); continue;
+        (sys = sys || []).push(runsHTML(runs, notes, pics)); sysT.push(t); plain.push(t.trim()); continue;
       }
       flush();
       if (!hasPic && BREAK.test(t)) { out.push(`<p style="text-align: center;">${esc(t.trim())}</p>`); plain.push('', t.trim(), ''); continue; }

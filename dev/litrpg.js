@@ -28,13 +28,27 @@ window.UnwipLitRPG = (function () {
 
   // ---- system messages look
   const SYS = /^\s*\[[^\[\]]*(\][^\[\]]*\[[^\[\]]*)*\]\s*$/;   // the paragraph is [one message] (or [a] [b] side by side)
+  // A short message on its own ([I am], [System will do]) reads like the System talking, so it can have a box that fits
+  // the words, or no box at all (Settings › LitRPG). Several messages in a row (a status screen) always get the full box.
+  const SHORT_MAX = 70;
+  const shortStyle = () => (cfg().short === 'fit' || cfg().short === 'plain') ? cfg().short : 'full';
+  const isSys = t => SYS.test(t || '');
+  // t: the paragraph's text; before/after: the paragraphs next to it (text), to tell a lone message from a block
+  const isShort = (t, before, after) => isSys(t) && String(t).trim().length <= SHORT_MAX && !/\]\s*\[/.test(String(t).trim()) && !isSys(before) && !isSys(after);
   function markSys(root) {
-    const on = cfg().on && cfg().look;
-    for (const p of (root || editor).children) {
-      if (!/^(P|DIV)$/.test(p.tagName)) continue;
+    const on = cfg().on && cfg().look, mode = shortStyle();
+    const kids = [...(root || editor).children];
+    kids.forEach((p, i) => {
+      if (!/^(P|DIV)$/.test(p.tagName)) return;
       const is = on && SYS.test(p.textContent || '');
-      if (is !== p.classList.contains('lit-sys')) { p.classList.toggle('lit-sys', is); if (!p.className) p.removeAttribute('class'); }
-    }
+      // the nearest paragraph with words on each side (a blank line doesn't split a status screen)
+      const sib = (j, d) => { for (; kids[j]; j += d) { const q = kids[j]; if (!/^(P|DIV)$/.test(q.tagName)) return ''; if ((q.textContent || '').trim()) return q.textContent; } return ''; };
+      const short = is && mode !== 'full' && isShort(p.textContent, sib(i - 1, -1), sib(i + 1, 1));
+      const want = { 'lit-sys': is, 'lit-fit': short && mode === 'fit', 'lit-plain': short && mode === 'plain' };
+      let changed = false;
+      for (const [k, v] of Object.entries(want)) if (v !== p.classList.contains(k)) { p.classList.toggle(k, v); changed = true; }
+      if (changed && !p.className) p.removeAttribute('class');
+    });
   }
   let markT = null;
   const markSoon = () => { clearTimeout(markT); markT = setTimeout(() => markSys(), 120); };
@@ -130,10 +144,12 @@ window.UnwipLitRPG = (function () {
           <label class="check full"><input type="checkbox" data-lit="pair" ${c.pair ? 'checked' : ''}> Brackets close themselves: type <b>[</b> and get <b>[ ]</b> (also { })</label>
           <label class="check full"><input type="checkbox" data-lit="look" ${c.look ? 'checked' : ''}> Show [system messages] as boxes while I write (the book keeps plain brackets)</label>
           <label class="check full"><input type="checkbox" data-lit="ebook" ${c.ebook ? 'checked' : ''}> Make [system messages] boxes in e-books too (EPUB and Kindle; Word and print keep plain brackets)</label>
+          <div class="field full"><label>A short message on its own, like [I am]</label><select data-litsel="short">${[['full', 'Full-width box, like the rest'], ['fit', 'Box that fits the words'], ['plain', 'No box, just bold [brackets]']].map(([v, l]) => `<option value="${v}" ${shortStyle() === v ? 'selected' : ''}>${l}</option>`).join('')}</select><div class="hint">Several messages in a row, like a status screen, always get the full box. Used while you write, in e-books and in the Royal Road copy.</div></div>
           <div class="field"><label>Stats, skills and items in the book</label><button class="btn" type="button" id="lit-ledger">LitRPG ledger…</button></div>
         </div>
         <div class="field"><label>Shortcuts like ;lvl → [Level Up! …]</label><button class="btn" type="button" id="lit-sn">Text shortcuts… (${snippets().length})</button></div>`;
       $$('[data-lit]', f).forEach(i => i.onchange = async () => { const patch = { [i.dataset.lit]: i.checked }; if (i.dataset.lit === 'on' && i.checked && !(S.settings && Array.isArray(S.settings.snippets))) S.settings = await U.api.setSettings({ snippets: STARTER }); await setCfg(patch); draw(); });
+      $$('[data-litsel]', f).forEach(sl => sl.onchange = () => setCfg({ [sl.dataset.litsel]: sl.value }));
       $('#lit-sn', f).onclick = async () => { await shortcutsDialog(); draw(); };
       const lg = $('#lit-ledger', f); if (lg) lg.onclick = () => { const m = f.closest('.modal-back'); if (m) m.querySelector('.m-foot .btn').click(); window.UnwipLedger && window.UnwipLedger.open(); };
     };
@@ -141,5 +157,5 @@ window.UnwipLitRPG = (function () {
   }
   setTimeout(apply, 0);
   U.on('project', () => setTimeout(apply, 0));
-  return { settingsSection, shortcutsDialog, markSys, apply, STARTER, _test: { expand, SYS } };
+  return { settingsSection, shortcutsDialog, markSys, apply, STARTER, shortStyle, isShort, isSys, _test: { expand, SYS } };
 })();

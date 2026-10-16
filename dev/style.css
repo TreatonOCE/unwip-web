@@ -207,7 +207,7 @@ body:not(.writer) .writer-exit { display: none; }
 .findbar #find-count { color: var(--muted); font-size: 12px; min-width: 52px; text-align: right; }
 
 /* context menu */
-.ctx-menu { position: fixed; z-index: 50; min-width: 190px; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow); padding: 5px; }
+.ctx-menu { position: fixed; z-index: 120; min-width: 190px; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow); padding: 5px; }
 .ctx-menu button { display: flex; width: 100%; text-align: left; border: 0; background: transparent; padding: 7px 10px; border-radius: 6px; cursor: pointer; gap: 10px; }
 .ctx-menu button:hover { background: var(--panel-2); }
 .ctx-menu button.danger { color: var(--danger); }
@@ -3751,3 +3751,15 @@ body.kit-pipetting #bd-main .kit-host, body.kit-pipetting #bd-main .kit-host *, 
 .ac-always .ac-opts { margin: 8px 0 12px; flex-wrap: wrap; }
 .ac-rm { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; width: 26px; height: 26px; border-radius: 6px; }
 .ac-rm:hover, .ac-rm:focus-visible { color: var(--text); background: var(--hover, rgba(127,127,127,.12)); }
+/* icon picker: the search box on top, found emojis under it */
+.ip-own { margin-bottom: 12px; }
+.ip-own input { width: 100%; max-width: 440px; font-size: 16px; }
+.ip-found .ip-grid { max-height: 168px; overflow: auto; }
+/* character sheet: "Looking back" is a button back to the latest chapter */
+button.cs-when { flex-basis: 360px; cursor: pointer; font: inherit; color: var(--text); text-align: left; }
+button.cs-when:hover, button.cs-when:focus-visible { border-color: var(--accent); }
+.cs-when .cs-now { margin-left: auto; font-style: normal; font-size: 12.5px; color: var(--accent); flex: 0 0 auto; padding-left: 8px; }
+.cs-when > span:last-of-type { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* a short [message] on its own (Settings › LitRPG): a box that fits the words, starting where the full boxes start, or no box */
+body.litrpg .editor p.lit-sys.lit-fit, body.litrpg #editor p.lit-sys.lit-fit { width: fit-content; max-width: 92%; margin-left: 4%; margin-right: auto; }
+body.litrpg .editor p.lit-sys.lit-plain, body.litrpg #editor p.lit-sys.lit-plain { border: 0; background: none; padding: 0; margin: .4em 4%; max-width: none; font-family: inherit; font-size: inherit; font-weight: 700; letter-spacing: 0; }

@@ -27,6 +27,8 @@ window.UnwipStuck = (function () {
   });
   U.on('reload', p => { stats = p.stats; stats.hours = stats.hours || {}; stats.weekdays = stats.weekdays || {}; stats.idle = stats.idle || {}; stats.sessions = stats.sessions || []; renderSteps(); });
   U.on('leave', () => { clearInterval(tick); stats = null; stopMessy(false); nudge(false); renderSteps(); });
+  // typing anywhere counts as not being stuck: the split window, notes, sheets (not only the main page)
+  document.addEventListener('input', e => { if (e.target && (e.target.isContentEditable || /^(TEXTAREA|INPUT)$/.test(e.target.tagName)) && !e.target.closest('.modal-back')) { lastTypedAt = Date.now(); nudge(false); } }, true);
   U.on('typed', d => {
     if (d <= 0 || !stats) return;
     lastTypedAt = Date.now(); nudge(false);
@@ -209,10 +211,9 @@ window.UnwipStuck = (function () {
   }
   function sectionId(kind) { const r = S.project.binder.find(n => n.root && n.kind === kind); return r ? r.id : 'root-manuscript'; }
   async function makeDoc(parentId, title, html, afterId) {
+    // Spark's pages go below Trash, under "New: drag into place", so they don't land in the middle of the book
     const node = { id: U.uid(), type: 'doc', title, words: 0 };
-    const f = afterId && U.findNode(afterId);
-    if (f && f.list) f.list.splice(f.index + 1, 0, node);
-    else { const p = U.findNode(parentId).node; p.children.push(node); p.open = true; }
+    S.project.binder.push(node);
     await U.api.saveDoc(S.slug, node.id, html);
     U.scheduleMeta(); U.renderBinder();
     return node;
@@ -273,7 +274,7 @@ window.UnwipStuck = (function () {
     const label = setId === 'main' || setId === 'mine' ? '' : ` (${SETS[setId].name.toLowerCase()})`;
     const node = await makeDoc(sectionId('notes'), `Interview: ${who}${label}`, `<p><i>Answer as ${esc(who === 'my character' ? 'your character' : who)}. No one else will read this.</i></p>` + setQs(setId).map(q => `<h2>${esc(q)}</h2><p><br></p>`).join(''));
     if (S.docId) U.openSplit(node.id); else await U.openDoc(node.id);
-    U.toast(S.docId ? 'Opened beside your chapter. It’s saved in Notes.' : 'Saved in Notes.', '', 6000);
+    U.toast(S.docId ? 'Opened beside your chapter. It’s saved below Trash, under New: drag it where you like.' : 'Saved below Trash, under New: drag it where you like.', '', 6000);
   }
   async function editInterview(fromSet) {
     const body = document.createElement('div');
@@ -293,7 +294,7 @@ window.UnwipStuck = (function () {
     if (!S.docId || U.rootOf(S.docId).kind !== 'manuscript') { U.toast('Open a chapter first.'); return; }
     const node = await makeDoc(sectionId('manuscript'), 'The scene I’m excited about', '<p><br></p>', S.docId);
     await U.openDoc(node.id);
-    U.toast('Write the fun scene now. You can drag it to the right place in the binder later.', '', 6000);
+    U.toast('Write the fun scene now. It’s below Trash, under New, so drag it into place in the binder later.', '', 6000);
   }
   async function parkIdeas() {
     const existing = (() => { let id = null; U.walkTree(S.project.binder, n => { if (n.title === 'Ideas I’m saving for later' && n.type === 'doc') { id = n.id; return false; } }); return id; })();
