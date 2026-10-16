@@ -490,7 +490,7 @@
     prefsWrite: async json => { await FS.write(`${LIB}/_Settings/shared.json`, json); return true; },
     onPrefsChange: on('prefs'),
     buildDelete: async id => { await FS.remove(`${LIB}/_Build/items/${safeId(id)}.json`); return true; },
-    onNoteCmd: on('note'), onPastePlain: on('pastePlain'), onSplit: on('split'), onAddToSheet: on('addToSheet'), onAddToBible: on('addToBible'), onAddTo: on('addTo'), setLevel: () => {},
+    onNoteCmd: on('note'), onPastePlain: on('pastePlain'), onSplit: on('split'), onAddToSheet: on('addToSheet'), onAddToBible: on('addToBible'), onAddTo: on('addTo'), onAutocorrectAdd: on('autocorrectAdd'), setLevel: () => {},
     find: async (t, o) => find(t, o), stopFind: async () => { clearFind(); },
     onFindResult: cb => { findCb = cb; },
     // spelling: the browser's own spellcheck does the work

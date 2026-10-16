@@ -1,8 +1,8 @@
 window.UNWIP_DEV = true;
 (function () { const P = 'dev:', S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem;
   S.getItem = function (k) { return g.call(this, P + k); }; S.setItem = function (k, v) { return s.call(this, P + k, v); }; S.removeItem = function (k) { return r.call(this, P + k); }; })();
-window.UNWIP_VERSION = "0.44.77";
-window.UNWIP_LATEST_NOTES = "- Settings \u203a What's new shows the latest three versions.";
+window.UNWIP_VERSION = "0.44.78";
+window.UNWIP_LATEST_NOTES = "- Autocorrect as you type, with no AI. It fixes common typos (teh, adn, recieve, dont), \"i\" on its own and a missing capital at the start of a sentence. Turn it off, or change what it does, in Settings \u203a Autocorrect.\n- Your own corrections: on a PC or Mac, right-click a word with a red line and choose Always correct to. On any device, use Ctrl+K \u203a Always correct this word, or Settings \u203a Autocorrect \u203a Your corrections. A short one works as a shortcut too.\n- Optional: fix a word that's one letter off a real word. It's off until you tick it, and it leaves names, your book's characters and places, and words you've already written that way alone.\n- If it corrects something you meant, press Backspace or Ctrl+Z straight away and your word comes back. Do that twice for the same word and Unwip stops correcting it.\n- Nothing inside [system messages] or links is corrected.";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;

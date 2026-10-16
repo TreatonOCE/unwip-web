@@ -2980,6 +2980,8 @@
         <div class="field"><label>Custom dictionary</label><button class="btn" id="s-dict" type="button">Manage added words…</button></div>`}
         <label class="check full"><input type="checkbox" id="s-dash" ${smartDash() ? 'checked' : ''}> Turn two hyphens (--) into an em dash (—) as I type</label>
         <label class="check full"><input type="checkbox" id="s-spell" ${sp.enabled ? 'checked' : ''}> Underline spelling mistakes</label>
+        <div class="section-label">Autocorrect <span class="sl-now">· applies straight away</span></div>
+        <div class="field full" id="s-autocorrect">${window.UnwipAutocorrect ? window.UnwipAutocorrect.settingsHTML() : ''}</div>
         <div class="section-label">LitRPG and text shortcuts <span class="sl-now">· applies straight away</span></div>
         <div class="field full" id="s-litrpg"></div>
         <div class="section-label">Licence <span class="sl-now">· applies straight away</span></div>
@@ -3010,6 +3012,7 @@
     $('#s-themes', body).onclick = () => window.UnwipLook && window.UnwipLook.openThemes();
     $('#s-typing', body).onclick = () => window.UnwipLook && window.UnwipLook.openTyping();
     if ($('#s-dict', body)) $('#s-dict', body).onclick = dictionaryDialog;
+    if (window.UnwipAutocorrect && $('#s-autocorrect', body)) window.UnwipAutocorrect.wireSettings($('#s-autocorrect', body));
     if (window.UnwipSync) window.UnwipSync.settingsSection(body);
     if (window.UnwipLicence) window.UnwipLicence.settingsSection(body);
     if (window.UnwipLitRPG) window.UnwipLitRPG.settingsSection(body);
