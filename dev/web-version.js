@@ -1,8 +1,8 @@
 window.UNWIP_DEV = true;
 (function () { const P = 'dev:', S = Storage.prototype, g = S.getItem, s = S.setItem, r = S.removeItem;
   S.getItem = function (k) { return g.call(this, P + k); }; S.setItem = function (k, v) { return s.call(this, P + k, v); }; S.removeItem = function (k) { return r.call(this, P + k); }; })();
-window.UNWIP_VERSION = "0.44.88";
-window.UNWIP_LATEST_NOTES = "- Website: LitRPG now has one section, under Lore.";
+window.UNWIP_VERSION = "0.44.89";
+window.UNWIP_LATEST_NOTES = "- Website: the logo at the top now reads Unwip\u2026 Write to finish, the same as in the app, on phones too.";
 if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 (function () {
   if (location.protocol !== 'https:') return;
